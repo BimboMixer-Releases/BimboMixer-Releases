@@ -9,6 +9,7 @@ import 'package:contabile_app/widgets/update_dialog.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:contabile_app/screens/invoices_screen.dart';
 import 'package:contabile_app/screens/security_center_screen.dart';
+import 'package:contabile_app/utils/calculation_engine.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String role;
@@ -78,111 +79,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    double tIn = 0;
-    double tOut = 0;
-    Map<int, double> tempMonthlyNet = {for (var i = 1; i <= 12; i++) i: 0.0};
-    Map<String, double> tempCat = {};
-    Map<String, double> tempSrv = {};
-    Map<String, double> tempFatCon = {};
+    final metrics = CalculationEngine.computeDashboardMetrics(
+      payments: payments,
+      paymentsLastYear: paymentsLastYear,
+      invoices: invoices,
+      deadlines: deadlines,
+      categoryNames: categoryNames,
+      serviceNames: serviceNames,
+      selectedYear: _selectedYear,
+    );
+
+    final metricsLastYear = CalculationEngine.computeDashboardMetrics(
+      payments: paymentsLastYear,
+      paymentsLastYear: [],
+      invoices: invoices,
+      deadlines: deadlines,
+      categoryNames: categoryNames,
+      serviceNames: serviceNames,
+      selectedYear: _selectedYear - 1,
+    );
+
     Map<String, Color> tempColors = {};
-
-    for (var p in payments) {
-      double amount = p['amount'];
-      int month = int.parse(p['date'].split('-')[1]);
-      String catName = categoryNames[p['category_id']] ?? 'Altro';
-      String? colorHex = categoryColorsHex[p['category_id']];
-      String srvName = serviceNames[p['service_id']] ?? 'Altro';
-      String? srvColorHex = serviceColorsHex[p['service_id']];
-      String paymentMethod = (p['payment_method'] ?? '').toString().toLowerCase();
-
-      if (p['type'] == 'IN') {
-        tIn += amount;
-        tempMonthlyNet[month] = (tempMonthlyNet[month] ?? 0) + amount;
-      } else {
-        tOut += amount;
-        tempMonthlyNet[month] = (tempMonthlyNet[month] ?? 0) - amount;
-      }
-
-      // Popola i dati per i grafici indipendentemente dal tipo (IN/OUT)
-      tempCat[catName] = (tempCat[catName] ?? 0) + amount;
-      tempSrv[srvName] = (tempSrv[srvName] ?? 0) + amount;
-      
-      bool isCash = paymentMethod.contains('contant');
-      String fatConKey = isCash ? 'Contante' : 'Fatturato';
-      tempFatCon[fatConKey] = (tempFatCon[fatConKey] ?? 0) + amount;
-
-      if (colorHex != null) tempColors[catName] = Color(int.parse(colorHex));
-      if (srvColorHex != null) tempColors[srvName] = Color(int.parse(srvColorHex));
-      tempColors['Fatturato'] = Colors.blueAccent;
-      tempColors['Contante'] = Colors.greenAccent;
-    }
-    
-    for (var i in invoices) {
-      if (i['status'] == 'PAID' && i['date'] != null) {
-        int year = int.parse(i['date'].split('-')[0]);
-        if (year == _selectedYear) {
-          double amount = (i['amount'] ?? 0).toDouble();
-          int month = int.parse(i['date'].split('-')[1]);
-          tIn += amount;
-          tempMonthlyNet[month] = (tempMonthlyNet[month] ?? 0) + amount;
-          
-          tempFatCon['Fatturato'] = (tempFatCon['Fatturato'] ?? 0) + amount;
-        }
+    for (var catName in metrics.categoryBreakdown.keys) {
+      var categoryId = categoryNames.entries.firstWhere((e) => e.value == catName, orElse: () => const MapEntry('', '')).key;
+      if (categoryId.isNotEmpty && categoryColorsHex[categoryId] != null) {
+        tempColors[catName] = Color(int.parse(categoryColorsHex[categoryId]!));
       }
     }
-
-    double tInLast = 0;
-    double tOutLast = 0;
-    for (var p in paymentsLastYear) {
-      if (p['type'] == 'IN') {
-        tInLast += p['amount'];
-      } else {
-        tOutLast += p['amount'];
+    for (var srvName in metrics.serviceBreakdown.keys) {
+      var serviceId = serviceNames.entries.firstWhere((e) => e.value == srvName, orElse: () => const MapEntry('', '')).key;
+      if (serviceId.isNotEmpty && serviceColorsHex[serviceId] != null) {
+        tempColors[srvName] = Color(int.parse(serviceColorsHex[serviceId]!));
       }
     }
-
-    for (var i in invoices) {
-      if (i['status'] == 'PAID' && i['date'] != null) {
-        int year = int.parse(i['date'].split('-')[0]);
-        if (year == _selectedYear - 1) {
-          tInLast += (i['amount'] ?? 0).toDouble();
-        }
-      }
-    }
-
-    // Scadenze pagate: sottraggono dal patrimonio netto
-    double totalDeadlinesPaid = 0;
-    for (var d in deadlines) {
-      if (d['status'] == 'PAID') {
-        totalDeadlinesPaid += ((d['amount'] as num?)?.toDouble() ?? 0.0);
-      }
-    }
+    tempColors['Fatturato'] = Colors.blueAccent;
+    tempColors['Contante'] = Colors.greenAccent;
 
     setState(() {
-      _totalIn = tIn;
-      _totalOut = tOut;
-      _totalInLastYear = tInLast;
-      _totalOutLastYear = tOutLast;
+      _totalIn = metrics.totalIn;
+      _totalOut = metrics.totalOut;
+      _totalInLastYear = metricsLastYear.totalIn;
+      _totalOutLastYear = metricsLastYear.totalOut;
       _payments = payments;
       _deadlines = deadlines;
       _invoices = invoices;
-      _monthlyNet = tempMonthlyNet;
-      _chartDataCategoria = tempCat;
-      _chartDataPrestazione = tempSrv;
-      _chartDataFatturatoContante = tempFatCon;
+      _monthlyNet = metrics.monthlyNet;
+      _chartDataCategoria = metrics.categoryBreakdown;
+      _chartDataPrestazione = metrics.serviceBreakdown;
+      _chartDataFatturatoContante = metrics.paymentMethodBreakdown;
       _categoryNames = categoryNames;
       _serviceNames = serviceNames;
       _categoryColors = tempColors;
-      _totalDeadlinesPaid = totalDeadlinesPaid;
+      _totalDeadlinesPaid = metrics.totalDeadlinesPaid;
       _isLoading = false;
     });
   }
 
   String _calculatePercentageChange(double current, double previous) {
-    if (previous == 0) return current > 0 ? '+100%' : '0%';
-    double change = ((current - previous) / previous) * 100;
-    String prefix = change >= 0 ? '+' : '';
-    return '$prefix${change.toStringAsFixed(1)}%';
+    return CalculationEngine.computePercentageChange(current, previous);
   }
 
   @override
