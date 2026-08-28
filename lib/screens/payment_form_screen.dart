@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,9 +16,9 @@ import 'package:dropdown_search/dropdown_search.dart';
 
 class PaymentFormScreen extends StatefulWidget {
   final String? paymentId;
-  final bool isReadOnly;
+  final bool isReadOnly;`n  final bool isScheduled;
   
-  const PaymentFormScreen({super.key, this.paymentId, this.isReadOnly = false});
+  const PaymentFormScreen({super.key, this.paymentId, this.isReadOnly = false, this.isScheduled = false});
 
   @override
   State<PaymentFormScreen> createState() => _PaymentFormScreenState();
@@ -71,7 +71,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     });
 
     if (widget.paymentId != null) {
-      final paymentData = await _dbHelper.getPaymentById(widget.paymentId!);
+      final paymentData = widget.isScheduled `n          ? await _dbHelper.getScheduledPaymentById(widget.paymentId!)`n          : await _dbHelper.getPaymentById(widget.paymentId!);
       if (paymentData != null) {
         final payment = Payment.fromMap(paymentData, widget.paymentId!);
         setState(() {
@@ -200,7 +200,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         'client_phone': _clientPhoneController.text.trim().isEmpty ? null : _clientPhoneController.text.trim(),
         'client_email': _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
       };
-      await _dbHelper.updatePayment(data);
+      if (widget.isScheduled) {`n        await _dbHelper.updateScheduledPayment(data);`n      } else {`n        await _dbHelper.updatePayment(data);`n      }
     } else {
       // New payment: auto-save to get an ID, then we'll update on final Save
       final data = {
@@ -218,7 +218,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         'client_email': _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
         'status': 'PAID',
       };
-      final newId = await _dbHelper.insertPayment(data);
+      final newId = widget.isScheduled `n          ? await _dbHelper.insertScheduledPayment(data) `n          : await _dbHelper.insertPayment(data);
       setState(() => _autoSavedPaymentId = newId);
       debugPrint("Auto-saved new payment with id: $newId");
     }
@@ -291,9 +291,9 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     try {
       if (effectiveId == null) {
         // Brand new payment, no attachments added yet
-        await _dbHelper.insertPayment(newPayment.toMap());
+        if (widget.isScheduled) {`n          await _dbHelper.insertScheduledPayment(newPayment.toMap());`n        } else {`n          await _dbHelper.insertPayment(newPayment.toMap());`n        }
       } else {
-        await _dbHelper.updatePayment(newPayment.toMap());
+        if (widget.isScheduled) {`n          await _dbHelper.updateScheduledPayment(newPayment.toMap());`n        } else {`n          await if (widget.isScheduled) {`n                                        _dbHelper.updateScheduledPayment(newPayment.toMap());`n                                      } else {`n                                        _dbHelper.updatePayment(newPayment.toMap());`n                                      }`n        }
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -381,7 +381,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                   Navigator.pushReplacement(
                     ctx,
                     MaterialPageRoute(
-                      builder: (_) => PaymentFormScreen(paymentId: widget.paymentId, isReadOnly: false),
+                      builder: (_) => PaymentFormScreen(paymentId: widget.paymentId, isReadOnly: false, isScheduled: widget.isScheduled),
                     ),
                   );
                 }
@@ -565,7 +565,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                                         clientPhone: _clientPhoneController.text.trim().isEmpty ? null : _clientPhoneController.text.trim(),
                                         clientEmail: _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
                                       );
-                                      _dbHelper.updatePayment(newPayment.toMap());
+                                      if (widget.isScheduled) {`n                                        _dbHelper.updateScheduledPayment(newPayment.toMap());`n                                      } else {`n                                        _dbHelper.updatePayment(newPayment.toMap());`n                                      }
                                     }
                                   },
                                 )
@@ -738,6 +738,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     );
   }
 }
+
+
 
 
 

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
@@ -250,7 +250,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const ScheduledPaymentFormScreen(),
+                  builder: (_) => const PaymentFormScreen(isScheduled: true),
                 ),
               );
               _loadScheduledPayments();
@@ -299,7 +299,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) =>
-                                ScheduledPaymentFormScreen(paymentId: p['id']),
+                                PaymentFormScreen(paymentId: p['id'], isScheduled: true),
                           ),
                         );
                         _loadScheduledPayments();
@@ -396,5 +396,6 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
     );
   }
 }
+
 
 

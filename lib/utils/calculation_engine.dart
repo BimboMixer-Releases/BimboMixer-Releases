@@ -1,5 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:contabile_app/utils/currency_utils.dart';
+﻿import 'package:contabile_app/utils/currency_utils.dart';
 import 'package:contabile_app/models/dashboard_metrics.dart';
 
 /// Pure calculation engine. Does not depend on UI, Firebase, or external state.
@@ -136,3 +135,4 @@ class CalculationEngine {
     return '$prefix${change.toStringAsFixed(1)}%';
   }
 }
+

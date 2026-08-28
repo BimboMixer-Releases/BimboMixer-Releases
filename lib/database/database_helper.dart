@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/password_hasher.dart';
 import '../utils/crypto_utils.dart';
 
@@ -606,6 +606,14 @@ class DatabaseHelper {
 
   Future<void> deleteScheduledPayment(String id) async {
     await _db.collection('scheduled_payments').doc(id).delete();
+  }
+
+  Future<Map<String, dynamic>?> getScheduledPaymentById(String id) async {
+    final doc = await _db.collection('scheduled_payments').doc(id).get();
+    if (!doc.exists) return null;
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return data;
   }
 
   Future<List<Map<String, dynamic>>> getScheduledPayments() async {

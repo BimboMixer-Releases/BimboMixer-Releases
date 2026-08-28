@@ -1,6 +1,5 @@
 ﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:contabile_app/utils/calculation_engine.dart';
-import 'package:contabile_app/models/dashboard_metrics.dart';
 
 void main() {
   group('CalculationEngine Tests', () {
@@ -62,3 +61,4 @@ void main() {
     });
   });
 }
+
