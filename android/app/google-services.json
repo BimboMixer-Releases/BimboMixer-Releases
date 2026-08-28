@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "960735169197",
+    "project_id": "contabilita-8dd6d",
+    "storage_bucket": "contabilita-8dd6d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:960735169197:android:40cc9ea0aebe99740b1424",
+        "android_client_info": {
+          "package_name": "com.example.contabile_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNFN1Xe6o_eXbXmf36ZON905M-Kgi8O08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

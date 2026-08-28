@@ -1,0 +1,25 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "contabilita-8dd6d",
+          "appId": "1:960735169197:android:40cc9ea0aebe99740b1424",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "contabilita-8dd6d",
+          "configurations": {
+            "android": "1:960735169197:android:40cc9ea0aebe99740b1424",
+            "windows": "1:960735169197:web:ea0c172db9fd806f0b1424"
+          }
+        }
+      }
+    }
+  }
+}

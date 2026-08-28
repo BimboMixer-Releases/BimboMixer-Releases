@@ -1,2 +1,4 @@
-# BimboMixer Releases
-Repository per gli aggiornamenti OTA.
+# BimboMixer Contabilità (Contabile App)
+
+Applicazione contabile multipiattaforma (Android, Windows).
+Repository per sorgenti e rilasci OTA.

@@ -1,0 +1,1 @@
+import 'package:sqflite_common_ffi/sqflite_ffi.dart'; void main() async { sqfliteFfiInit(); var databaseFactory = databaseFactoryFfi; var path = await databaseFactory.getDatabasesPath(); print(path); }
