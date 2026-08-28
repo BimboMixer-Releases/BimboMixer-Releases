@@ -1417,19 +1417,8 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                       return PieChartSectionData(
                         color: isSelected ? color : color.withValues(alpha: 0.75),
                         value: entry.value,
-                        title: '${pct.toStringAsFixed(1)}%',
-                        titleStyle: TextStyle(
-                          color: textColor,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          fontSize: isSelected ? 18 : 12,
-                          shadows: textColor == Colors.white 
-                            ? const [Shadow(color: Colors.black54, blurRadius: 4)] 
-                            : null,
-                        ),
-                        titlePositionPercentageOffset: 0.75,
+                        showTitle: false,
                         radius: isSelected ? currentRadius * 1.1 : currentRadius,
-                        badgeWidget: pct > 2 ? buildBadge(getIconForCategory(entry.key), badgeSize) : null,
-                        badgePositionPercentageOffset: 0.45,
                       );
                     });
 
