@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,7 +16,8 @@ import 'package:dropdown_search/dropdown_search.dart';
 
 class PaymentFormScreen extends StatefulWidget {
   final String? paymentId;
-  final bool isReadOnly;`n  final bool isScheduled;
+  final bool isReadOnly;
+  final bool isScheduled;
   
   const PaymentFormScreen({super.key, this.paymentId, this.isReadOnly = false, this.isScheduled = false});
 
@@ -71,7 +72,9 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     });
 
     if (widget.paymentId != null) {
-      final paymentData = widget.isScheduled `n          ? await _dbHelper.getScheduledPaymentById(widget.paymentId!)`n          : await _dbHelper.getPaymentById(widget.paymentId!);
+      final paymentData = widget.isScheduled 
+          ? await _dbHelper.getScheduledPaymentById(widget.paymentId!)
+          : await _dbHelper.getPaymentById(widget.paymentId!);
       if (paymentData != null) {
         final payment = Payment.fromMap(paymentData, widget.paymentId!);
         setState(() {
@@ -200,7 +203,11 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         'client_phone': _clientPhoneController.text.trim().isEmpty ? null : _clientPhoneController.text.trim(),
         'client_email': _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
       };
-      if (widget.isScheduled) {`n        await _dbHelper.updateScheduledPayment(data);`n      } else {`n        await _dbHelper.updatePayment(data);`n      }
+      if (widget.isScheduled) {
+        await _dbHelper.updateScheduledPayment(data);
+      } else {
+        await _dbHelper.updatePayment(data);
+      }
     } else {
       // New payment: auto-save to get an ID, then we'll update on final Save
       final data = {
@@ -218,7 +225,9 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         'client_email': _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
         'status': 'PAID',
       };
-      final newId = widget.isScheduled `n          ? await _dbHelper.insertScheduledPayment(data) `n          : await _dbHelper.insertPayment(data);
+      final newId = widget.isScheduled 
+          ? await _dbHelper.insertScheduledPayment(data) 
+          : await _dbHelper.insertPayment(data);
       setState(() => _autoSavedPaymentId = newId);
       debugPrint("Auto-saved new payment with id: $newId");
     }
@@ -291,9 +300,17 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     try {
       if (effectiveId == null) {
         // Brand new payment, no attachments added yet
-        if (widget.isScheduled) {`n          await _dbHelper.insertScheduledPayment(newPayment.toMap());`n        } else {`n          await _dbHelper.insertPayment(newPayment.toMap());`n        }
+        if (widget.isScheduled) {
+          await _dbHelper.insertScheduledPayment(newPayment.toMap());
+        } else {
+          await _dbHelper.insertPayment(newPayment.toMap());
+        }
       } else {
-        if (widget.isScheduled) {`n          await _dbHelper.updateScheduledPayment(newPayment.toMap());`n        } else {`n          await if (widget.isScheduled) {`n                                        _dbHelper.updateScheduledPayment(newPayment.toMap());`n                                      } else {`n                                        _dbHelper.updatePayment(newPayment.toMap());`n                                      }`n        }
+        if (widget.isScheduled) {
+          await _dbHelper.updateScheduledPayment(newPayment.toMap());
+        } else {
+          await _dbHelper.updatePayment(newPayment.toMap());
+        }
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -433,7 +450,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                       decoration: InputDecoration(
                         labelText: 'Importo (es. 100.50)',
                         prefixText: '€ ',
-                        prefixStyle: TextStyle(color: Colors.black),
+                        prefixStyle: TextStyle(color: Colors.white),
                         labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
                         enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
                       ),
@@ -458,7 +475,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                     DropdownSearch<String>(
                       selectedItem: _paymentMethod,
                       items: (filter, _) => ['Fattura', 'Contante', 'Bonifico', 'Carta'],
-                      popupProps: PopupProps.menu(
+                      popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                         showSearchBox: true,
                         searchFieldProps: TextFieldProps(
                           style: TextStyle(color: Colors.black),
@@ -565,7 +582,11 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                                         clientPhone: _clientPhoneController.text.trim().isEmpty ? null : _clientPhoneController.text.trim(),
                                         clientEmail: _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
                                       );
-                                      if (widget.isScheduled) {`n                                        _dbHelper.updateScheduledPayment(newPayment.toMap());`n                                      } else {`n                                        _dbHelper.updatePayment(newPayment.toMap());`n                                      }
+                                      if (widget.isScheduled) {
+                                        _dbHelper.updateScheduledPayment(newPayment.toMap());
+                                      } else {
+                                        _dbHelper.updatePayment(newPayment.toMap());
+                                      }
                                     }
                                   },
                                 )
@@ -597,7 +618,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                       selectedItem: _selectedCustomerId != null ? _customers.firstWhere((c) => c.id == _selectedCustomerId, orElse: () => Customer(id: '', name: '')) : null,
                       items: (filter, _) => _customers,
                       itemAsString: (Customer c) => c.name,
-                      popupProps: PopupProps.menu(
+                      popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                         showSearchBox: true,
                         searchFieldProps: TextFieldProps(
                           style: TextStyle(color: Colors.black),
@@ -657,7 +678,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                       selectedItem: _selectedCategoryId != null ? _categories.firstWhere((c) => c.id == _selectedCategoryId, orElse: () => Category(id: '', name: '', type: '')) : null,
                       items: (filter, _) => _categories.where((c) => c.type == _type).toList(),
                       itemAsString: (Category c) => c.name,
-                      popupProps: PopupProps.menu(
+                      popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                         showSearchBox: true,
                         searchFieldProps: TextFieldProps(
                           style: TextStyle(color: Colors.black),
@@ -685,7 +706,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                       selectedItem: _selectedServiceId != null ? _services.firstWhere((s) => s.id == _selectedServiceId, orElse: () => ServiceType(id: '', name: '')) : null,
                       items: (filter, _) => _services,
                       itemAsString: (ServiceType s) => s.name,
-                      popupProps: PopupProps.menu(
+                      popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                         showSearchBox: true,
                         searchFieldProps: TextFieldProps(
                           style: TextStyle(color: Colors.black),
@@ -738,6 +759,9 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     );
   }
 }
+
+
+
 
 
 

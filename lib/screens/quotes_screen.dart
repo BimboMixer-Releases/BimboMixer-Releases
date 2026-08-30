@@ -48,9 +48,6 @@ class _QuotesScreenState extends State<QuotesScreen> {
   }
 
   Future<void> _uploadQuote() async {
-    final auth = await SecurityUtils.requireAdminAuth(context);
-    if (!auth || !mounted) return;
-
     try {
       File? file = await _attachmentService.pickFile(context);
       if (file == null) return;
@@ -100,9 +97,6 @@ class _QuotesScreenState extends State<QuotesScreen> {
   }
 
   Future<void> _editSerialNumber(Map<String, dynamic> quote) async {
-    final auth = await SecurityUtils.requireAdminAuth(context);
-    if (!auth || !mounted) return;
-
     final tc = TextEditingController(text: quote['serial_number']?.toString() ?? '');
 
     final newSerialStr = await showDialog<String>(
@@ -141,18 +135,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
     }
   }
 
-  Future<void> _toggleAccepted(Map<String, dynamic> quote, bool? value) async {
-    final auth = await SecurityUtils.requireAdminAuth(context);
-    if (!auth || !mounted) return;
-
-    await _dbHelper.updateQuote({'id': quote['id'], 'accepted': value ?? false});
+  Future<void> _updateQuoteState(Map<String, dynamic> quote, {required bool accepted, required bool rejected}) async {
+    await _dbHelper.updateQuote({'id': quote['id'], 'accepted': accepted, 'rejected': rejected});
     _loadQuotes();
   }
 
   Future<void> _deleteQuote(String id) async {
-    final auth = await SecurityUtils.requireAdminAuth(context);
-    if (!auth || !mounted) return;
-
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -227,6 +215,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   itemBuilder: (context, index) {
                     final quote = _quotes[index];
                     final isAccepted = quote['accepted'] == true;
+                    final isRejected = quote['rejected'] == true;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -270,11 +259,19 @@ class _QuotesScreenState extends State<QuotesScreen> {
                           children: [
                             Checkbox(
                               value: isAccepted,
-                              onChanged: (val) => _toggleAccepted(quote, val),
+                              onChanged: (val) => _updateQuoteState(quote, accepted: val ?? false, rejected: false),
                               activeColor: Colors.greenAccent,
                               checkColor: Colors.black,
                             ),
                             Text('Accettato', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                            SizedBox(width: 8),
+                            Checkbox(
+                              value: isRejected,
+                              onChanged: (val) => _updateQuoteState(quote, accepted: false, rejected: val ?? false),
+                              activeColor: Colors.redAccent,
+                              checkColor: Colors.white,
+                            ),
+                            Text('Non Accett.', style: TextStyle(color: Colors.white.withOpacity(0.7))),
                             SizedBox(width: 8),
                             IconButton(
                               icon: Icon(Icons.delete_outline, color: Colors.redAccent),

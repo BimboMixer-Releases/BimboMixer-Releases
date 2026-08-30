@@ -367,6 +367,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
                                   child: TextField(
                                     decoration: InputDecoration(
                                       labelText: 'Importo',
+                                      prefixText: '€ ',
                                       isDense: true,
                                     ),
                                     keyboardType: TextInputType.number,

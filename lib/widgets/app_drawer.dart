@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../providers/app_theme_provider.dart';
 import 'package:provider/provider.dart';
@@ -17,9 +18,9 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<AppThemeProvider>();
-    
+
     return Drawer(
-      backgroundColor: const Color(0xFF1E1E24),
+      backgroundColor: theme.cardColor,
       child: Column(
         children: [
           DrawerHeader(
@@ -29,12 +30,21 @@ class AppDrawer extends StatelessWidget {
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: Colors.white,
-                  child: Icon(Icons.account_balance_wallet, size: 30, color: theme.primaryColor),
+                  child: theme.hasValidLogo
+                      ? ClipOval(
+                          child: Image.file(
+                            File(theme.logoImagePath!),
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Icon(Icons.account_balance_wallet, size: 30, color: theme.primaryColor),
                 ),
                 SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    'BimboMixer\nContabilit‡',
+                    'Bimbomixer Contabilit√†',
                     style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ),

@@ -1,8 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
-import 'scheduled_payment_form_screen.dart';
+import 'payment_form_screen.dart';
 import 'payment_summary_screen.dart';
 import '../services/pdf_report_service.dart';
 import '../utils/report_utils.dart';
@@ -250,7 +250,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const PaymentFormScreen(isScheduled: true),
+                  builder: (_) => PaymentFormScreen(isScheduled: true),
                 ),
               );
               _loadScheduledPayments();
@@ -332,7 +332,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                             SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                '${p['payment_method'] ?? 'Movimento'}${subtitleText.isNotEmpty ? '  •  $subtitleText' : ''}',
+                                '${p['payment_method'] ?? 'Movimento'}${subtitleText.isNotEmpty ? '    $subtitleText' : ''}',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -396,6 +396,9 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
     );
   }
 }
+
+
+
 
 
 

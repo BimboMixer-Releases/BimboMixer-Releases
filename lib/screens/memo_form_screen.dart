@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dropdown_search/dropdown_search.dart';
@@ -325,7 +325,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                       : null,
                     items: (filter, _) => _customers,
                     itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                    popupProps: PopupProps.menu(
+                    popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                       showSearchBox: true,
                       searchFieldProps: TextFieldProps(
                         style: TextStyle(color: Colors.black),
@@ -384,7 +384,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                       : null,
                     items: (filter, _) => _categories,
                     itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                    popupProps: PopupProps.menu(showSearchBox: true),
+                    popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), showSearchBox: true),
                     decoratorProps: DropDownDecoratorProps(
                       baseStyle: TextStyle(color: Colors.black),
                       decoration: InputDecoration(
@@ -404,7 +404,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                       : null,
                     items: (filter, _) => _services,
                     itemAsString: (Map<String, dynamic> s) => s['name'] ?? '',
-                    popupProps: PopupProps.menu(showSearchBox: true),
+                    popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), showSearchBox: true),
                     decoratorProps: DropDownDecoratorProps(
                       baseStyle: TextStyle(color: Colors.black),
                       decoration: InputDecoration(
@@ -424,6 +424,8 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       labelText: 'Importo',
+                      prefixText: '€ ',
+                      prefixStyle: TextStyle(color: Colors.white),
                       labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
                     ),
                   ),
@@ -473,7 +475,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                     DropdownSearch<String>(
                       selectedItem: _vatCode,
                       items: (filter, _) => _vatCodes,
-                      popupProps: PopupProps.menu(showSearchBox: true),
+                      popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), showSearchBox: true),
                       decoratorProps: DropDownDecoratorProps(
                         baseStyle: TextStyle(color: Colors.black),
                         decoration: InputDecoration(

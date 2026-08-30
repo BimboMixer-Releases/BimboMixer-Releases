@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -241,7 +241,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                           : null,
                         items: (filter, _) => _customers,
                         itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                        popupProps: PopupProps.menu(
+                        popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                           showSearchBox: true,
                           searchFieldProps: TextFieldProps(
                             style: TextStyle(color: Colors.black),
@@ -298,6 +298,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                             labelText: 'Importo',
+                            prefixText: '€ ',
+                            prefixStyle: TextStyle(color: Colors.white),
                             labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
                       ),
                       SizedBox(height: 16),
@@ -312,7 +314,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                             default: return item;
                           }
                         },
-                        popupProps: PopupProps.menu(
+                        popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                           showSearchBox: true,
                           searchFieldProps: TextFieldProps(
                             style: TextStyle(color: Colors.black),
@@ -343,7 +345,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                       DropdownSearch<String>(
                         selectedItem: vatCode,
                         items: (filter, _) => _vatCodes,
-                        popupProps: PopupProps.menu(
+                        popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
                           showSearchBox: true,
                           searchFieldProps: TextFieldProps(
                             style: TextStyle(color: Colors.black),
