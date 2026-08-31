@@ -224,61 +224,70 @@ class _QuotesScreenState extends State<QuotesScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: theme.borderColor),
                       ),
-                      child: ListTile(
-                        leading: InkWell(
-                          onTap: () => _editSerialNumber(quote),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: theme.primaryColor.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '#${quote['serial_number'] ?? '0'}',
-                              style: TextStyle(
-                                color: theme.primaryColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: InkWell(
+                              onTap: () => _editSerialNumber(quote),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: theme.primaryColor.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '#${quote['serial_number'] ?? '0'}',
+                                  style: TextStyle(
+                                    color: theme.primaryColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        title: InkWell(
-                          onTap: () => _openFile(quote['file_url'] ?? ''),
-                          child: Text(
-                            quote['file_name'] ?? 'Sconosciuto',
-                            style: TextStyle(
-                              color: Colors.blueAccent,
-                              decoration: TextDecoration.underline,
-                              fontWeight: FontWeight.bold,
+                            title: InkWell(
+                              onTap: () => _openFile(quote['file_url'] ?? ''),
+                              child: Text(
+                                quote['file_name'] ?? 'Sconosciuto',
+                                style: TextStyle(
+                                  color: Colors.blueAccent,
+                                  decoration: TextDecoration.underline,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Checkbox(
-                              value: isAccepted,
-                              onChanged: (val) => _updateQuoteState(quote, accepted: val ?? false, rejected: false),
-                              activeColor: Colors.greenAccent,
-                              checkColor: Colors.black,
-                            ),
-                            Text('Accettato', style: TextStyle(color: Colors.white.withOpacity(0.7))),
-                            SizedBox(width: 8),
-                            Checkbox(
-                              value: isRejected,
-                              onChanged: (val) => _updateQuoteState(quote, accepted: false, rejected: val ?? false),
-                              activeColor: Colors.redAccent,
-                              checkColor: Colors.white,
-                            ),
-                            Text('Non Accett.', style: TextStyle(color: Colors.white.withOpacity(0.7))),
-                            SizedBox(width: 8),
-                            IconButton(
+                            trailing: IconButton(
                               icon: Icon(Icons.delete_outline, color: Colors.redAccent),
                               onPressed: () => _deleteQuote(quote['id']),
                             ),
-                          ],
-                        ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  Checkbox(
+                                    value: isAccepted,
+                                    onChanged: (val) => _updateQuoteState(quote, accepted: val ?? false, rejected: false),
+                                    activeColor: Colors.greenAccent,
+                                    checkColor: Colors.black,
+                                  ),
+                                  Text('Accettato', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                                  SizedBox(width: 16),
+                                  Checkbox(
+                                    value: isRejected,
+                                    onChanged: (val) => _updateQuoteState(quote, accepted: false, rejected: val ?? false),
+                                    activeColor: Colors.redAccent,
+                                    checkColor: Colors.white,
+                                  ),
+                                  Text('Non Accettato', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   },
