@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -135,6 +135,14 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     final titleCtrl = TextEditingController(text: invoice?['title']?.toString() ?? '');
     final clientPhoneCtrl = TextEditingController(text: invoice?['client_phone']?.toString() ?? '');
     final clientEmailCtrl = TextEditingController(text: invoice?['client_email']?.toString() ?? '');
+    final clientVatCtrl = TextEditingController(text: invoice?['client_vat']?.toString() ?? '');
+    final clientTaxCodeCtrl = TextEditingController(text: invoice?['client_tax_code']?.toString() ?? '');
+    final clientAddressCtrl = TextEditingController(text: invoice?['client_address']?.toString() ?? '');
+    final clientCityCtrl = TextEditingController(text: invoice?['client_city']?.toString() ?? '');
+    final clientProvinceCtrl = TextEditingController(text: invoice?['client_province']?.toString() ?? '');
+    final clientZipCtrl = TextEditingController(text: invoice?['client_zip']?.toString() ?? '');
+    final clientSdiCtrl = TextEditingController(text: invoice?['client_sdi']?.toString() ?? '');
+    final clientPecCtrl = TextEditingController(text: invoice?['client_pec']?.toString() ?? '');
 
     String status = invoice?['status']?.toString() ?? 'PENDING';
     String? customerId = invoice?['customer_id']?.toString();
@@ -173,6 +181,14 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
         'title': titleCtrl.text,
         'client_phone': clientPhoneCtrl.text,
         'client_email': clientEmailCtrl.text,
+        'client_vat': clientVatCtrl.text,
+        'client_tax_code': clientTaxCodeCtrl.text,
+        'client_address': clientAddressCtrl.text,
+        'client_city': clientCityCtrl.text,
+        'client_province': clientProvinceCtrl.text,
+        'client_zip': clientZipCtrl.text,
+        'client_sdi': clientSdiCtrl.text,
+        'client_pec': clientPecCtrl.text,
         'attachments': attachments,
       };
       if (effectiveId != null) {
@@ -265,12 +281,16 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                           setStateBuilder(() {
                             customerId = val?['id']?.toString();
                             if (val != null) {
-                              if (val['phone'] != null && val['phone'].toString().isNotEmpty) {
-                                clientPhoneCtrl.text = val['phone'].toString();
-                              }
-                              if (val['email'] != null && val['email'].toString().isNotEmpty) {
-                                clientEmailCtrl.text = val['email'].toString();
-                              }
+                              if (val['phone'] != null) clientPhoneCtrl.text = val['phone'].toString();
+                              if (val['email'] != null) clientEmailCtrl.text = val['email'].toString();
+                              if (val['vat_number'] != null) clientVatCtrl.text = val['vat_number'].toString();
+                              if (val['tax_code'] != null) clientTaxCodeCtrl.text = val['tax_code'].toString();
+                              if (val['address_street'] != null) clientAddressCtrl.text = val['address_street'].toString();
+                              if (val['address_city'] != null) clientCityCtrl.text = val['address_city'].toString();
+                              if (val['address_province'] != null) clientProvinceCtrl.text = val['address_province'].toString();
+                              if (val['address_zip'] != null) clientZipCtrl.text = val['address_zip'].toString();
+                              if (val['sdi_code'] != null) clientSdiCtrl.text = val['sdi_code'].toString();
+                              if (val['pec'] != null) clientPecCtrl.text = val['pec'].toString();
                             }
                           });
                         },
@@ -290,6 +310,34 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         decoration: InputDecoration(
                             labelText: 'Email Cliente',
                             labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
+                      ),
+                      SizedBox(height: 12),
+                      ExpansionTile(
+                        title: Text('Dati Anagrafici Cliente', style: TextStyle(color: Colors.white)),
+                        iconColor: Colors.white,
+                        collapsedIconColor: Colors.white,
+                        childrenPadding: EdgeInsets.all(8),
+                        children: [
+                          TextField(controller: clientVatCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Partita IVA', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          SizedBox(height: 8),
+                          TextField(controller: clientTaxCodeCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Codice Fiscale', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          SizedBox(height: 8),
+                          TextField(controller: clientAddressCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Indirizzo', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(flex: 2, child: TextField(controller: clientCityCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Città', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))))),
+                              SizedBox(width: 8),
+                              Expanded(flex: 1, child: TextField(controller: clientProvinceCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Provincia', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))))),
+                              SizedBox(width: 8),
+                              Expanded(flex: 1, child: TextField(controller: clientZipCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'CAP', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))))),
+                            ],
+                          ),
+                          SizedBox(height: 8),
+                          TextField(controller: clientSdiCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Codice SDI', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          SizedBox(height: 8),
+                          TextField(controller: clientPecCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'PEC', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                        ],
                       ),
                       SizedBox(height: 12),
                       TextField(

@@ -388,7 +388,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
                                       labelText: 'Cliente',
                                       isDense: true,
                                     ),
-                                    initialValue: expense.customerId,
+                                    value: expense.customerId,
                                     items: [
                                       ..._customers.map((c) {
                                         return DropdownMenuItem<String>(
@@ -421,7 +421,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
                                       labelText: 'Metodo',
                                       isDense: true,
                                     ),
-                                    initialValue: expense.paymentMethod,
+                                    value: expense.paymentMethod,
                                     items: ['Contanti', 'Fattura', 'Ritenuta d\'acconto'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                                     onChanged: (val) => setState(() => expense.paymentMethod = val!),
                                   ),

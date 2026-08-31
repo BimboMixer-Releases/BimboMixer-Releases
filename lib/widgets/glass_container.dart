@@ -95,21 +95,18 @@ class _GlassContainerState extends State<GlassContainer> {
           ),
           child: ClipRRect(
             borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: widget.blur, sigmaY: widget.blur),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: widget.padding ?? const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: currentCardColor,
-                  borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
-                  border: Border.all(
-                    color: currentBorderColor,
-                    width: currentBorderWidth,
-                  ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: widget.padding ?? const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: currentCardColor,
+                borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
+                border: Border.all(
+                  color: currentBorderColor,
+                  width: currentBorderWidth,
                 ),
-                child: widget.child,
               ),
+              child: widget.child,
             ),
           ),
         ),

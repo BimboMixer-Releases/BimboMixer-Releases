@@ -46,6 +46,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
 
   List<String> _attachments = [];
   DateTime _selectedDate = DateTime.now();
+  DateTime? _dateTo; // For scheduled payments end date
+  String _status = 'PENDING'; // For scheduled payments status
   final AttachmentService _attachmentService = AttachmentService();
   bool _isUploading = false;
 
@@ -84,6 +86,12 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
           try {
             _selectedDate = DateTime.parse(payment.date);
           } catch (_) {}
+          try {
+            if (payment.dateTo != null && payment.dateTo!.isNotEmpty) {
+              _dateTo = DateTime.parse(payment.dateTo!);
+            }
+          } catch (_) {}
+          _status = payment.status;
           _selectedCustomerId = payment.customerId;
           _selectedCategoryId = payment.categoryId;
           _selectedServiceId = payment.serviceId;
@@ -202,6 +210,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         'title': _titleController.text.trim().isEmpty ? null : _titleController.text.trim(),
         'client_phone': _clientPhoneController.text.trim().isEmpty ? null : _clientPhoneController.text.trim(),
         'client_email': _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
+        'status': _status,
+        'date_to': _dateTo != null ? DateFormat('yyyy-MM-dd').format(_dateTo!) : null,
       };
       if (widget.isScheduled) {
         await _dbHelper.updateScheduledPayment(data);
@@ -223,7 +233,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         'title': _titleController.text.trim().isEmpty ? null : _titleController.text.trim(),
         'client_phone': _clientPhoneController.text.trim().isEmpty ? null : _clientPhoneController.text.trim(),
         'client_email': _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
-        'status': 'PAID',
+        'status': _status,
+        'date_to': _dateTo != null ? DateFormat('yyyy-MM-dd').format(_dateTo!) : null,
       };
       final newId = widget.isScheduled 
           ? await _dbHelper.insertScheduledPayment(data) 
@@ -295,6 +306,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
       title: _titleController.text.trim().isEmpty ? null : _titleController.text.trim(),
       clientPhone: _clientPhoneController.text.trim().isEmpty ? null : _clientPhoneController.text.trim(),
       clientEmail: _clientEmailController.text.trim().isEmpty ? null : _clientEmailController.text.trim(),
+      status: _status,
+      dateTo: _dateTo != null ? DateFormat('yyyy-MM-dd').format(_dateTo!) : null,
     );
 
     try {
@@ -354,16 +367,21 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     }
   }
 
-  Future<void> _pickDate() async {
+  Future<void> _pickDate({bool isFrom = true}) async {
+    final initialDate = isFrom ? _selectedDate : (_dateTo ?? _selectedDate);
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
+      initialDate: initialDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null && picked != _selectedDate) {
+    if (picked != null) {
       setState(() {
-        _selectedDate = picked;
+        if (isFrom) {
+          _selectedDate = picked;
+        } else {
+          _dateTo = picked;
+        }
       });
     }
   }
@@ -456,21 +474,87 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                       ),
                     ),
                     SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: _pickDate,
-                      child: AbsorbPointer(
-                        child: TextField(
-                          controller: TextEditingController(text: displayDate),
-                          style: TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            labelText: 'Data',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
-                            suffixIcon: Icon(Icons.calendar_today, color: Colors.white.withOpacity(0.7)),
+                    if (widget.isScheduled) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => _pickDate(isFrom: true),
+                              child: AbsorbPointer(
+                                child: TextField(
+                                  controller: TextEditingController(text: displayDate),
+                                  style: TextStyle(color: Colors.white),
+                                  decoration: InputDecoration(
+                                    labelText: 'Data da',
+                                    labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                                    suffixIcon: Icon(Icons.calendar_today, color: Colors.white.withOpacity(0.7)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => _pickDate(isFrom: false),
+                              child: AbsorbPointer(
+                                child: TextField(
+                                  controller: TextEditingController(
+                                    text: _dateTo != null ? DateFormat(theme.dateFormat).format(_dateTo!) : '',
+                                  ),
+                                  style: TextStyle(color: Colors.white),
+                                  decoration: InputDecoration(
+                                    labelText: 'Data a (opz.)',
+                                    labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                                    suffixIcon: _dateTo != null 
+                                      ? GestureDetector(
+                                          onTap: () => setState(() => _dateTo = null),
+                                          child: Icon(Icons.clear, color: Colors.white54),
+                                        )
+                                      : Icon(Icons.calendar_today, color: Colors.white.withOpacity(0.7)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: _status,
+                        dropdownColor: const Color(0xFF2A2D34),
+                        decoration: InputDecoration(
+                          labelText: 'Stato',
+                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'PENDING', child: Text('⏳ Da Pagare', style: TextStyle(color: Colors.white))),
+                          DropdownMenuItem(value: 'PAID', child: Text('✅ Pagato', style: TextStyle(color: Colors.white))),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _status = val);
+                        },
+                      ),
+                    ] else ...[
+                      GestureDetector(
+                        onTap: () => _pickDate(isFrom: true),
+                        child: AbsorbPointer(
+                          child: TextField(
+                            controller: TextEditingController(text: displayDate),
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Data',
+                              labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                              suffixIcon: Icon(Icons.calendar_today, color: Colors.white.withOpacity(0.7)),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                     SizedBox(height: 16),
                     DropdownSearch<String>(
                       selectedItem: _paymentMethod,

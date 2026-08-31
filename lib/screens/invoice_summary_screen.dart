@@ -139,6 +139,34 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                       _buildInfoRow('Data Operazione/Evento', DateUtilsApp.formatDbDate(pData['event_date']?.toString(), theme.dateFormat)),
                       const Divider(),
                       _buildInfoRow('Cliente', _customerName ?? '-'),
+                      if ((pData['client_vat'] ?? '').toString().isNotEmpty) ...[
+                        const Divider(),
+                        _buildInfoRow('Partita IVA', pData['client_vat']),
+                      ],
+                      if ((pData['client_tax_code'] ?? '').toString().isNotEmpty) ...[
+                        const Divider(),
+                        _buildInfoRow('Codice Fiscale', pData['client_tax_code']),
+                      ],
+                      if ((pData['client_address'] ?? '').toString().isNotEmpty) ...[
+                        const Divider(),
+                        _buildInfoRow('Indirizzo', '${pData['client_address']} ${pData['client_city'] ?? ''} ${pData['client_province'] ?? ''} ${pData['client_zip'] ?? ''}'),
+                      ],
+                      if ((pData['client_pec'] ?? '').toString().isNotEmpty) ...[
+                        const Divider(),
+                        _buildInfoRow('PEC', pData['client_pec']),
+                      ],
+                      if ((pData['client_sdi'] ?? '').toString().isNotEmpty) ...[
+                        const Divider(),
+                        _buildInfoRow('SDI', pData['client_sdi']),
+                      ],
+                      if ((pData['client_phone'] ?? '').toString().isNotEmpty) ...[
+                        const Divider(),
+                        _buildInfoRow('Telefono', pData['client_phone']),
+                      ],
+                      if ((pData['client_email'] ?? '').toString().isNotEmpty) ...[
+                        const Divider(),
+                        _buildInfoRow('Email', pData['client_email']),
+                      ],
                       const Divider(),
                       _buildInfoRow('Codice IVA', pData['vat_code']?.toString() ?? '-'),
                       const Divider(),

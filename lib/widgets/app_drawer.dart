@@ -20,32 +20,89 @@ class AppDrawer extends StatelessWidget {
     final theme = context.watch<AppThemeProvider>();
 
     return Drawer(
-      backgroundColor: theme.cardColor,
+      backgroundColor: const Color(0xFF1A1D24),
       child: Column(
         children: [
-          DrawerHeader(
-            decoration: BoxDecoration(color: theme.primaryColor),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF3A3F4B),
+                  const Color(0xFF2A2D34),
+                  const Color(0xFF4A4F5A),
+                  const Color(0xFF2A2D34),
+                  const Color(0xFF3A3F4B),
+                ],
+                stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.05),
+                  blurRadius: 12,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.white,
-                  child: theme.hasValidLogo
-                      ? ClipOval(
-                          child: Image.file(
-                            File(theme.logoImagePath!),
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Icon(Icons.account_balance_wallet, size: 30, color: theme.primaryColor),
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 30,
+                    backgroundColor: const Color(0xFF2A2D34),
+                    child: theme.hasValidLogo
+                        ? ClipOval(
+                            child: Image.file(
+                              File(theme.logoImagePath!),
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Icon(Icons.account_balance_wallet, size: 30, color: theme.primaryColor),
+                  ),
                 ),
                 SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    'Bimbomixer Contabilità',
-                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Colors.white,
+                        Colors.white.withOpacity(0.85),
+                        Colors.white,
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ).createShader(bounds),
+                    child: Text(
+                      'Bimbomixer Contabilità',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],

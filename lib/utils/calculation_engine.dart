@@ -1,4 +1,4 @@
-﻿import 'package:contabile_app/utils/currency_utils.dart';
+import 'package:contabile_app/utils/currency_utils.dart';
 import 'package:contabile_app/models/dashboard_metrics.dart';
 
 /// Pure calculation engine. Does not depend on UI, Firebase, or external state.
@@ -91,10 +91,16 @@ class CalculationEngine {
     // Deadlines processing (filtered by selected year!)
     double totalDeadlinesPaid = 0.0;
     for (var d in deadlines) {
-      if (d['status'] == 'PAID' && d['date'] != null) {
-        int year = int.tryParse(d['date'].split('-')[0]) ?? 0;
-        if (year == selectedYear) {
-          totalDeadlinesPaid += CurrencyUtils.parseCurrency(d['amount']?.toString());
+      if (d['status'] == 'PAID') {
+        String? dateStr = d['date_from']?.toString();
+        if (dateStr == null || dateStr.isEmpty) {
+          dateStr = d['date']?.toString();
+        }
+        if (dateStr != null && dateStr.isNotEmpty) {
+          int year = int.tryParse(dateStr.split('-')[0]) ?? 0;
+          if (year == selectedYear) {
+            totalDeadlinesPaid += CurrencyUtils.parseCurrency(d['amount']?.toString());
+          }
         }
       }
     }

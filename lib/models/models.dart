@@ -150,6 +150,7 @@ class Payment {
   final String status; // 'PAID' or 'PENDING'
   final String? notes; // Additional notes e.g. for split logic
   final String? eventDates; // Storing intervals as text or JSON
+  final String? dateTo; // Optional end date for scheduled payments
   final String? title;
   final String? clientPhone;
   final String? clientEmail;
@@ -167,6 +168,7 @@ class Payment {
     this.status = 'PAID',
     this.notes,
     this.eventDates,
+    this.dateTo,
     this.title,
     this.clientPhone,
     this.clientEmail,
@@ -186,6 +188,7 @@ class Payment {
       'status': status,
       'notes': notes,
       'event_dates': eventDates,
+      'date_to': dateTo,
       'title': title,
       'client_phone': clientPhone,
       'client_email': clientEmail,
@@ -206,6 +209,7 @@ class Payment {
       status: map['status']?.toString() ?? 'PAID',
       notes: map['notes']?.toString(),
       eventDates: map['event_dates']?.toString(),
+      dateTo: map['date_to']?.toString(),
       title: map['title']?.toString(),
       clientPhone: map['client_phone']?.toString(),
       clientEmail: map['client_email']?.toString(),

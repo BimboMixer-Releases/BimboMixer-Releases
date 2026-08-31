@@ -311,68 +311,100 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                              isIN ? Icons.arrow_downward : Icons.arrow_upward,
-                              color: isIN
-                                  ? Colors.greenAccent
-                                  : Colors.redAccent,
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              DateUtilsApp.formatDbDate(
-                                p['date']?.toString(),
-                                theme.dateFormat,
-                              ),
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 13,
+                            GestureDetector(
+                              onTap: () async {
+                                final auth = await SecurityUtils.requireAdminAuth(context);
+                                if (auth && mounted) {
+                                  _markAsPaid(p);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: (p['status'] == 'Pagato' || p['status'] == 'PAID') 
+                                      ? Colors.greenAccent.withOpacity(0.1) 
+                                      : Colors.orangeAccent.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Icons.check_circle : Icons.schedule, 
+                                  color: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Colors.greenAccent : Colors.orangeAccent, 
+                                  size: 20
+                                ),
                               ),
                             ),
                             SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                '${p['payment_method'] ?? 'Movimento'}${subtitleText.isNotEmpty ? '    $subtitleText' : ''}',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${p['payment_method'] ?? 'Movimento'}',
+                                    style: TextStyle(
+                                      color: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Colors.white54 : Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? TextDecoration.lineThrough : null,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.calendar_today, color: Colors.white38, size: 12),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        () {
+                                          final dateStr = DateUtilsApp.formatDbDate(p['date']?.toString(), theme.dateFormat);
+                                          final dateTo = DateUtilsApp.formatDbDate(p['date_to']?.toString(), theme.dateFormat);
+                                          if (dateTo.isNotEmpty && dateTo != dateStr) {
+                                            return '$dateStr → $dateTo';
+                                          }
+                                          return dateStr;
+                                        }(),
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.54),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (subtitleText.isNotEmpty) ...[
+                                    SizedBox(height: 4),
+                                    Text(
+                                      subtitleText,
+                                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
-                            SizedBox(width: 8),
-                            if (p['attachments'] != null &&
-                                p['attachments'] != '[]')
-                              Padding(
-                                padding: EdgeInsets.only(right: 8.0),
-                                child: Icon(
-                                  Icons.attachment,
-                                  color: Colors.blueAccent,
-                                  size: 20,
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '€ ${double.tryParse(p['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'}',
+                                  style: TextStyle(
+                                    color: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Colors.greenAccent : (isIN ? Colors.greenAccent : Colors.redAccent),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    decoration: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? TextDecoration.lineThrough : null,
+                                  ),
                                 ),
-                              ),
-                            Text(
-                              '${double.tryParse(p['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'} €',
-                              style: TextStyle(
-                                color: isIN
-                                    ? Colors.greenAccent
-                                    : Colors.redAccent,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            IconButton(
-                              icon: Icon(
-                                Icons.check_circle_outline,
-                                color: Colors.greenAccent,
-                                size: 20,
-                              ),
-                              tooltip: 'Segna come Pagato',
-                              onPressed: () => _markAsPaid(p),
-                              constraints: const BoxConstraints(),
-                              padding: EdgeInsets.zero,
+                                if (p['attachments'] != null && p['attachments'] != '[]') ...[
+                                  SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.attachment, color: Colors.blueAccent, size: 12),
+                                      SizedBox(width: 4),
+                                      Text('Allegato', style: TextStyle(color: Colors.blueAccent, fontSize: 11)),
+                                    ],
+                                  ),
+                                ],
+                              ],
                             ),
                             SizedBox(width: 8),
                             IconButton(
