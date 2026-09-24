@@ -6,7 +6,7 @@ import sys
 
 TOKEN = "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"
 REPO = "BimboMixer-Releases/BimboMixer-Releases"
-TAG = "v1.8.49"
+TAG = "v1.8.50"
 
 headers = {
     "Authorization": f"token {TOKEN}",
@@ -48,7 +48,7 @@ except urllib.error.HTTPError as e:
         payload = json.dumps({
             "tag_name": TAG,
             "name": TAG,
-            "body": "Aggiornamento v1.8.49 con fix versione.",
+            "body": "Aggiornamento v1.8.50 con fix versione.",
             "draft": False,
             "prerelease": False
         }).encode('utf-8')
@@ -74,8 +74,8 @@ except urllib.error.HTTPError as e:
 
 # 3. Upload Assets
 assets = [
-    {"path": "build/app/outputs/flutter-apk/app-release.apk", "name": "BimboMixer_v1.8.49.apk", "content_type": "application/vnd.android.package-archive"},
-    {"path": "Contabile_App_v1.8.49_Windows.zip", "name": "Contabile_App_v1.8.49_Windows.zip", "content_type": "application/zip"}
+    {"path": "build/app/outputs/flutter-apk/app-release.apk", "name": "BimboMixer_v1.8.50.apk", "content_type": "application/vnd.android.package-archive"},
+    {"path": "Contabile_App_v1.8.50_Windows.zip", "name": "Contabile_App_v1.8.50_Windows.zip", "content_type": "application/zip"}
 ]
 
 for asset in assets:

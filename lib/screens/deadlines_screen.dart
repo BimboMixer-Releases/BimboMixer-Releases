@@ -878,27 +878,26 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                   ),
                   const SizedBox(height: 16),
                   // Row 2: Details
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        flex: 2,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildInfoColumn('Cliente', customer),
-                            _buildInfoColumn('Stato', statusText, icon: statusIcon, iconColor: statusColor),
-                            _buildInfoColumn('Priorità', priority, dotColor: priority == 'ALTA' ? Colors.red : Colors.orange),
-                          ],
-                        ),
+                      Wrap(
+                        spacing: 24,
+                        runSpacing: 12,
+                        children: [
+                          _buildInfoColumn('Cliente', customer),
+                          _buildInfoColumn('Stato', statusText, icon: statusIcon, iconColor: statusColor),
+                          _buildInfoColumn('Priorità', priority, dotColor: priority == 'ALTA' ? Colors.red : Colors.orange),
+                        ],
                       ),
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '€ ${amount.toStringAsFixed(2)}',
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '€ ${amount.toStringAsFixed(2)}',
                               style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),

@@ -1,18 +1,18 @@
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:contabile_app/database/database_helper.dart';
-import 'package:contabile_app/providers/app_theme_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:contabile_app/utils/date_utils_app.dart';
 import 'package:contabile_app/utils/security_utils.dart';
-import 'package:contabile_app/screens/payment_summary_screen.dart';
+import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:contabile_app/screens/payment_form_screen.dart';
+import 'package:contabile_app/screens/invoice_form_screen.dart';
 
 class InvoiceSummaryScreen extends StatefulWidget {
-  final Map<String, dynamic> invoice;
-  final Function(Map<String, dynamic>) onEdit;
+  final String invoiceId;
 
-  const InvoiceSummaryScreen({super.key, required this.invoice, required this.onEdit});
+  const InvoiceSummaryScreen({super.key, required this.invoiceId});
 
   @override
   State<InvoiceSummaryScreen> createState() => _InvoiceSummaryScreenState();
@@ -20,7 +20,10 @@ class InvoiceSummaryScreen extends StatefulWidget {
 
 class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  Map<String, dynamic>? _data;
   String? _customerName;
+  String? _categoryName;
+  String? _serviceName;
   List<String> _attachments = [];
   bool _isLoading = true;
 
@@ -31,30 +34,53 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
   }
 
   Future<void> _loadData() async {
-    if (mounted) setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
+    
+    final pData = await _dbHelper.getInvoiceById(widget.invoiceId);
+    if (pData != null) {
+      _data = pData;
+      
+      final custId = pData['customer_id'];
+      if (custId != null) {
+        final custList = await _dbHelper.getCustomers();
+        final c = custList.cast<Map<String,dynamic>>().firstWhere((e) => e['id'].toString() == custId.toString(), orElse: () => {});
+        _customerName = c['name'];
+      }
 
-    final pData = widget.invoice;
-    final custId = pData['customer_id'];
-    if (custId != null) {
-      final custList = await _dbHelper.getCustomers();
-      final c = custList.cast<Map<String, dynamic>>().firstWhere(
-        (e) => e['id'].toString() == custId.toString(),
-        orElse: () => {},
-      );
-      _customerName = c['name'];
-    }
+      final catId = pData['category_id'];
+      if (catId != null) {
+        final catList = await _dbHelper.getCategories();
+        final c = catList.cast<Map<String,dynamic>>().firstWhere((e) => e['id'].toString() == catId.toString(), orElse: () => {});
+        _categoryName = c['name'];
+      }
 
-    if (pData['attachments'] != null) {
-      try {
-        if (pData['attachments'] is String) {
+      final srvId = pData['service_id'];
+      if (srvId != null) {
+        final srvList = await _dbHelper.getServiceTypes();
+        final s = srvList.cast<Map<String,dynamic>>().firstWhere((e) => e['id'].toString() == srvId.toString(), orElse: () => {});
+        _serviceName = s['name'];
+      }
+
+      if (pData['attachments'] != null) {
+        try {
           _attachments = List<String>.from(jsonDecode(pData['attachments']));
-        } else if (pData['attachments'] is List) {
-          _attachments = List<String>.from(pData['attachments']);
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
+    
+    setState(() => _isLoading = false);
+  }
 
-    if (mounted) setState(() => _isLoading = false);
+  Future<void> _launchUrl(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Impossibile aprire l\'allegato')));
+      }
+    }
   }
 
   @override
@@ -62,421 +88,463 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFF0A0710),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF7C3AED))),
+        body: Center(child: CircularProgressIndicator(color: Colors.purpleAccent)),
       );
     }
 
-    final pData = widget.invoice;
-    final amount = double.tryParse(pData['amount']?.toString() ?? '0') ?? 0.0;
-    final theme = Provider.of<AppThemeProvider>(context);
-    final isPaid = pData['status']?.toString().toUpperCase() == 'PAGATO';
-    final invoiceNumber = pData['number']?.toString() ?? '-';
+    if (_data == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0A0710),
+        appBar: AppBar(title: const Text('Errore'), backgroundColor: Colors.transparent, elevation: 0),
+        body: const Center(child: Text('Fattura non trovato', style: TextStyle(color: Colors.white))),
+      );
+    }
+    
+    final isIN = _data!['type'] == 'IN';
+    final amount = double.tryParse(_data!['amount']?.toString() ?? '0') ?? 0.0;
+    final regDate = DateUtilsApp.formatDbDate(_data!['date']?.toString(), 'dd MMMM yyyy');
+    final displayId = 'N. 2026/0' + _data!['id'].toString().padLeft(3, '0');
+    final String title2 = "COMMERCIALE";
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0710),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ══════════ COMBINED HEADER + TITLE (full-width stage lights bg) ══════════
-            Stack(
+      backgroundColor: const Color(0xFF0A0710), // Solid dark blue/black background
+      body: Stack(
+        children: [
+          // Background Gradient (Dark solid)
+          Container(
+            color: const Color(0xFF0A0710),
+          ),
+          
+          // Stage Lights only at top right, fading out
+          Positioned(
+            top: 0,
+            right: 0,
+            width: MediaQuery.of(context).size.width * 0.5,
+            height: 350,
+            child: ShaderMask(
+              shaderCallback: (rect) {
+                return const LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [Colors.black, Colors.black87, Colors.transparent],
+                  stops: [0.0, 0.4, 1.0],
+                ).createShader(rect);
+              },
+              blendMode: BlendMode.dstIn,
+              child: Image.asset(
+                'assets/images/stage_lights.jpg',
+                fit: BoxFit.cover,
+                alignment: Alignment.topRight,
+              ),
+            ),
+          ),
+          
+          // Content
+          SafeArea(
+            child: Column(
               children: [
-                // Stage lights — covers ENTIRE header+title area
-                Positioned.fill(
-                  child: ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
-                      colors: [Colors.transparent, Colors.white],
-                      stops: [0.0, 0.55],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ).createShader(bounds),
-                    blendMode: BlendMode.dstIn,
-                    child: Image.asset(
-                      'assets/images/stage_lights.jpg',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                // Dark left overlay
-                Positioned.fill(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF0A0710), Colors.transparent],
-                        stops: [0.3, 1.0],
+                // Top Bar with back button and edit button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
                       ),
-                    ),
+                      HoverEditButton(
+                        onTap: () async {
+                          bool authorized = await SecurityUtils.requireAdminAuth(context);
+                          if (!authorized || !context.mounted) return;
+                          await Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceFormScreen(invoiceId: widget.invoiceId, isReadOnly: false))); 
+                          _loadData();
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                // Foreground
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Company header row
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 10, 12, 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          ClipOval(
-                            child: Image.asset(
-                              'assets/images/logo_bimbomixer_bw.jpg',
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFF7C3AED), width: 2),
+                
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header (Logo and Company Details) OVER the background
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Logo Image
+                            Container(
+                              width: 110,
+                              height: 110,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFB142F5).withValues(alpha: 0.4),
+                                    blurRadius: 20,
+                                    spreadRadius: 2,
+                                  )
+                                ],
+                                image: const DecorationImage(
+                                  image: AssetImage('assets/images/logo_bimbomixer_bw.png'),
+                                  fit: BoxFit.cover,
                                 ),
-                                child: const Icon(Icons.music_note, color: Color(0xFF7C3AED)),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                RichText(
-                                  text: TextSpan(
-                                    children: [
-                                      TextSpan(text: 'BIMBO', style: GoogleFonts.inter(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                                      TextSpan(text: 'MIXER', style: GoogleFonts.inter(color: const Color(0xFF7C3AED), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                                    ],
-                                  ),
-                                ),
-                                Text('SERVICE AUDIO  •  LUCI  •  VIDEO', style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 9, letterSpacing: 1.5, fontWeight: FontWeight.w500)),
-                                const SizedBox(height: 5),
-                                Row(children: [
-                                  const Icon(Icons.location_on, color: Color(0xFF7C3AED), size: 11),
-                                  const SizedBox(width: 3),
-                                  Text('Vetralla (VT)', style: TextStyle(color: Colors.grey[400], fontSize: 10)),
-                                  const SizedBox(width: 12),
-                                  const Icon(Icons.email_outlined, color: Color(0xFF7C3AED), size: 11),
-                                  const SizedBox(width: 3),
-                                  Text('bimbomixer91@gmail.com', style: TextStyle(color: Colors.grey[400], fontSize: 10)),
-                                ]),
-                                const SizedBox(height: 2),
-                                Row(children: [
-                                  const Icon(Icons.badge_outlined, color: Color(0xFF7C3AED), size: 11),
-                                  const SizedBox(width: 3),
-                                  Text('P.IVA 02494800564', style: TextStyle(color: Colors.grey[400], fontSize: 10)),
-                                  const SizedBox(width: 12),
-                                  const Icon(Icons.phone, color: Color(0xFF7C3AED), size: 11),
-                                  const SizedBox(width: 3),
-                                  Text('+39 380 7483998', style: TextStyle(color: Colors.grey[400], fontSize: 10)),
-                                ]),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          HoverEditButton(
-                            onTap: () async {
-                              bool authorized = await SecurityUtils.requireAdminAuth(context);
-                              if (!authorized || !context.mounted) return;
-                              Navigator.pop(context);
-                              widget.onEdit(widget.invoice);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Title row
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                RichText(
-                                  text: TextSpan(
-                                    children: [
-                                      TextSpan(text: 'FATTURA ', style: GoogleFonts.inter(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-                                      TextSpan(text: 'COMMERCIALE', style: GoogleFonts.inter(color: const Color(0xFF7C3AED), fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text('N. $invoiceNumber', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          // Date + status
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.45),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFF2A2A4A), width: 1),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.calendar_today, color: Color(0xFF7C3AED), size: 15),
-                                    const SizedBox(width: 8),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  RichText(
+                                    text: const TextSpan(
+                                      style: TextStyle(
+                                        fontSize: 42,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 2.0,
+                                      ),
                                       children: [
-                                        Text('Data emissione', style: TextStyle(color: Colors.grey[400], fontSize: 9)),
-                                        Text(DateUtilsApp.formatDbDate(pData['date']?.toString(), theme.dateFormat), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                      ],
+                                        TextSpan(text: 'BIMBO', style: TextStyle(color: Colors.white)),
+                                        TextSpan(text: 'MIXER', style: TextStyle(color: Color(0xFFB142F5))),
+                                      ]
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'SERVICE AUDIO • LUCI • VIDEO\nPRODUZIONI TEATRALI',
+                                    style: TextStyle(color: Colors.grey[400], fontSize: 13, letterSpacing: 2.0, fontWeight: FontWeight.bold, height: 1.4),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.location_on, color: Color(0xFFB142F5), size: 16),
+                                      const SizedBox(width: 8),
+                                      Text('Vetralla (VT)', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                      const SizedBox(width: 32),
+                                      const Icon(Icons.email, color: Color(0xFFB142F5), size: 16),
+                                      const SizedBox(width: 8),
+                                      Text('bimbomixer91@gmail.com', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.person, color: Color(0xFFB142F5), size: 16),
+                                      const SizedBox(width: 8),
+                                      Text('P.IVA 02494800564', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                      const SizedBox(width: 32),
+                                      const Icon(Icons.phone, color: Color(0xFFB142F5), size: 16),
+                                      const SizedBox(width: 8),
+                                      Text('+39 3807483998', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isPaid ? const Color(0xFF0D2E1A) : const Color(0xFF2E1A0D),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: isPaid ? Colors.green[700]! : Colors.orange[700]!, width: 1),
-                                ),
-                                child: Text(
-                                  pData['status']?.toString().toUpperCase() ?? 'PENDING',
-                                  style: TextStyle(color: isPaid ? Colors.greenAccent : Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                                ),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 40),
+                        
+                        // The Bordered Container for Receipt
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0E0B16), // very dark inside
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: const Color(0xFF261D42), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            // ══════════ CONTENT CARD ══════════
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
-                child: Stack(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
-                            blurRadius: 30,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildRow(Icons.person_outline, 'Cliente', _customerName ?? '-'),
-                          _buildDivider(),
-                          _buildAmountRow(amount),
-                          _buildDivider(),
-                          _buildRow(
-                            Icons.event,
-                            'Data Operazione',
-                            DateUtilsApp.formatDbDate(pData['event_date']?.toString(), theme.dateFormat),
-                          ),
-                          if ((pData['client_vat'] ?? '').toString().isNotEmpty) ...[
-                            _buildDivider(),
-                            _buildRow(Icons.badge_outlined, 'P.IVA Cliente', pData['client_vat'].toString()),
-                          ],
-                          if ((pData['client_pec'] ?? '').toString().isNotEmpty) ...[
-                            _buildDivider(),
-                            _buildRow(Icons.email_outlined, 'PEC', pData['client_pec'].toString()),
-                          ],
-                          if ((pData['client_sdi'] ?? '').toString().isNotEmpty) ...[
-                            _buildDivider(),
-                            _buildRow(Icons.qr_code, 'SDI', pData['client_sdi'].toString()),
-                          ],
-                          if ((pData['client_address'] ?? '').toString().isNotEmpty) ...[
-                            _buildDivider(),
-                            _buildRow(
-                              Icons.location_on_outlined,
-                              'Indirizzo',
-                              '${pData['client_address']} ${pData['client_city'] ?? ''} ${pData['client_province'] ?? ''}',
-                            ),
-                          ],
-                          if ((pData['notes'] ?? '').toString().isNotEmpty) ...[
-                            _buildDivider(),
-                            _buildNoteRow(pData['notes'].toString()),
-                          ],
-                          const SizedBox(height: 90),
-                        ],
-                      ),
-                    ),
-                    // Watermark logo
-                    Positioned(
-                      bottom: 16,
-                      right: 16,
-                      child: Opacity(
-                        opacity: 0.07,
-                        child: Image.asset(
-                          'assets/images/logo_bimbomixer_bw.jpg',
-                          width: 150,
-                          height: 150,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ══════════ FOOTER ══════════
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFF0D0D1A),
-                border: Border(top: BorderSide(color: Color(0xFF1E1E3A), width: 1)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1230),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.receipt_long, color: Color(0xFF7C3AED), size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'FATTURA COMMERCIALE',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                        RichText(
-                          text: const TextSpan(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              TextSpan(text: 'Documento generato tramite ', style: TextStyle(color: Color(0xFF777777), fontSize: 9)),
-                              TextSpan(text: 'Contabile App', style: TextStyle(color: Color(0xFF7C3AED), fontSize: 9, fontWeight: FontWeight.bold)),
+                              // Title & Date Banner inside the container
+                              Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        RichText(
+                                          text: TextSpan(
+                                            text: 'FATTURA ',
+                                            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900),
+                                            children: [
+                                              TextSpan(
+                                                text: title2,
+                                                style: const TextStyle(color: Color(0xFFB142F5)),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          displayId,
+                                          style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF161124),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: const Color(0xFF261D42)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.calendar_month, color: Color(0xFFB142F5), size: 26),
+                                          const SizedBox(width: 12),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('Data registrazione', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                                              const SizedBox(height: 2),
+                                              Text(regDate, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  ],
+                                ),
+                              ),
+                              
+                              // Main White Card Area
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8F7FA), // The white card background
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  padding: const EdgeInsets.all(24),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Left Details Panel
+                                      Expanded(
+                                        flex: 7,
+                                        child: Column(
+                                          children: [
+                                            _buildRowItem(Icons.person_outline, 'Cliente', _customerName ?? '-'),
+                                            const Divider(color: Color(0xFFE5E0F1), height: 24),
+                                            _buildRowItem(Icons.layers_outlined, 'Importo', '€ ${amount.toStringAsFixed(2)}', isAmount: true),
+                                            const Divider(color: Color(0xFFE5E0F1), height: 24),
+                                            _buildRowItem(Icons.credit_card_outlined, 'Metodo di pagamento', _data!['payment_method']?.toString() ?? '-'),
+                                            const Divider(color: Color(0xFFE5E0F1), height: 24),
+                                            _buildRowItem(Icons.folder_outlined, 'Categoria', _categoryName ?? '-'),
+                                            const Divider(color: Color(0xFFE5E0F1), height: 24),
+                                            _buildRowItem(Icons.receipt_long_outlined, 'Prestazione', _serviceName ?? '-'),
+                                            
+                                            const SizedBox(height: 24),
+                                            
+                                            // Note Container inside white card
+                                            Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.all(16),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF0EDF6),
+                                                borderRadius: BorderRadius.circular(16),
+                                              ),
+                                              child: Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFE3DCF0),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: const Icon(Icons.chat_bubble_outline, color: Color(0xFF322756), size: 18),
+                                                  ),
+                                                  const SizedBox(width: 16),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        const Text('Note', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
+                                                        const SizedBox(height: 4),
+                                                        Text(
+                                                          _data!['notes']?.toString().isNotEmpty == true ? _data!['notes'].toString() : 'Nessuna nota aggiuntiva.',
+                                                          style: TextStyle(color: Colors.grey[800], fontSize: 13),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            
+                                            if (_attachments.isNotEmpty) ...[
+                                              const SizedBox(height: 16),
+                                              Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.all(16),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF0EDF6),
+                                                  borderRadius: BorderRadius.circular(16),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    const Text('Allegati', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
+                                                    const SizedBox(height: 8),
+                                                    Wrap(
+                                                      spacing: 8,
+                                                      runSpacing: 8,
+                                                      children: _attachments.map((path) => InkWell(
+                                                        onTap: () => _launchUrl(path),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFFE3DCF0),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              const Icon(Icons.picture_as_pdf, size: 14, color: Color(0xFF322756)),
+                                                              const SizedBox(width: 6),
+                                                              Text(
+                                                                path.split('/').last.length > 15 ? path.split('/').last.substring(0, 15) + '...' : path.split('/').last,
+                                                                style: const TextStyle(fontSize: 11, color: Color(0xFF322756), fontWeight: FontWeight.bold),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      )).toList(),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ]
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 24),
+                                      // Right Panel (Watermark Logo)
+                                      Expanded(
+                                        flex: 4,
+                                        child: Container(
+                                          height: 380,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF8F7FA),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: Center(
+                                            child: Opacity(
+                                              opacity: 0.15,
+                                              child: Image.asset(
+                                                'assets/images/logo_bimbomixer_bw.png',
+                                                width: 300,
+                                                height: 300,
+                                                fit: BoxFit.contain,
+                                              )
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 24),
+                              
+                              // Dark Footer inside container
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFB142F5).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: const Icon(Icons.receipt_long, color: Color(0xFFB142F5), size: 28),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'FATTURA ' + (title2.contains("COMMERCIALE") ? title2 : title2 == "isIN ? 'INCASSO' : 'PAGAMENTO'" ? (isIN ? 'INCASSO' : 'PAGAMENTO') : title2),
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            RichText(
+                                              text: TextSpan(
+                                                text: 'Documento generato tramite ',
+                                                style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                                                children: const [
+                                                  TextSpan(
+                                                    text: 'Contabile App',
+                                                    style: TextStyle(color: Color(0xFFB142F5), fontWeight: FontWeight.bold),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Grazie!',
+                                          style: GoogleFonts.caveat(
+                                            color: const Color(0xFFB142F5),
+                                            fontSize: 42,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 24),
+                                        Container(width: 1, height: 40, color: const Color(0xFF322756)),
+                                        const SizedBox(width: 24),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text('Bimbomixer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                                            const SizedBox(height: 4),
+                                            Text('SERVICE AUDIO, LUCI, VIDEO\nE PRODUZIONI TEATRALI', style: TextStyle(color: Colors.grey[500], fontSize: 10, height: 1.3)),
+                                          ],
+                                        ),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              )
                             ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Grazie!',
-                        style: GoogleFonts.dancingScript(
-                          color: const Color(0xFF7C3AED),
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Text('Bimbomixer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                      Text('SERVICE AUDIO, LUCI, VIDEO', style: TextStyle(color: Colors.grey[600], fontSize: 8, letterSpacing: 0.8)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3EEFF),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: const Color(0xFF7C3AED), size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(label, style: const TextStyle(color: Color(0xFF555555), fontWeight: FontWeight.w600, fontSize: 14)),
-          ),
-          Text(value, style: const TextStyle(color: Color(0xFF222222), fontWeight: FontWeight.w500, fontSize: 14)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAmountRow(double amount) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3EEFF),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.euro, color: Color(0xFF7C3AED), size: 18),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Text('Importo', style: TextStyle(color: Color(0xFF555555), fontWeight: FontWeight.w600, fontSize: 14)),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3EEFF),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '€ ${amount.toStringAsFixed(2).replaceAll('.', ',')}',
-              style: const TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.w900, fontSize: 16),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNoteRow(String note) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3EEFF),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.notes, color: Color(0xFF7C3AED), size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Note', style: TextStyle(color: Color(0xFF555555), fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(note, style: const TextStyle(color: Color(0xFF666666), fontSize: 13)),
+                ),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -485,7 +553,97 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
     );
   }
 
-  Widget _buildDivider() {
-    return const Divider(color: Color(0xFFEEEEEE), height: 1, thickness: 1);
+  Widget _buildRowItem(IconData icon, String label, String value, {bool isAmount = false}) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEBE6F5),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: const Color(0xFF322756), size: 20),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 2,
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+        ),
+        if (isAmount)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEBE6F5), // Light purple box
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(color: Color(0xFF7F30D8), fontWeight: FontWeight.w900, fontSize: 22),
+            ),
+          )
+        else
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: Colors.grey[800], fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class HoverEditButton extends StatefulWidget {
+  final VoidCallback onTap;
+  
+  const HoverEditButton({super.key, required this.onTap});
+
+  @override
+  State<HoverEditButton> createState() => _HoverEditButtonState();
+}
+
+class _HoverEditButtonState extends State<HoverEditButton> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: _isHovering ? Colors.cyanAccent : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: _isHovering ? [
+              BoxShadow(color: Colors.cyanAccent.withValues(alpha: 0.5), blurRadius: 15, spreadRadius: 2)
+            ] : [],
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.edit_rounded, color: _isHovering ? Colors.black87 : Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'MODIFICA',
+                style: TextStyle(
+                  color: _isHovering ? Colors.black87 : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

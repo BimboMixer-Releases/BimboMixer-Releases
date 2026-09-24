@@ -1251,8 +1251,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 const SizedBox(height: 8),
 
                 // Bottom Action Bar
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                Wrap(
+                  alignment: WrapAlignment.spaceAround,
+                  spacing: 4,
+                  runSpacing: 8,
                   children: [
                     _buildCardActionBtn(
                       icon: Icons.person_search_outlined,
