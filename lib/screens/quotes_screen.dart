@@ -10,7 +10,8 @@ import '../services/attachment_service.dart';
 import '../widgets/gradient_scaffold.dart';
 
 class QuotesScreen extends StatefulWidget {
-  const QuotesScreen({super.key});
+  final bool openDialog;
+  const QuotesScreen({super.key, this.openDialog = false});
 
   @override
   State<QuotesScreen> createState() => _QuotesScreenState();
@@ -31,6 +32,9 @@ class _QuotesScreenState extends State<QuotesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.openDialog) _showQuoteDialog();
+    });
     _loadQuotes();
   }
 

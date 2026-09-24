@@ -17,7 +17,8 @@ import '../utils/url_launcher_util.dart';
 
 
 class InvoicesScreen extends StatefulWidget {
-  const InvoicesScreen({super.key});
+  final bool openDialog;
+  const InvoicesScreen({super.key, this.openDialog = false});
 
   @override
   State<InvoicesScreen> createState() => _InvoicesScreenState();
@@ -44,6 +45,9 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.openDialog) _showInvoiceDialog();
+    });
     _loadData();
   }
 

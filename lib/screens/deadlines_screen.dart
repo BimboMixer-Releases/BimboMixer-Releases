@@ -9,7 +9,8 @@ import '../providers/app_theme_provider.dart';
 import '../services/attachment_service.dart';
 
 class DeadlinesScreen extends StatefulWidget {
-  const DeadlinesScreen({super.key});
+  final bool openDialog;
+  const DeadlinesScreen({super.key, this.openDialog = false});
 
   @override
   State<DeadlinesScreen> createState() => _DeadlinesScreenState();
@@ -25,6 +26,9 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.openDialog) _showDeadlineDialog();
+    });
     _loadDeadlines();
   }
 

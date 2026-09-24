@@ -8,6 +8,13 @@ import 'package:contabile_app/services/update_service.dart';
 import 'package:contabile_app/widgets/update_dialog.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:contabile_app/screens/invoices_screen.dart';
+import 'package:contabile_app/screens/payment_form_screen.dart';
+
+
+import 'package:contabile_app/screens/quotes_screen.dart';
+import 'package:contabile_app/screens/deadlines_screen.dart';
+import 'package:contabile_app/screens/payments_screen.dart';
+
 import 'package:contabile_app/screens/security_center_screen.dart';
 import 'package:contabile_app/utils/calculation_engine.dart';
 
@@ -33,6 +40,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _deadlines = [];
   List<Map<String, dynamic>> _invoices = [];
   Map<int, double> _monthlyNet = {};
+  Map<int, double> _monthlyIn = {};
+  Map<int, double> _monthlyOut = {};
   Map<String, double> _chartDataCategoria = {};
   Map<String, double> _chartDataPrestazione = {};
   Map<String, double> _chartDataFatturatoContante = {};
@@ -125,6 +134,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _deadlines = deadlines;
       _invoices = invoices;
       _monthlyNet = metrics.monthlyNet;
+      _monthlyIn = metrics.monthlyIn;
+      _monthlyOut = metrics.monthlyOut;
       _chartDataCategoria = metrics.categoryBreakdown;
       _chartDataPrestazione = metrics.serviceBreakdown;
       _chartDataFatturatoContante = metrics.paymentMethodBreakdown;
@@ -174,6 +185,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
+            child: PopupMenuButton<String>(
+              offset: const Offset(0, 45),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: const Color(0xFF1E1E24),
+              onSelected: (value) {
+                if (value == 'Fattura') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen(openDialog: true)));
+                } else if (value == 'SpesaIncasso') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen()));
+                } else if (value == 'Scadenza') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
+                } else if (value == 'Preventivo') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const QuotesScreen(openDialog: true)));
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'Fattura', child: Row(children: [Icon(Icons.receipt, color: Colors.blueAccent), SizedBox(width:8), Text('Nuova Fattura', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'SpesaIncasso', child: Row(children: [Icon(Icons.swap_horiz, color: Colors.greenAccent), SizedBox(width:8), Text('Nuova Spesa / Incasso', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Scadenza', child: Row(children: [Icon(Icons.event, color: Colors.orangeAccent), SizedBox(width:8), Text('Nuova Scadenza', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Preventivo', child: Row(children: [Icon(Icons.description, color: Colors.purpleAccent), SizedBox(width:8), Text('Nuovo Preventivo', style: TextStyle(color: Colors.white))])),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.blueAccent]),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 1),
+                  ],
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 18),
+                    SizedBox(width: 4),
+                    Text('Nuova operazione', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ),
           if (widget.role == 'admin')
             IconButton(
               icon: Icon(Icons.security, color: Colors.white),
@@ -516,13 +570,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildLineChartCard(AppThemeProvider theme) {
-    List<FlSpot> spots = [];
+    List<FlSpot> spotsIn = [];
+    List<FlSpot> spotsOut = [];
     for (int i = 1; i <= 12; i++) {
-      spots.add(FlSpot(i.toDouble(), _monthlyNet[i] ?? 0.0));
+      spotsIn.add(FlSpot(i.toDouble(), _monthlyIn[i] ?? 0.0));
+      spotsOut.add(FlSpot(i.toDouble(), _monthlyOut[i] ?? 0.0));
     }
 
-    // Calcola range asse Y
-    final allValues = spots.map((s) => s.y).toList();
+    final allValues = [...spotsIn.map((s) => s.y), ...spotsOut.map((s) => s.y)];
     double maxY = allValues.isEmpty ? 1000 : (allValues.reduce((a, b) => a > b ? a : b));
     double minY = allValues.isEmpty ? 0 : (allValues.reduce((a, b) => a < b ? a : b));
     maxY = maxY <= 0 ? 1000 : maxY * 1.2;
@@ -545,13 +600,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ANDAMENTO MENSILE',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.54),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Text(
+                'ANDAMENTO MENSILE',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.54),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Spacer(),
+              Icon(Icons.circle, color: Colors.blueAccent, size: 10),
+              SizedBox(width: 4),
+              Text('Incassi', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+              SizedBox(width: 16),
+              Icon(Icons.circle, color: Colors.purpleAccent, size: 10),
+              SizedBox(width: 4),
+              Text('Spese', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+              SizedBox(width: 8),
+            ],
           ),
           SizedBox(height: 24),
           Expanded(
@@ -569,13 +637,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         final month = spot.x.toInt() >= 1 && spot.x.toInt() <= 12
                             ? months[spot.x.toInt() - 1]
                             : '';
-                        final euroVal = spot.y >= 0
-                            ? '€ ${spot.y.toStringAsFixed(2)}'
-                            : '- € ${spot.y.abs().toStringAsFixed(2)}';
+                        final isIncasso = spot.barIndex == 0;
+                        final title = isIncasso ? 'Incassi' : 'Spese';
+                        final color = isIncasso ? Colors.blueAccent : Colors.purpleAccent;
+                        
                         return LineTooltipItem(
-                          '$month\n$euroVal',
+                          '$month\n$title: € ${spot.y.toStringAsFixed(2)}',
                           TextStyle(
-                            color: Colors.white,
+                            color: color,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -637,7 +706,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: spots,
+                    spots: spotsIn,
                     isCurved: true,
                     color: Colors.blueAccent,
                     barWidth: 3,
@@ -647,6 +716,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       gradient: LinearGradient(
                         colors: [
                           Colors.blueAccent.withValues(alpha: 0.3),
+                          Colors.transparent,
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                  LineChartBarData(
+                    spots: spotsOut,
+                    isCurved: true,
+                    color: Colors.purpleAccent,
+                    barWidth: 3,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.purpleAccent.withValues(alpha: 0.3),
                           Colors.transparent,
                         ],
                         begin: Alignment.topCenter,
@@ -954,13 +1041,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ULTIME FATTURE',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.54),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'ULTIME FATTURE',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.54),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen()));
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text('Vedi tutti', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward, color: Colors.white.withValues(alpha: 0.7), size: 12),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 16),
           if (_invoices.isEmpty)
@@ -1027,13 +1140,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ULTIMI MOVIMENTI',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.54),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'ULTIMI MOVIMENTI',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.54),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentsScreen()));
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text('Vedi tutti', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward, color: Colors.white.withValues(alpha: 0.7), size: 12),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 16),
           if (sortedPayments.isEmpty)
@@ -1116,19 +1255,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'SCADENZE IN ARRIVO',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.54),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'SCADENZE IN ARRIVO',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.54),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen()));
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text('Vedi tutti', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward, color: Colors.white.withValues(alpha: 0.7), size: 12),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 16),
           if (_deadlines.isEmpty)
-            Text(
-              'Nessuna scadenza a breve.',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.calendar_month, color: Colors.purpleAccent.withValues(alpha: 0.8), size: 48),
+                    SizedBox(height: 16),
+                    Text('Nessuna scadenza a breve.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    SizedBox(height: 8),
+                    Text('Quando ci saranno scadenze, le troverai qui\nper tenerle sempre sotto controllo.', 
+                         textAlign: TextAlign.center, 
+                         style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 12)),
+                    SizedBox(height: 24),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.blueAccent]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(color: Colors.purpleAccent.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 1),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
+                        },
+                        icon: Icon(Icons.add, color: Colors.white, size: 18),
+                        label: Text('Nuova Scadenza', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             )
           else
             ..._deadlines.take(5).map((d) {
