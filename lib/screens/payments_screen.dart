@@ -415,24 +415,27 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Row(
-                                    children: [
-                                      const Text(
-                                        'Transactions Overview',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 0.2,
+                                  Expanded(
+                                    child: Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        const Text(
+                                          'Transactions Overview',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.2,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 20),
-                                      _buildStatusFilterChip('Tutti'),
-                                      const SizedBox(width: 8),
-                                      _buildStatusFilterChip('Saldato'),
-                                      const SizedBox(width: 8),
-                                      _buildStatusFilterChip('In Attesa'),
-                                    ],
+                                        const SizedBox(width: 12),
+                                        _buildStatusFilterChip('Tutti'),
+                                        _buildStatusFilterChip('Saldato'),
+                                        _buildStatusFilterChip('In Attesa'),
+                                      ],
+                                    ),
                                   ),
 
                                   // Three Dots Menu
@@ -468,10 +471,25 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                               ),
                             ),
 
-                            // Table Header Capsule Strip
-                            Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 20),
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            // Table Area with Horizontal Scroll for Mobile
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final double minTableWidth = 900.0;
+                                  final double actualWidth = constraints.maxWidth > minTableWidth 
+                                      ? constraints.maxWidth 
+                                      : minTableWidth;
+
+                                  return SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: actualWidth,
+                                      child: Column(
+                                        children: [
+                                          // Table Header Capsule Strip
+                                          Container(
+                                            margin: const EdgeInsets.symmetric(horizontal: 20),
+                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.05),
                                 borderRadius: BorderRadius.circular(14),
@@ -732,11 +750,18 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                         );
                                       },
                                     ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
                   ],
                 ),
               ),
@@ -749,19 +774,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Welcome Text
-        RichText(
-          text: const TextSpan(
-            text: 'Welcome, ',
-            style: TextStyle(color: Colors.white60, fontSize: 16),
-            children: [
-              TextSpan(
-                text: 'Eleanor V.',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ],
-          ),
-        ),
+        // Welcome Text removed
+        const SizedBox(),
 
         // Right side: Search Box + Bell + AXION Brand
         Row(
