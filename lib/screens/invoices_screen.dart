@@ -627,7 +627,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => InvoiceSummaryScreen(
-                              invoice: invoice,
+                              invoiceId: invoice['id'].toString(),
                               onEdit: (invoiceData) {
                                 _showInvoiceDialog(invoice: invoiceData, isReadOnly: false);
                               },

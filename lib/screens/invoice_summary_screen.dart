@@ -7,12 +7,12 @@ import 'package:contabile_app/utils/security_utils.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:contabile_app/screens/payment_form_screen.dart';
-import 'package:contabile_app/screens/invoice_form_screen.dart';
 
 class InvoiceSummaryScreen extends StatefulWidget {
   final String invoiceId;
+  final Function(Map<String, dynamic>)? onEdit;
 
-  const InvoiceSummaryScreen({super.key, required this.invoiceId});
+  const InvoiceSummaryScreen({super.key, required this.invoiceId, this.onEdit});
 
   @override
   State<InvoiceSummaryScreen> createState() => _InvoiceSummaryScreenState();
@@ -163,8 +163,7 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                         onTap: () async {
                           bool authorized = await SecurityUtils.requireAdminAuth(context);
                           if (!authorized || !context.mounted) return;
-                          await Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceFormScreen(invoiceId: widget.invoiceId, isReadOnly: false))); 
-                          _loadData();
+                          if (widget.onEdit != null) widget.onEdit!(_data!); Navigator.pop(context, true);
                         },
                       ),
                     ],

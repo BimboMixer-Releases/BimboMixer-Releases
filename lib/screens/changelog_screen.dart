@@ -16,6 +16,24 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
   // Hardcoded changelog for previous and current versions
   final List<Map<String, dynamic>> _changelogs = [
     {
+      'version': '1.8.50',
+      'date': '24 Settembre 2026',
+      'changes': [
+        'Risoluzione dei problemi di layout su schermi piccoli (smartphone).',
+        'Sistemati gli incolonnamenti e gli elementi fuori schermo in Clienti, Preventivi, Pagamenti e Scadenze.',
+        'Migliorata la reattività generale delle tabelle.',
+      ]
+    },
+    {
+      'version': '1.8.49',
+      'date': '24 Settembre 2026',
+      'changes': [
+        'Miglioramento grafico dell\'interfaccia utente (UI/UX).',
+        'Rimozione testo di benvenuto errato e placeholder.',
+        'Fix minori per la compatibilità con dispositivi Android e layout generale.',
+      ]
+    },
+    {
       'version': '1.8.36',
       'date': '25 Agosto 2026',
       'changes': [

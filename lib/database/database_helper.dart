@@ -411,6 +411,16 @@ class DatabaseHelper {
     }).toList();
   }
 
+  Future<Map<String, dynamic>?> getInvoiceById(String id) async {
+    final doc = await _db.collection('invoices').doc(id).get();
+    if (doc.exists) {
+      final data = doc.data()!;
+      data['id'] = doc.id;
+      return data;
+    }
+    return null;
+  }
+
   // --- CRUD DEADLINES ---
   Future<String> insertDeadline(Map<String, dynamic> deadline) async {
     final data = Map<String, dynamic>.from(deadline)..remove('id');
