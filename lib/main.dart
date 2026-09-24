@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'screens/main_screen.dart'; // Import MainScreen
+import 'screens/login_screen.dart'; // Ripristinato LoginScreen
 import 'providers/app_theme_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -94,7 +94,7 @@ class ContabileApp extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.white),
         useMaterial3: true,
       ),
-      home: const MainScreen(role: 'Admin', username: 'Sviluppatore'), // Bypass LoginScreen
+      home: const LoginScreen(), // Login e Impronta Digitale riattivati
     );
   }
 }
