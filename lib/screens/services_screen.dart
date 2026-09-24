@@ -59,8 +59,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   style: TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     labelText: 'Nome Servizio *',
-                    labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                   ),
                 ),
                 SizedBox(height: 16),
@@ -69,7 +69,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Colore (per grafico)', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
+                        Text('Colore (per grafico)', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
                         SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -106,7 +106,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(dialogContext),
-                      child: Text('ANNULLA', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                      child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                     ),
                     SizedBox(width: 8),
                     ElevatedButton(
@@ -151,14 +151,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
             children: [
               Text('Conferma Eliminazione', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
               SizedBox(height: 16),
-              Text('Eliminando questo servizio, i pagamenti associati rimarranno senza servizio. Procedere?', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+              Text('Eliminando questo servizio, i pagamenti associati rimarranno senza servizio. Procedere?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
               SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
@@ -192,7 +192,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: Colors.white))
           : _services.isEmpty
-              ? Center(child: Text('Nessun servizio definito.', style: TextStyle(color: Colors.white.withOpacity(0.54))))
+              ? Center(child: Text('Nessun servizio definito.', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))))
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _services.length,

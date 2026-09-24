@@ -123,7 +123,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                         onPressed: () => Navigator.pop(context),
                       ),
                       SizedBox(width: 8),
-                      Image.asset('assets/images/logo.png', height: 40, errorBuilder: (ctx, err, trace) {
+                      Image.asset('assets/logo.jpg', height: 40, errorBuilder: (ctx, err, trace) {
                         return Icon(Icons.account_balance_wallet, color: Colors.blueAccent, size: 40);
                       }),
                       SizedBox(width: 12),

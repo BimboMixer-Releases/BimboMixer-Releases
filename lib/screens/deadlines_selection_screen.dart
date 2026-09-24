@@ -16,14 +16,6 @@ class DeadlinesSelectionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
-            },
-          ),
-        ),
         title: Text('Gestione Scadenze', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -103,7 +95,7 @@ class DeadlinesSelectionScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           width: isDesktop ? 300 : MediaQuery.of(context).size.width * 0.8,
-          height: 200,
+          height: 230,
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -123,9 +115,11 @@ class DeadlinesSelectionScreen extends StatelessWidget {
               Text(
                 description,
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.54),
-                  fontSize: 14,
+                  color: Colors.white.withValues(alpha: 0.54),
+                  fontSize: 13,
                 ),
               ),
             ],

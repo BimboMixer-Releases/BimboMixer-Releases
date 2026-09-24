@@ -1,8 +1,11 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../providers/app_theme_provider.dart';
+import '../utils/app_colors.dart';
+import 'customers_screen.dart';
+import 'services_screen.dart';
+import 'categories_screen.dart';
+import 'reports_screen.dart';
+import 'settings_screen.dart';
 import 'dashboard_screen.dart';
 import 'payments_screen.dart';
 import 'invoices_screen.dart';
@@ -11,8 +14,8 @@ import 'menu_screen.dart';
 import 'notes_screen.dart';
 import 'quotes_screen.dart';
 import 'login_screen.dart';
-import '../widgets/app_drawer.dart';
-import '../services/secure_storage_service.dart';
+import '../widgets/app_sidebar.dart';
+import '../widgets/mobile_bottom_nav.dart';
 
 class MainScreen extends StatefulWidget {
   final String role;
@@ -45,6 +48,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       const DeadlinesSelectionScreen(),
       const NotesScreen(),
       const QuotesScreen(),
+      const CustomersScreen(),
+      const ServicesScreen(),
+      const CategoriesScreen(),
+      const ReportsScreen(),
+      const SettingsScreen(),
       MenuScreen(role: widget.role),
     ];
   }
@@ -99,20 +107,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Disconnessione'),
-        content: Text('Sei sicuro di voler uscire dall\'app?'),
+        backgroundColor: AppColors.panelBackground,
+        title: const Text('Disconnessione', style: TextStyle(color: AppColors.textMain)),
+        content: const Text('Sei sicuro di voler uscire dall\'app?', style: TextStyle(color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('ANNULLA'),
+            child: const Text('ANNULLA', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.expenseRed),
             onPressed: () {
               Navigator.pop(context);
               _logout();
             },
-            child: Text('ESCI', style: TextStyle(color: Colors.white)),
+            child: const Text('ESCI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -121,34 +130,69 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Reset activity timer on any interaction
     _lastActivity = DateTime.now();
-    final theme = context.watch<AppThemeProvider>();
 
-    return Scaffold(
-      backgroundColor: theme.hasValidBackground ? Colors.transparent : const Color(0xFF121212),
-      body: Container(
-        decoration: theme.hasValidBackground
-            ? BoxDecoration(
-                image: DecorationImage(
-                  image: FileImage(File(theme.backgroundImagePath!)),
-                  fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(
-                    Colors.black.withValues(alpha: 0.8), // Sfondo molto scuro per non dare fastidio
-                    BlendMode.darken,
-                  ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth > 800;
+        
+        if (isDesktop) {
+          // DESKTOP LAYOUT (Sidebar)
+          return Scaffold(
+            backgroundColor: const Color(0xFF080614), // Dark deep neon base
+            body: Container(
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(0.5, -0.8),
+                  radius: 1.5,
+                  colors: [
+                    Color(0xFF2A114A), // Neon purple glow top
+                    Color(0xFF080614), // Deep dark
+                  ],
                 ),
-              )
-            : null,
-        child: _screens[_currentIndex],
-      ),
-      drawer: AppDrawer(
-        currentIndex: _currentIndex,
-        onItemSelected: (index) {
-          setState(() => _currentIndex = index);
-        },
-        onLogout: _showLogoutConfirmation,
-      ),
+              ),
+              child: Row(
+                children: [
+                  AppSidebar(
+                    currentIndex: _currentIndex,
+                    onItemSelected: (index) {
+                      setState(() => _currentIndex = index);
+                    },
+                    onLogout: _showLogoutConfirmation,
+                  ),
+                  Expanded(
+                    child: _screens[_currentIndex],
+                  ),
+                ],
+              ),
+            ),
+          );
+        } else {
+          // MOBILE LAYOUT (Bottom Navigation)
+          return Scaffold(
+            backgroundColor: const Color(0xFF080614),
+            body: Container(
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(0.0, -1.0),
+                  radius: 1.5,
+                  colors: [
+                    Color(0xFF2A114A),
+                    Color(0xFF080614),
+                  ],
+                ),
+              ),
+              child: _screens[_currentIndex],
+            ),
+            bottomNavigationBar: MobileBottomNav(
+              currentIndex: _currentIndex,
+              onItemSelected: (index) {
+                setState(() => _currentIndex = index);
+              },
+            ),
+          );
+        }
+      },
     );
   }
 }

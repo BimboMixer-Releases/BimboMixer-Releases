@@ -17,6 +17,8 @@ class CalculationEngine {
     double totalIn = 0.0;
     double totalOut = 0.0;
     Map<int, double> monthlyNet = {for (var i = 1; i <= 12; i++) i: 0.0};
+    Map<int, double> monthlyIn = {for (var i = 1; i <= 12; i++) i: 0.0};
+    Map<int, double> monthlyOut = {for (var i = 1; i <= 12; i++) i: 0.0};
     Map<String, double> tempCat = {};
     Map<String, double> tempSrv = {};
     Map<String, double> tempFatCon = {};
@@ -46,6 +48,7 @@ class CalculationEngine {
       if (p['type'] == 'IN') {
         totalIn += amount;
         monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) + amount);
+        monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) + amount);
         
         // Track invoice if this payment comes from an invoice
         if (p['invoice_id'] != null && p['invoice_id'].toString().isNotEmpty) {
@@ -54,6 +57,7 @@ class CalculationEngine {
       } else {
         totalOut += amount;
         monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) - amount);
+        monthlyOut[month] = CurrencyUtils.roundMoney((monthlyOut[month] ?? 0.0) + amount);
       }
 
       // Breakdown charts - count both IN and OUT as absolute values (as per previous logic)
@@ -83,6 +87,7 @@ class CalculationEngine {
           
           totalIn += amount;
           monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) + amount);
+          monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) + amount);
           tempFatCon['Fatturato'] = CurrencyUtils.roundMoney((tempFatCon['Fatturato'] ?? 0.0) + amount);
         }
       }
@@ -99,18 +104,23 @@ class CalculationEngine {
         if (dateStr != null && dateStr.isNotEmpty) {
           int year = int.tryParse(dateStr.split('-')[0]) ?? 0;
           if (year == selectedYear) {
-            totalDeadlinesPaid += CurrencyUtils.parseCurrency(d['amount']?.toString());
+            double amount = CurrencyUtils.parseCurrency(d['amount']?.toString());
+            totalDeadlinesPaid += amount;
+            
+            int month = int.tryParse(dateStr.split('-')[1]) ?? 1;
+            monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) - amount);
+            monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) - amount);
           }
         }
       }
     }
 
     // Calculate final metrics
-    totalIn = CurrencyUtils.roundMoney(totalIn);
+    totalIn = CurrencyUtils.roundMoney(totalIn - totalDeadlinesPaid);
     totalOut = CurrencyUtils.roundMoney(totalOut);
     totalDeadlinesPaid = CurrencyUtils.roundMoney(totalDeadlinesPaid);
     
-    double patrimonio = CurrencyUtils.roundMoney(totalIn - totalOut - totalDeadlinesPaid);
+    double patrimonio = CurrencyUtils.roundMoney(totalIn - totalOut);
     
     double margine = 0.0;
     if (totalIn > 0) {
@@ -123,6 +133,8 @@ class CalculationEngine {
       patrimonio: patrimonio,
       margine: margine,
       monthlyNet: monthlyNet,
+      monthlyIn: monthlyIn,
+      monthlyOut: monthlyOut,
       categoryBreakdown: tempCat,
       serviceBreakdown: tempSrv,
       paymentMethodBreakdown: tempFatCon,

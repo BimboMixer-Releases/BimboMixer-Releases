@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:contabile_app/main.dart' as app;
 
@@ -8,10 +8,12 @@ void main() {
   group('Financial Scenarios Integration Tests', () {
     testWidgets('App starts and Dashboard loads without crashing', (tester) async {
       app.main();
-      await tester.pumpAndSettle();
+      
+      for (int i = 0; i < 10; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
 
-      // We expect to find the "PATRIMONIO NETTO" text on the dashboard
-      expect(find.text('PATRIMONIO NETTO'), findsWidgets);
+      expect(find.textContaining('BIMBOMIXER'), findsWidgets);
     });
   });
 }

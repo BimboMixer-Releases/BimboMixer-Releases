@@ -126,7 +126,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.close, color: Colors.white.withOpacity(0.54)),
+                icon: Icon(Icons.close, color: Colors.white.withValues(alpha: 0.54)),
                 onPressed: () {
                   setState(() {
                     _checklistItems.removeAt(index);
@@ -184,7 +184,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 labelText: 'Titolo',
-                labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                 enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.borderColor)),
                 focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
               ),
@@ -193,7 +193,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             SizedBox(height: 24),
             Row(
               children: [
-                Text('Tipo: ', style: TextStyle(color: Colors.white.withOpacity(0.54))),
+                Text('Tipo: ', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))),
                 SizedBox(width: 8),
                 ChoiceChip(
                   label: Text('Testo'),

@@ -66,14 +66,6 @@ class _NotesScreenState extends State<NotesScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F13),
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
-            },
-          ),
-        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text('Note Generali', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

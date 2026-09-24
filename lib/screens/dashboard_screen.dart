@@ -239,7 +239,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildPatrimonioCard(AppThemeProvider theme) {
-    double netto = _totalIn - _totalOut - _totalDeadlinesPaid;
+    double netto = _totalIn - _totalOut;
     double nettoLastYear = _totalInLastYear - _totalOutLastYear;
     String change = _calculatePercentageChange(netto, nettoLastYear);
     bool isPositive = !change.startsWith('-');
@@ -260,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                 'PATRIMONIO NETTO',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.54),
+                  color: Colors.white.withValues(alpha: 0.54),
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
@@ -450,7 +450,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: AutoScrollText(
                     text: title,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.54),
+                      color: Colors.white.withValues(alpha: 0.54),
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -473,7 +473,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   height: 14,
                   child: AutoScrollText(
                     text: isAmount ? '$subtitle vs ${_selectedYear - 1}' : subtitle,
-                    style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 10),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 10),
                   ),
                 ),
               ],
@@ -547,7 +547,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(
             'ANDAMENTO MENSILE',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.54),
+              color: Colors.white.withValues(alpha: 0.54),
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -605,7 +605,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
                               months[value.toInt() - 1],
-                              style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 10),
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 10),
                             ),
                           );
                         }
@@ -741,7 +741,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: color,
         value: entry.value,
         showTitle: false,
-        radius: 65,
+        radius: 30,
       ));
     }
     if (sections.isEmpty) {
@@ -772,7 +772,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       value: _chartFilter,
                       isExpanded: true,
                       dropdownColor: theme.cardColor,
-                      icon: Icon(Icons.arrow_drop_down, color: Colors.white.withOpacity(0.54)),
+                      icon: Icon(Icons.arrow_drop_down, color: Colors.white.withValues(alpha: 0.54)),
                       style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                       items: const [
                         DropdownMenuItem(value: 'Categoria', child: Text('RIPARTIZIONE CATEGORIE')),
@@ -799,13 +799,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Expanded(
                     flex: 2,
                     child: IgnorePointer(
-                      child: PieChart(
-                        PieChartData(
-                          pieTouchData: PieTouchData(enabled: false),
-                          sectionsSpace: 2,
-                          centerSpaceRadius: 0,
-                          sections: sections,
-                        ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PieChart(
+                            PieChartData(
+                              pieTouchData: PieTouchData(enabled: false),
+                              sectionsSpace: 2,
+                              centerSpaceRadius: 35,
+                              sections: sections,
+                            ),
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Totale', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                              Text('€ ${total.toStringAsFixed(0)}', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -844,7 +856,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 SizedBox(width: 4),
                                 Text(
                                   '${pct.toStringAsFixed(0)}%',
-                                  style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 10),
+                                  style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 10),
                                 ),
                               ],
                             ),
@@ -944,14 +956,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(
             'ULTIME FATTURE',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.54),
+              color: Colors.white.withValues(alpha: 0.54),
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
           ),
           SizedBox(height: 16),
           if (_invoices.isEmpty)
-            Center(child: Text('Nessuna fattura registrata', style: TextStyle(color: Colors.white.withOpacity(0.54)))),
+            Center(child: Text('Nessuna fattura registrata', style: TextStyle(color: Colors.white.withValues(alpha: 0.54)))),
           ..._invoices.take(5).map((inv) {
             String status = inv['status']?.toString() ?? '';
             String displayStatus = status == 'PAID' ? 'Incassata' : status == 'LATE' ? 'In Ritardo' : 'Da Incassare';
@@ -1017,7 +1029,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(
             'ULTIMI MOVIMENTI',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.54),
+              color: Colors.white.withValues(alpha: 0.54),
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -1026,7 +1038,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (sortedPayments.isEmpty)
             Text(
               'Nessun movimento.',
-              style: TextStyle(color: Colors.white.withOpacity(0.54)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
             )
           else
             ...sortedPayments.take(5).map((p) {
@@ -1067,7 +1079,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Text(
                             subtitle,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.54),
+                              color: Colors.white.withValues(alpha: 0.54),
                               fontSize: 11,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -1106,7 +1118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(
             'SCADENZE IN ARRIVO',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.54),
+              color: Colors.white.withValues(alpha: 0.54),
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -1115,7 +1127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (_deadlines.isEmpty)
             Text(
               'Nessuna scadenza a breve.',
-              style: TextStyle(color: Colors.white.withOpacity(0.54)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
             )
           else
             ..._deadlines.take(5).map((d) {
@@ -1151,7 +1163,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Text(
                             d['date'],
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.54),
+                              color: Colors.white.withValues(alpha: 0.54),
                               fontSize: 12,
                             ),
                           ),
@@ -1342,7 +1354,7 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.close, color: Colors.white.withOpacity(0.54)),
+                      icon: Icon(Icons.close, color: Colors.white.withValues(alpha: 0.54)),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -1418,27 +1430,39 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                         color: isSelected ? color : color.withValues(alpha: 0.75),
                         value: entry.value,
                         showTitle: false,
-                        radius: isSelected ? currentRadius * 1.1 : currentRadius,
+                        radius: isSelected ? (currentRadius * 0.45) * 1.1 : currentRadius * 0.45,
                       );
                     });
 
-                    final pieWidget = PieChart(
-                      PieChartData(
-                        sectionsSpace: 3,
-                        centerSpaceRadius: 0,
-                        sections: sections,
-                        pieTouchData: PieTouchData(
-                          enabled: true,
-                          touchCallback: (event, response) {
-                            if (event is FlTapUpEvent) {
-                              final idx = response?.touchedSection?.touchedSectionIndex ?? -1;
-                              if (idx >= 0) _selectSlice(idx);
-                            }
-                          },
+                    final pieWidget = Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        PieChart(
+                          PieChartData(
+                            sectionsSpace: 3,
+                            centerSpaceRadius: currentRadius * 0.55,
+                            sections: sections,
+                            pieTouchData: PieTouchData(
+                              enabled: true,
+                              touchCallback: (event, response) {
+                                if (event is FlTapUpEvent) {
+                                  final idx = response?.touchedSection?.touchedSectionIndex ?? -1;
+                                  if (idx >= 0) _selectSlice(idx);
+                                }
+                              },
+                            ),
+                          ),
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOutCubic,
                         ),
-                      ),
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOutCubic,
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Totale', style: TextStyle(color: Colors.white54, fontSize: currentRadius * 0.12)),
+                            Text('€ ${total.toStringAsFixed(0)}', style: TextStyle(color: Colors.white, fontSize: currentRadius * 0.15, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
                     );
 
                     // Pannello dettaglio sezione selezionata
@@ -1510,7 +1534,7 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text('Totale', style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 13)),
+                                        Text('Totale', style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 13)),
                                         Text(
                                           '€ ${selected.value.toStringAsFixed(2)}',
                                           style: TextStyle(
@@ -1534,7 +1558,7 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text('% sul totale', style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 13)),
+                                        Text('% sul totale', style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 13)),
                                         Text(
                                           '${selectedPct.toStringAsFixed(1)}%',
                                           style: TextStyle(
@@ -1551,65 +1575,14 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                                   const Divider(color: Colors.white12),
                                   SizedBox(height: 8),
                                   Text(
-                                    selected != null 
-                                      ? 'TRANSAZIONI: ${selected.key.toUpperCase()}'
-                                      : 'RIEPILOGO TUTTE LE CATEGORIE',
+                                    'TRANSAZIONI: ${selected.key.toUpperCase()}',
                                     style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold),
                                   ),
                                   SizedBox(height: 10),
 
                                   // Lista (Categorie o Transazioni filtrate)
                                   Expanded(
-                                    child: selected != null 
-                                      ? _buildFilteredTransactionsList(selected.key, selectedColor)
-                                      : ListView.builder(
-                                          itemCount: widget.sortedCats.length,
-                                          itemBuilder: (_, idx) {
-                                            final e = widget.sortedCats[idx];
-                                            final c = _colorFor(idx);
-                                            final pct = total > 0 ? (e.value / total * 100) : 0.0;
-                                            return Container(
-                                              margin: const EdgeInsets.only(bottom: 6),
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white.withValues(alpha: 0.04),
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Container(
-                                                    width: 10, height: 10,
-                                                    decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-                                                  ),
-                                                  SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      e.key,
-                                                      style: TextStyle(
-                                                        color: Colors.white70,
-                                                        fontSize: 12,
-                                                      ),
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  SizedBox(width: 8),
-                                                  Text(
-                                                    '€ ${e.value.toStringAsFixed(0)}',
-                                                    style: TextStyle(
-                                                      color: Colors.white54,
-                                                      fontSize: 11,
-                                                    ),
-                                                  ),
-                                                  SizedBox(width: 6),
-                                                  Text(
-                                                    '${pct.toStringAsFixed(0)}%',
-                                                    style: TextStyle(color: Colors.white38, fontSize: 10),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-                                        ),
+                                    child: _buildFilteredTransactionsList(selected.key, selectedColor),
                                   ),
                                 ],
                               ),

@@ -66,7 +66,7 @@ class AdminUpdateScreen extends StatelessWidget {
                         '2. Crea un repository pubblico chiamato "BimboMixer-Releases"\n'
                         '3. Apri il file "lib/services/update_service.dart"\n'
                         '4. Modifica "TUO_USERNAME" con il tuo vero nome utente',
-                        style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                       ),
                     ],
                   ),
@@ -140,7 +140,7 @@ class AdminUpdateScreen extends StatelessWidget {
             children: [
               Text(title, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               SizedBox(height: 4),
-              Text(description, style: TextStyle(color: Colors.white.withOpacity(0.7))),
+              Text(description, style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
             ],
           ),
         ),

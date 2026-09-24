@@ -2,11 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'screens/login_screen.dart';
+import 'screens/main_screen.dart'; // Import MainScreen
 import 'providers/app_theme_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:safe_device/safe_device.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,11 +16,16 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint("Firebase initialization failed: $e");
+  }
 
-  // Livello 2 e Livello 3: Protezioni RASP e Anti-Screenshot
+  // Livello 2 e Livello 3: Protezioni RASP e Anti-Screenshot (DISABILITATO PER SVILUPPO)
+  /*
   if (Platform.isAndroid || Platform.isIOS) {
     try {
       bool isJailBroken = await SafeDevice.isJailBroken;
@@ -48,6 +52,7 @@ void main() async {
       print("Errore RASP: $e");
     }
   }
+  */
 
   runApp(
     ChangeNotifierProvider(
@@ -67,10 +72,29 @@ class ContabileApp extends StatelessWidget {
       title: 'Contabilità App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: theme.primaryColor),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: theme.primaryColor,
+          brightness: Brightness.dark,
+        ),
+        canvasColor: theme.panelBackground,
+        scaffoldBackgroundColor: theme.backgroundMain,
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white),
+          titleMedium: TextStyle(color: Colors.white),
+        ),
+        listTileTheme: const ListTileThemeData(
+          textColor: Colors.white,
+          iconColor: Colors.white,
+        ),
+        appBarTheme: const AppBarTheme(
+          iconTheme: IconThemeData(color: Colors.white),
+          foregroundColor: Colors.white,
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         useMaterial3: true,
       ),
-      home: const LoginScreen(),
+      home: const MainScreen(role: 'Admin', username: 'Sviluppatore'), // Bypass LoginScreen
     );
   }
 }

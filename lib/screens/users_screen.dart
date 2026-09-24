@@ -60,8 +60,8 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Username',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                         ),
                       ),
                       SizedBox(height: 8),
@@ -71,8 +71,8 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: user == null ? 'Password' : 'Password (lascia vuoto per non modificare)',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                         ),
                       ),
                       SizedBox(height: 8),
@@ -82,8 +82,8 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Email (per recupero password)',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                         ),
                       ),
                       SizedBox(height: 8),
@@ -93,8 +93,8 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Cellulare (per recupero password)',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                         ),
                       ),
                       SizedBox(height: 16),
@@ -104,8 +104,8 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Ruolo',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                         ),
                         items: ['Admin', 'User'].map((String r) {
                           return DropdownMenuItem<String>(
@@ -125,7 +125,7 @@ class _UsersScreenState extends State<UsersScreen> {
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(dialogContext),
-                            child: Text('ANNULLA', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                            child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                           ),
                           SizedBox(width: 8),
                           ElevatedButton(
@@ -188,14 +188,14 @@ class _UsersScreenState extends State<UsersScreen> {
             children: [
               Text('Conferma Eliminazione', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
               SizedBox(height: 16),
-              Text('Sei sicuro di voler eliminare questo utente?', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+              Text('Sei sicuro di voler eliminare questo utente?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
               SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
@@ -245,7 +245,7 @@ class _UsersScreenState extends State<UsersScreen> {
             children: [
               Text('Imposta Biometria per ${user['username']}', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
               SizedBox(height: 16),
-              Text('Inserisci la password dell\'utente per poterla salvare nel portachiavi sicuro del dispositivo.', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+              Text('Inserisci la password dell\'utente per poterla salvare nel portachiavi sicuro del dispositivo.', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
               SizedBox(height: 16),
               TextField(
                 controller: pwdController,
@@ -253,8 +253,8 @@ class _UsersScreenState extends State<UsersScreen> {
                 style: TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                 ),
               ),
               SizedBox(height: 24),
@@ -263,7 +263,7 @@ class _UsersScreenState extends State<UsersScreen> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
@@ -312,7 +312,7 @@ class _UsersScreenState extends State<UsersScreen> {
                       type: MaterialType.transparency,
                       child: ListTile(
                       title: Text(user['username']?.toString() ?? 'Utente', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      subtitle: Text('Ruolo: ${user['role']?.toString() ?? 'User'}', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                      subtitle: Text('Ruolo: ${user['role']?.toString() ?? 'User'}', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [

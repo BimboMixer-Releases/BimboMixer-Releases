@@ -4,10 +4,8 @@ import 'categories_screen.dart';
 import 'services_screen.dart';
 import 'users_screen.dart';
 import 'settings_screen.dart';
-import 'data_import_screen.dart';
 import 'security_center_screen.dart';
 import 'changelog_screen.dart';
-import 'quotes_screen.dart';
 import 'reports_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
@@ -25,14 +23,6 @@ class MenuScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
-            },
-          ),
-        ),
         title: Text('Altro', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -98,7 +88,7 @@ class MenuScreen extends StatelessWidget {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           glowColor: theme.primaryColor,
         ),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.54), size: 16),
+        trailing: Icon(Icons.arrow_forward_ios, color: Colors.white.withValues(alpha: 0.54), size: 16),
         onTap: () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
         },

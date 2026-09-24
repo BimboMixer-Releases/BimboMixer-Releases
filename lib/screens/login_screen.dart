@@ -270,10 +270,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Username',
-                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                       border: OutlineInputBorder(),
-                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.54))),
-                      prefixIcon: Icon(Icons.person, color: Colors.white.withOpacity(0.7)),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.54))),
+                      prefixIcon: Icon(Icons.person, color: Colors.white.withValues(alpha: 0.7)),
                     ),
                   ),
                   SizedBox(height: 16),
@@ -283,15 +283,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Password',
-                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                       border: OutlineInputBorder(),
-                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.54))),
-                      prefixIcon: Icon(Icons.lock, color: Colors.white.withOpacity(0.7)),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.54))),
+                      prefixIcon: Icon(Icons.lock, color: Colors.white.withValues(alpha: 0.7)),
                     ),
                   ),
                   SizedBox(height: 8),
                   Theme(
-                    data: Theme.of(context).copyWith(unselectedWidgetColor: Colors.white.withOpacity(0.7)),
+                    data: Theme.of(context).copyWith(unselectedWidgetColor: Colors.white.withValues(alpha: 0.7)),
                     child: CheckboxListTile(
                       title: Text('Ricordami', style: TextStyle(color: Colors.white)),
                       value: _rememberMe,
@@ -367,6 +367,18 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text(
+          'v1.0.3 (Build 42)',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
+            fontSize: 12,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
     );
   }
 
@@ -390,18 +402,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   Text('Recupero Credenziali', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                   SizedBox(height: 16),
-                  Text('Inserisci Email e Cellulare associati al tuo account per recuperare il tuo username.', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                  Text('Inserisci Email e Cellulare associati al tuo account per recuperare il tuo username.', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                   SizedBox(height: 16),
                   TextField(
                     controller: emailCtrl,
                     style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: Colors.white.withOpacity(0.7))),
+                    decoration: InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                   ),
                   SizedBox(height: 8),
                   TextField(
                     controller: phoneCtrl,
                     style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(labelText: 'Cellulare', labelStyle: TextStyle(color: Colors.white.withOpacity(0.7))),
+                    decoration: InputDecoration(labelText: 'Cellulare', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                   ),
                   SizedBox(height: 16),
                   if (errorMsg.isNotEmpty) Text(errorMsg, style: TextStyle(color: Colors.redAccent)),
@@ -410,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TextButton(onPressed: () => Navigator.pop(dialogCtx), child: Text('CHIUDI', style: TextStyle(color: Colors.white.withOpacity(0.7)))),
+                      TextButton(onPressed: () => Navigator.pop(dialogCtx), child: Text('CHIUDI', style: TextStyle(color: Colors.white.withValues(alpha: 0.7)))),
                       SizedBox(width: 8),
                       ElevatedButton(
                         onPressed: () async {

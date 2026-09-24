@@ -17,6 +17,7 @@ class Customer {
   final String? paReference; // Riferimento Amministrazione / Numero Ordine
   final String? paContract; // Codice Commessa / Convenzione
   final String? logoPath;
+  final String? status; // Stato del cliente (es. Attivo, In Revisione, ecc.)
 
   Customer({
     this.id,
@@ -37,6 +38,7 @@ class Customer {
     this.paReference,
     this.paContract,
     this.logoPath,
+    this.status,
   });
 
   Map<String, dynamic> toMap() {
@@ -59,6 +61,7 @@ class Customer {
       'pa_reference': paReference,
       'pa_contract': paContract,
       'logo_path': logoPath,
+      'status': status,
     };
   }
 
@@ -82,6 +85,7 @@ class Customer {
       paReference: map['pa_reference']?.toString(),
       paContract: map['pa_contract']?.toString(),
       logoPath: map['logo_path']?.toString(),
+      status: map['status']?.toString() ?? 'Nuovo',
     );
   }
 }

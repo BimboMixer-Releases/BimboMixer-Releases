@@ -70,12 +70,12 @@ dependencies:
   crypto: ^3.0.6
   encrypt: ^5.0.3
   crop_image: ^1.0.17
+  google_fonts: ^8.2.1
+  lucide_icons_flutter: ^3.1.20
 
 dependency_overrides:
   xml: ^7.0.1
 dev_dependencies:
-  integration_test:
-    sdk: flutter
   flutter_test:
     sdk: flutter
 

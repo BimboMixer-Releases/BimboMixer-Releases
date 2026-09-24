@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../database/database_helper.dart';
 import 'package:contabile_app/providers/app_theme_provider.dart';
 import 'package:contabile_app/screens/invoice_summary_screen.dart';
@@ -11,8 +10,11 @@ import '../services/pdf_report_service.dart';
 import '../utils/report_utils.dart';
 import '../utils/security_utils.dart';
 import '../utils/date_utils_app.dart';
-import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../widgets/custom_text_field.dart';
+import '../utils/date_picker_util.dart';
+import '../utils/url_launcher_util.dart';
+
 
 class InvoicesScreen extends StatefulWidget {
   const InvoicesScreen({super.key});
@@ -76,50 +78,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     });
   }
 
-  Future<void> _launchUrl(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Impossibile aprire l\'allegato')));
-      }
-    }
-  }
 
-  Future<void> _selectDate(BuildContext context, TextEditingController controller) async {
-    final theme = Provider.of<AppThemeProvider>(context, listen: false);
-    final dateFormat = theme.dateFormat;
-    DateTime initial = DateTime.now();
-    if (controller.text.isNotEmpty) {
-      try {
-        initial = DateFormat(dateFormat).parseStrict(controller.text);
-      } catch (_) {}
-    }
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.blueAccent,
-              onPrimary: Colors.white,
-              surface: Color(0xFF1E1E24),
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      controller.text = DateFormat(dateFormat).format(picked);
-    }
-  }
 
   void _showInvoiceDialog({Map<String, dynamic>? invoice, bool isReadOnly = false}) {
     final theme = Provider.of<AppThemeProvider>(context, listen: false);
@@ -220,50 +179,33 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextField(
-                        controller: numberCtrl,
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                            labelText: 'Numero Fattura (es. FPA 2/26)',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                      ),
+                      CustomTextField(controller: numberCtrl, labelText: 'Numero Fattura (es. FPA 2/26)'),
                       SizedBox(height: 12),
-                      TextField(
-                        controller: titleCtrl,
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                            labelText: 'Titolo (opzionale)',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                      ),
+                      CustomTextField(controller: titleCtrl, labelText: 'Titolo (opzionale)'),
                       SizedBox(height: 12),
                       InkWell(
                         onTap: () {
-                          if (!isReadOnly) _selectDate(context, dateCtrl);
+                          if (!isReadOnly) DatePickerUtil.selectDate(context, dateCtrl);
                         },
                         child: IgnorePointer(
-                          child: TextField(
-                            controller: dateCtrl,
-                            style: TextStyle(color: Colors.white),
-                            decoration: InputDecoration(
-                                labelText: 'Data Fattura (gg/mm/aaaa)',
-                                labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                          ),
+                          child: CustomTextField(controller: dateCtrl, labelText: 'Data Fattura (gg/mm/aaaa)'),
                         ),
                       ),
                       SizedBox(height: 16),
                       DropdownSearch<Map<String, dynamic>>(
+                        compareFn: (Map<String, dynamic> a, Map<String, dynamic> b) => a['id'] == b['id'],
                         selectedItem: customerId != null 
                           ? _customers.firstWhere((c) => c['id'].toString() == customerId, orElse: () => {'id': '', 'name': 'Sconosciuto'})
                           : null,
                         items: (filter, _) => _customers,
                         itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                        popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
+                        popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), 
                           showSearchBox: true,
                           searchFieldProps: TextFieldProps(
-                            style: TextStyle(color: Colors.black),
+                            style: TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               hintText: 'Cerca cliente...',
-                              hintStyle: TextStyle(color: Colors.black54),
+                              hintStyle: TextStyle(color: Colors.white54),
                             ),
                           ),
                         ),
@@ -274,7 +216,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         decoratorProps: DropDownDecoratorProps(
                           decoration: InputDecoration(
                             labelText: 'Cliente',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                           ),
                         ),
                         onSelected: isReadOnly ? null : (Map<String, dynamic>? val) {
@@ -296,21 +238,9 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         },
                       ),
                       SizedBox(height: 12),
-                      TextField(
-                        controller: clientPhoneCtrl,
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                            labelText: 'Cellulare Cliente',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                      ),
+                      CustomTextField(controller: clientPhoneCtrl, labelText: 'Cellulare Cliente'),
                       SizedBox(height: 12),
-                      TextField(
-                        controller: clientEmailCtrl,
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                            labelText: 'Email Cliente',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                      ),
+                      CustomTextField(controller: clientEmailCtrl, labelText: 'Email Cliente'),
                       SizedBox(height: 12),
                       ExpansionTile(
                         title: Text('Dati Anagrafici Cliente', style: TextStyle(color: Colors.white)),
@@ -318,40 +248,32 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         collapsedIconColor: Colors.white,
                         childrenPadding: EdgeInsets.all(8),
                         children: [
-                          TextField(controller: clientVatCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Partita IVA', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          TextField(controller: clientVatCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Partita IVA', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)))),
                           SizedBox(height: 8),
-                          TextField(controller: clientTaxCodeCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Codice Fiscale', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          TextField(controller: clientTaxCodeCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Codice Fiscale', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)))),
                           SizedBox(height: 8),
-                          TextField(controller: clientAddressCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Indirizzo', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          TextField(controller: clientAddressCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Indirizzo', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)))),
                           SizedBox(height: 8),
                           Row(
                             children: [
-                              Expanded(flex: 2, child: TextField(controller: clientCityCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Città', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))))),
+                              Expanded(flex: 2, child: TextField(controller: clientCityCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Città', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54))))),
                               SizedBox(width: 8),
-                              Expanded(flex: 1, child: TextField(controller: clientProvinceCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Provincia', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))))),
+                              Expanded(flex: 1, child: TextField(controller: clientProvinceCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Provincia', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54))))),
                               SizedBox(width: 8),
-                              Expanded(flex: 1, child: TextField(controller: clientZipCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'CAP', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))))),
+                              Expanded(flex: 1, child: TextField(controller: clientZipCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'CAP', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54))))),
                             ],
                           ),
                           SizedBox(height: 8),
-                          TextField(controller: clientSdiCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Codice SDI', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          TextField(controller: clientSdiCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Codice SDI', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)))),
                           SizedBox(height: 8),
-                          TextField(controller: clientPecCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'PEC', labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)))),
+                          TextField(controller: clientPecCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'PEC', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)))),
                         ],
                       ),
                       SizedBox(height: 12),
-                      TextField(
-                        controller: amountCtrl,
-                        style: TextStyle(color: Colors.white),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                            labelText: 'Importo',
-                            prefixText: '€ ',
-                            prefixStyle: TextStyle(color: Colors.white),
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                      ),
+                      CustomTextField(controller: amountCtrl, labelText: '€  Importo', keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                       SizedBox(height: 16),
                       DropdownSearch<String>(
+                        compareFn: (a, b) => a == b,
                         selectedItem: status,
                         items: (filter, _) => ['PENDING', 'PAID', 'LATE'],
                         itemAsString: (String item) {
@@ -362,13 +284,13 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                             default: return item;
                           }
                         },
-                        popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
+                        popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), 
                           showSearchBox: true,
                           searchFieldProps: TextFieldProps(
-                            style: TextStyle(color: Colors.black),
+                            style: TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               hintText: 'Cerca stato...',
-                              hintStyle: TextStyle(color: Colors.black54),
+                              hintStyle: TextStyle(color: Colors.white54),
                             ),
                           ),
                         ),
@@ -384,22 +306,23 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         decoratorProps: DropDownDecoratorProps(
                           decoration: InputDecoration(
                             labelText: 'Stato',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                           ),
                         ),
                         onSelected: isReadOnly ? null : (val) => setStateBuilder(() => status = val ?? 'PENDING'),
                       ),
                       SizedBox(height: 12),
                       DropdownSearch<String>(
+                        compareFn: (a, b) => a == b,
                         selectedItem: vatCode,
                         items: (filter, _) => _vatCodes,
-                        popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
+                        popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), 
                           showSearchBox: true,
                           searchFieldProps: TextFieldProps(
-                            style: TextStyle(color: Colors.black),
+                            style: TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               hintText: 'Cerca codice IVA...',
-                              hintStyle: TextStyle(color: Colors.black54),
+                              hintStyle: TextStyle(color: Colors.white54),
                             ),
                           ),
                         ),
@@ -410,7 +333,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                         decoratorProps: DropDownDecoratorProps(
                           decoration: InputDecoration(
                             labelText: 'Codice IVA',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                           ),
                         ),
                         onSelected: isReadOnly ? null : (val) => setStateBuilder(() => vatCode = val),
@@ -418,34 +341,21 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                       SizedBox(height: 12),
                       InkWell(
                         onTap: () {
-                          if (!isReadOnly) _selectDate(context, eventDateCtrl);
+                          if (!isReadOnly) DatePickerUtil.selectDate(context, eventDateCtrl);
                         },
                         child: IgnorePointer(
-                          child: TextField(
-                            controller: eventDateCtrl,
-                            style: TextStyle(color: Colors.white),
-                            decoration: InputDecoration(
-                                labelText: 'Data Evento (opzionale)',
-                                labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                          ),
+                          child: CustomTextField(controller: eventDateCtrl, labelText: 'Data Evento (opzionale)'),
                         ),
                       ),
                       SizedBox(height: 12),
-                      TextField(
-                        controller: noteCtrl,
-                        style: TextStyle(color: Colors.white),
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                            labelText: 'Note Evento',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54))),
-                      ),
+                      CustomTextField(controller: noteCtrl, labelText: 'Note Evento', maxLines: 3),
                     ],
                   ),
                 ),
                 SizedBox(height: 24),
                 Text('Allegati (Foto/File)',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontWeight: FontWeight.bold,
                         fontSize: 14)),
                 SizedBox(height: 8),
@@ -466,7 +376,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                           SizedBox(width: 8),
                           Expanded(
                             child: InkWell(
-                              onTap: () => _launchUrl(url),
+                              onTap: () => UrlLauncherUtil.launchCustomUrl(context, url),
                               child: Text(
                                 'Allegato ${idx + 1}',
                                 style: TextStyle(
@@ -507,7 +417,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                     children: [
                       if (Platform.isAndroid || Platform.isIOS)
                         IconButton(
-                          icon: Icon(Icons.camera_alt, color: Colors.white.withOpacity(0.54)),
+                          icon: Icon(Icons.camera_alt, color: Colors.white.withValues(alpha: 0.54)),
                           onPressed: () async {
                             final file = await _attachmentService.pickImageFromCamera(context);
                             if (file != null) {
@@ -523,7 +433,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                           },
                         ),
                       IconButton(
-                        icon: Icon(Icons.image, color: Colors.white.withOpacity(0.54)),
+                        icon: Icon(Icons.image, color: Colors.white.withValues(alpha: 0.54)),
                         onPressed: () async {
                           final file = await _attachmentService.pickFile(context);
                           if (file != null) {
@@ -599,15 +509,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
-            },
-          ),
-        ),
-        title: Text('Fatture', style: TextStyle(color: Colors.black)),
+        title: Text('Fatture', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -766,7 +668,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                                             child: Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(Icons.person, color: Colors.white.withOpacity(0.7), size: 14),
+                                                Icon(Icons.person, color: Colors.white.withValues(alpha: 0.7), size: 14),
                                                 SizedBox(width: 4),
                                                 Flexible(
                                                   child: Text(
@@ -836,7 +738,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                                   ),
                                 ),
                                 Text('Data: ${DateUtilsApp.formatDbDate(invoice['date']?.toString(), theme.dateFormat)}',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 13)),
+                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 13)),
                               ],
                             ),
                             SizedBox(height: 8),
@@ -844,19 +746,19 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Text('Note: ${invoice['notes']}',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13)),
+                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
                               ),
                             if (invoice['event_date'] != null && invoice['event_date'].toString().isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Text('Evento: ${DateUtilsApp.formatDbDate(invoice['event_date']?.toString(), theme.dateFormat)}',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13)),
+                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
                               ),
                             if (invoice['vat_code'] != null && invoice['vat_code'].toString().isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Text('IVA: ${invoice['vat_code']}',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13)),
+                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
                               ),
                             SizedBox(height: 12),
                             Row(
@@ -865,7 +767,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                                 if (attachments.isNotEmpty)
                                   Padding(
                                     padding: EdgeInsets.only(right: 12.0),
-                                    child: Icon(Icons.attachment, color: Colors.white.withOpacity(0.54), size: 20),
+                                    child: Icon(Icons.attachment, color: Colors.white.withValues(alpha: 0.54), size: 20),
                                   ),
                                 IconButton(
                                   icon: Icon(Icons.edit, color: Colors.blueAccent, size: 20),
@@ -917,7 +819,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
 
             return AlertDialog(
               backgroundColor: const Color(0xFF1E1E2C),
-              title: Text('Seleziona Cliente', style: TextStyle(color: Colors.black)),
+              title: Text('Seleziona Cliente', style: TextStyle(color: Colors.white)),
               content: SizedBox(
                 width: double.maxFinite,
                 height: 400,
@@ -927,8 +829,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: 'Cerca per nome...',
-                        labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
-                        prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.54)),
+                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+                        prefixIcon: Icon(Icons.search, color: Colors.white.withValues(alpha: 0.54)),
                       ),
                       onChanged: (val) {
                         setStateBuilder(() {
@@ -972,7 +874,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Annulla', style: TextStyle(color: Colors.white.withOpacity(0.54))),
+                  child: Text('Annulla', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))),
                 ),
               ],
             );
@@ -991,7 +893,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1E1E2C),
-          title: Text('Aggiungi Cliente', style: TextStyle(color: Colors.black)),
+          title: Text('Aggiungi Cliente', style: TextStyle(color: Colors.white)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1000,7 +902,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                 style: TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Ragione Sociale / Nome',
-                  labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                 ),
               ),
               SizedBox(height: 16),
@@ -1009,7 +911,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                 style: TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Partita IVA / Codice Fiscale',
-                  labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                 ),
               ),
             ],
@@ -1017,7 +919,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Annulla', style: TextStyle(color: Colors.white.withOpacity(0.54))),
+              child: Text('Annulla', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))),
             ),
             ElevatedButton(
               onPressed: () async {

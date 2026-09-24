@@ -44,7 +44,7 @@ class _MemoEventsScreenState extends State<MemoEventsScreen> {
         title: Text('Conferma Trasferimento', style: TextStyle(color: Colors.white)),
         content: Text(
           'Impostando lo stato su "PAGATO", questo memo verrà rimosso da questa lista e inserito in automatico nella sua sezione definitiva (Movimenti o Fatture).\n\nVuoi procedere?',
-          style: TextStyle(color: Colors.white.withOpacity(0.7)),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
@@ -113,7 +113,7 @@ class _MemoEventsScreenState extends State<MemoEventsScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E24),
         title: Text('Conferma', style: TextStyle(color: Colors.white)),
-        content: Text('Sei sicuro di voler eliminare questo memo?', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+        content: Text('Sei sicuro di voler eliminare questo memo?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annulla')),
           ElevatedButton(
@@ -166,7 +166,7 @@ class _MemoEventsScreenState extends State<MemoEventsScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: Colors.blueAccent))
           : _memoEvents.isEmpty
-              ? Center(child: Text('Nessun memo presente.', style: TextStyle(color: Colors.white.withOpacity(0.54))))
+              ? Center(child: Text('Nessun memo presente.', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))))
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _memoEvents.length,
@@ -234,7 +234,7 @@ class _MemoEventsScreenState extends State<MemoEventsScreen> {
                                         ),
                                         Text(
                                           'Data: $date',
-                                          style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 13),
+                                          style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 13),
                                         ),
                                       ],
                                     ),
@@ -254,6 +254,7 @@ class _MemoEventsScreenState extends State<MemoEventsScreen> {
                                 children: [
                                   Expanded(
                                     child: DropdownSearch<String>(
+                        compareFn: (a, b) => a == b,
                                       selectedItem: status,
                                       items: (filter, _) => ['IN ATTESA', 'SOLLECITARE', 'PAGATO'],
                                       dropdownBuilder: (context, selectedItem) {
@@ -279,7 +280,7 @@ class _MemoEventsScreenState extends State<MemoEventsScreen> {
                                       decoratorProps: DropDownDecoratorProps(
                                         decoration: InputDecoration(
                                           labelText: 'Stato',
-                                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                         ),

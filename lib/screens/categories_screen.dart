@@ -64,8 +64,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: 'Nome Categoria *',
-                        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                       ),
                     ),
                     SizedBox(height: 16),
@@ -75,8 +75,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: 'Tipo',
-                        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.7))),
+                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
                       ),
                       items: const [
                         DropdownMenuItem(value: 'IN', child: Text('Entrata')),
@@ -89,7 +89,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       },
                     ),
                     SizedBox(height: 16),
-                    Text('Colore (per grafici):', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                    Text('Colore (per grafici):', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                     SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -122,7 +122,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       children: [
                         TextButton(
                           onPressed: () => Navigator.pop(dialogContext),
-                          child: Text('ANNULLA', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                          child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                         ),
                         SizedBox(width: 8),
                         ElevatedButton(
@@ -170,14 +170,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             children: [
               Text('Conferma Eliminazione', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
               SizedBox(height: 16),
-              Text('Eliminando questa categoria, i pagamenti associati rimarranno senza categoria. Procedere?', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+              Text('Eliminando questa categoria, i pagamenti associati rimarranno senza categoria. Procedere?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
               SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
@@ -220,7 +220,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: Colors.white))
           : _categories.isEmpty
-              ? Center(child: Text('Nessuna categoria definita.', style: TextStyle(color: Colors.white.withOpacity(0.54))))
+              ? Center(child: Text('Nessuna categoria definita.', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))))
               : GridView.builder(
                   padding: const EdgeInsets.all(16),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -256,7 +256,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                 SizedBox(height: 4),
                                 Text(
                                   cat.type == 'IN' ? 'Entrata' : 'Uscita',
-                                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
+                                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
                                 ),
                               ],
                             ),

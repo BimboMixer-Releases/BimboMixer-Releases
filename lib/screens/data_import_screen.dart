@@ -85,11 +85,11 @@ class _DataImportScreenState extends State<DataImportScreen> {
           builder: (ctx) => AlertDialog(
             backgroundColor: const Color(0xFF1E1E24),
             title: Text('Cliente mancante', style: TextStyle(color: Colors.white)),
-            content: Text('Il cliente "${exp.customerName}" non esiste in anagrafica. Vuoi crearlo ora?', style: TextStyle(color: Colors.white.withOpacity(0.7))),
+            content: Text('Il cliente "${exp.customerName}" non esiste in anagrafica. Vuoi crearlo ora?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: Text('Salta per ora', style: TextStyle(color: Colors.white.withOpacity(0.54))),
+                child: Text('Salta per ora', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
@@ -388,7 +388,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
                                       labelText: 'Cliente',
                                       isDense: true,
                                     ),
-                                    value: expense.customerId,
+                                    initialValue: expense.customerId,
                                     items: [
                                       ..._customers.map((c) {
                                         return DropdownMenuItem<String>(
@@ -421,7 +421,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
                                       labelText: 'Metodo',
                                       isDense: true,
                                     ),
-                                    value: expense.paymentMethod,
+                                    initialValue: expense.paymentMethod,
                                     items: ['Contanti', 'Fattura', 'Ritenuta d\'acconto'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                                     onChanged: (val) => setState(() => expense.paymentMethod = val!),
                                   ),

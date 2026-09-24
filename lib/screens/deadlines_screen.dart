@@ -7,11 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../database/database_helper.dart';
 import '../providers/app_theme_provider.dart';
 import '../services/attachment_service.dart';
-import '../services/pdf_report_service.dart';
-import '../utils/report_utils.dart';
-import '../utils/security_utils.dart';
-import 'calendar_screen.dart';
-import 'package:pdf/widgets.dart' as pw;
 
 class DeadlinesScreen extends StatefulWidget {
   const DeadlinesScreen({super.key});
@@ -25,6 +20,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
   final AttachmentService _attachmentService = AttachmentService();
   List<Map<String, dynamic>> _deadlines = [];
   bool _isLoading = true;
+  String _selectedTab = 'Tutte';
 
   @override
   void initState() {
@@ -316,7 +312,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                                   color: Colors.white38, size: 18),
                               SizedBox(width: 8),
                               Text('Stato:',
-                                  style: TextStyle(color: Colors.white.withOpacity(0.54))),
+                                  style: TextStyle(color: Colors.white.withValues(alpha: 0.54))),
                               SizedBox(width: 12),
                               DropdownButton<String>(
                                 value: status,
@@ -347,7 +343,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                   // Allegati
                   Text('Allegati (Foto/File)',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                           fontWeight: FontWeight.bold,
                           fontSize: 14)),
                   SizedBox(height: 8),
@@ -409,7 +405,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                       children: [
                         if (Platform.isAndroid || Platform.isIOS)
                           IconButton(
-                            icon: Icon(Icons.camera_alt, color: Colors.white.withOpacity(0.54)),
+                            icon: Icon(Icons.camera_alt, color: Colors.white.withValues(alpha: 0.54)),
                             onPressed: () async {
                               final file = await _attachmentService.pickImageFromCamera(context);
                               if (file != null) {
@@ -430,7 +426,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                             },
                           ),
                         IconButton(
-                          icon: Icon(Icons.image, color: Colors.white.withOpacity(0.54)),
+                          icon: Icon(Icons.image, color: Colors.white.withValues(alpha: 0.54)),
                           onPressed: () async {
                             final file = await _attachmentService.pickFile(context);
                             if (file != null) {
@@ -462,7 +458,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
                         child: Text('Annulla',
-                            style: TextStyle(color: Colors.white.withOpacity(0.54))),
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.54))),
                       ),
                       if (!isReadOnly)
                         ElevatedButton.icon(
@@ -549,7 +545,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
       style: TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 13),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 13),
         prefixIcon: Icon(icon, color: Colors.white38, size: 18),
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.04),
@@ -633,434 +629,375 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
   // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
+
+  @override
   Widget build(BuildContext context) {
-    final theme = context.watch<AppThemeProvider>();
-    final dateFormat = theme.dateFormat;
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: Text('Scadenze',
-            style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.edit_calendar, color: Colors.blueAccent),
-            tooltip: 'Calendario Eventi',
-            onPressed: () {
-              // Non serve il controllo di ruolo qui, se vogliamo renderlo disponibile,
-              // ma possiamo recuperare il ruolo dal provider se necessario, per ora lo passiamo fisso
-              // o verifichiamo la biometria dentro calendar_screen.
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CalendarScreen(role: 'admin')),
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.print, color: Colors.blueAccent),
-            tooltip: 'Esporta in PDF',
-            onPressed: () async {
-              if (_deadlines.isEmpty) return;
-
-              // Richiedi il periodo con il filtro
-              final range = await ReportUtils.showDateRangeFilterDialog(context);
-              if (range == null) return; // Annullato dall'utente
-
-              // Filtra le scadenze in base al range
-              final filteredDeadlines = _deadlines.where((d) {
-                final dateFrom = d['date_from'] as String?;
-                if (dateFrom == null || dateFrom.isEmpty) return true;
-                return ReportUtils.isDateInRange(dateFrom, range);
-              }).toList();
-
-              if (filteredDeadlines.isEmpty) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Nessuna scadenza nel periodo selezionato.')),
-                  );
-                }
-                return;
-              }
-
-              final List<List<String>> data = filteredDeadlines.map<List<String>>((d) {
-                final date = _buildDateLabel(d, dateFormat);
-                final title = d['title']?.toString() ?? '';
-                final amountStr = d['amount']?.toString() ?? '0.0';
-                final amount = '${double.tryParse(amountStr)?.toStringAsFixed(2) ?? '0.00'} €';
-                final status = d['status'] == 'PAID' ? 'Pagato' : 'Pend.';
-                return [title, date, amount, status];
-              }).toList();
-              
-              await PDFReportService.generateAndDownloadReport(
-                title: 'Scadenze',
-                headers: ['Descrizione', 'Data', 'Importo', 'Stato'],
-                data: data,
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(3),
-                  1: const pw.FixedColumnWidth(80),
-                  2: const pw.FixedColumnWidth(60),
-                  3: const pw.FixedColumnWidth(50),
-                },
-                dateRangeText: ReportUtils.formatDateRangeText(range, dateFormat),
-                dateFormatString: dateFormat,
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.add, color: Colors.blueAccent),
-            onPressed: () => _showDeadlineDialog(),
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: Colors.blueAccent))
-          : Column(
-              children: [
-                // Banner totali
-                _buildTotalsBanner(theme),
-                // Lista scadenze
-                Expanded(
-                  child: _deadlines.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          itemCount: _deadlines.length,
-                          itemBuilder: (context, index) {
-                            final d = _deadlines[index];
-                            return _buildDeadlineCard(
-                                d, theme, dateFormat);
-                          },
-                        ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // HEADER
+              Row(
+                children: [
+                  if (Navigator.canPop(context))
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  const Expanded(
+                    child: Text(
+                      'AGENDA E SCADENZE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        shadows: [Shadow(color: Colors.white54, blurRadius: 10)],
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.list, color: Colors.white54),
+                        onPressed: () {},
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right, color: Colors.white54),
+                        onPressed: () {},
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // TABS
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildTab('Tutte'),
+                    _buildTab('Fiscali'),
+                    _buildTab('Previdenziali'),
+                    _buildTab('Aziendali'),
+                  ],
                 ),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildTotalsBanner(AppThemeProvider theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildTotalChip(
-              label: 'Da pagare',
-              amount: _totalPending,
-              color: Colors.orangeAccent,
-              icon: Icons.hourglass_empty,
-            ),
+              ),
+              const SizedBox(height: 24),
+              // SUBTITLE
+              const Text(
+                'Prossime Scadenze',
+                style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              // TIMELINE LIST
+              Expanded(
+                child: _deadlines.isEmpty 
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: _deadlines.length,
+                        itemBuilder: (context, index) {
+                          return _buildTimelineItem(_deadlines[index], index);
+                        },
+                      ),
+              ),
+            ],
           ),
-          SizedBox(width: 12),
-          Expanded(
-            child: _buildTotalChip(
-              label: 'Già pagato',
-              amount: _totalPaid,
-              color: Colors.greenAccent,
-              icon: Icons.check_circle_outline,
-            ),
-          ),
-        ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFFE324FF),
+        child: const Icon(Icons.add, color: Colors.white),
+        onPressed: () => _showDeadlineDialog(),
       ),
     );
   }
 
-  Widget _buildTotalChip({
-    required String label,
-    required double amount,
-    required Color color,
-    required IconData icon,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+  Widget _buildTab(String text) {
+    bool isSelected = _selectedTab == text;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedTab = text;
+        });
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.white.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white54,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildTimelineItem(Map<String, dynamic> d, int index) {
+    final colors = [
+      const Color(0xFFFF2A6D), // Neon Pink
+      const Color(0xFF05D9E8), // Neon Cyan
+      const Color(0xFF01FFE5), // Neon Green
+      const Color(0xFF2588FF), // Neon Blue
+    ];
+    final color = colors[index % colors.length];
+
+    final dateStr = _formatDate(d['date_from'] as String?, 'dd\nMMM');
+    final title = d['title'] ?? 'Scadenza senza titolo';
+    final amount = (d['amount'] as num?)?.toDouble() ?? 0.0;
+    final customer = d['customer_name']?.toString() ?? 'Nessun cliente';
+    final priority = (d['priority']?.toString() ?? 'Media').toUpperCase();
+    
+    final status = _getDeadlineStatus(d);
+    String statusText = 'In Sospeso';
+    IconData statusIcon = Icons.info_outline;
+    Color statusColor = Colors.orange;
+    
+    if (status == _DeadlineStatus.paid) {
+      statusText = 'Pagato';
+      statusIcon = Icons.check_circle_outline;
+      statusColor = Colors.green;
+    } else if (status == _DeadlineStatus.overdue) {
+      statusText = 'Scaduto';
+      statusIcon = Icons.error_outline;
+      statusColor = Colors.red;
+    }
+
+    return IntrinsicHeight(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(icon, color: color, size: 18),
-          SizedBox(width: 8),
-          Expanded(
+          // Timeline Date & Line
+          SizedBox(
+            width: 60,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        color: color.withValues(alpha: 0.8), fontSize: 11)),
                 Text(
-                  '€ ${amount.toStringAsFixed(2)}',
+                  dateStr,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: color,
-                    fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    height: 1.2,
+                    shadows: [Shadow(color: color, blurRadius: 8)],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Stack(
+                    alignment: Alignment.topCenter,
+                    children: [
+                      Container(
+                        width: 2,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              color,
+                              colors[(index + 1) % colors.length].withValues(alpha: 0.5)
+                            ],
+                          ),
+                          boxShadow: [BoxShadow(color: color, blurRadius: 4)],
+                        ),
+                      ),
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(color: color, blurRadius: 8, spreadRadius: 2)
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 16),
+          // Card
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).canvasColor.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+                boxShadow: [
+                  BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 20, spreadRadius: -5)
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Row 1: Title and Badge
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      _buildNeonBadge(status == _DeadlineStatus.paid ? 'COMPLETATO' : (status == _DeadlineStatus.overdue ? 'SCADUTO' : 'IMMINENTE'), color),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Row 2: Details
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildInfoColumn('Cliente', customer),
+                            _buildInfoColumn('Stato', statusText, icon: statusIcon, iconColor: statusColor),
+                            _buildInfoColumn('Priorità', priority, dotColor: priority == 'ALTA' ? Colors.red : Colors.orange),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '€ ${amount.toStringAsFixed(2)}',
+                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.end,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: () => _showDeadlineDialog(deadline: d),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.white38),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                  ),
+                                  child: const Text('Dettagli', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => _togglePaid(d),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: color.withValues(alpha: 0.8),
+                                    shadowColor: color,
+                                    elevation: 8,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                  ),
+                                  child: Text(status == _DeadlineStatus.paid ? 'Annulla' : 'Paga Ora', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                  onPressed: () async {
+                                    bool? confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        backgroundColor: Theme.of(context).canvasColor,
+                                        title: const Text('Elimina', style: TextStyle(color: Colors.white)),
+                                        content: const Text('Vuoi eliminare questa scadenza?', style: TextStyle(color: Colors.white70)),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ANNULLA', style: TextStyle(color: Colors.white54))),
+                                          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('ELIMINA', style: TextStyle(color: Colors.red))),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      await _dbHelper.deleteDeadline(d['id']);
+                                      _loadDeadlines();
+                                    }
+                                  },
+                                ),
+                              ],
+                            )
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDeadlineCard(
-      Map<String, dynamic> d, AppThemeProvider theme, String dateFormat) {
-    final status = _getDeadlineStatus(d);
-    final isPaid = status == _DeadlineStatus.paid;
-    final isOverdue = status == _DeadlineStatus.overdue;
-    final amount = (d['amount'] as num?)?.toDouble() ?? 0.0;
-    final notes = d['notes'] as String? ?? '';
+  Widget _buildInfoColumn(String label, String value, {IconData? icon, Color? iconColor, Color? dotColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: iconColor),
+              const SizedBox(width: 4),
+            ],
+            if (dotColor != null) ...[
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+            ],
+            Flexible(child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+      ],
+    );
+  }
 
-    Color statusColor;
-    String statusLabel;
-    IconData statusIcon;
-    switch (status) {
-      case _DeadlineStatus.paid:
-        statusColor = Colors.greenAccent;
-        statusLabel = 'Pagato';
-        statusIcon = Icons.check_circle;
-        break;
-      case _DeadlineStatus.overdue:
-        statusColor = Colors.redAccent;
-        statusLabel = 'Scaduto';
-        statusIcon = Icons.error_outline;
-        break;
-      default:
-        statusColor = Colors.orangeAccent;
-        statusLabel = 'Da pagare';
-        statusIcon = Icons.hourglass_empty;
-    }
-
+  Widget _buildNeonBadge(String text, Color color) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isPaid
-              ? Colors.greenAccent.withValues(alpha: 0.3)
-              : isOverdue
-                  ? Colors.redAccent.withValues(alpha: 0.3)
-                  : theme.borderColor,
-        ),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.8), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 8),
+        ],
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _showDeadlineDialog(deadline: d, isReadOnly: true),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () async {
-                        final auth = await SecurityUtils.requireAdminAuth(context);
-                        if (auth && mounted) {
-                          _togglePaid(d);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(statusIcon, color: statusColor, size: 20),
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    // Titolo + data
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            d['title'] ?? 'Scadenza',
-                            style: TextStyle(
-                              color: isPaid ? Colors.white54 : Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              decoration: isPaid
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.calendar_today,
-                                  color: Colors.white38, size: 12),
-                              SizedBox(width: 4),
-                              Text(
-                                _buildDateLabel(d, dateFormat),
-                                style: TextStyle(
-                                    color: Colors.white.withOpacity(0.54), fontSize: 12),
-                              ),
-                            ],
-                          ),
-                          if (notes.isNotEmpty) ...[
-                            SizedBox(height: 4),
-                            Text(notes,
-                                style: TextStyle(
-                                    color: Colors.white38, fontSize: 11),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          ],
-                          if (d['attachments'] != null && (d['attachments'] as List).isNotEmpty) ...[
-                            SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(Icons.attachment, color: Colors.blueAccent, size: 12),
-                                SizedBox(width: 4),
-                                Text('${(d['attachments'] as List).length} allegati', style: TextStyle(color: Colors.blueAccent, fontSize: 11)),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    // Importo + azioni
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (amount > 0)
-                          Text(
-                            '€ ${amount.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: isPaid ? Colors.greenAccent : Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              decoration: isPaid
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                        SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(statusLabel,
-                              style: TextStyle(
-                                  color: statusColor, fontSize: 10)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                SizedBox(height: 10),
-                // Azioni rapide
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    // Aggiungi a calendario
-                    TextButton.icon(
-                      onPressed: () => _addToCalendar(d),
-                      icon: Icon(Icons.event_available,
-                          size: 14, color: Colors.blueAccent),
-                      label: Text('Aggiungi al Calendario',
-                          style: TextStyle(
-                              color: Colors.blueAccent, fontSize: 11)),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                      ),
-                    ),
-                    // Toggle pagato
-                    TextButton.icon(
-                      onPressed: () async {
-                        final auth = await SecurityUtils.requireAdminAuth(context);
-                        if (auth && mounted) {
-                          _togglePaid(d);
-                        }
-                      },
-                      icon: Icon(
-                        isPaid ? Icons.undo : Icons.check,
-                        size: 14,
-                        color: isPaid ? Colors.orangeAccent : Colors.greenAccent,
-                      ),
-                      label: Text(
-                        isPaid ? 'Segna Pendente' : 'Segna Pagato',
-                        style: TextStyle(
-                          color: isPaid
-                              ? Colors.orangeAccent
-                              : Colors.greenAccent,
-                          fontSize: 11,
-                        ),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                      ),
-                    ),
-                    // Modifica
-                    IconButton(
-                      icon: Icon(Icons.edit_outlined,
-                          color: Colors.blueAccent, size: 18),
-                      onPressed: () async {
-                        final auth = await SecurityUtils.requireAdminAuth(context);
-                        if (auth && mounted) {
-                          _showDeadlineDialog(deadline: d, isReadOnly: false);
-                        }
-                      },
-                    ),
-                    // Elimina
-                    IconButton(
-                      icon: Icon(Icons.delete_outline,
-                          color: Colors.redAccent, size: 18),
-                      onPressed: () async {
-                        final auth = await SecurityUtils.requireAdminAuth(context);
-                        if (!auth || !mounted) return;
-                        
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: const Color(0xFF1E1E24),
-                            title: Text('Elimina Scadenza',
-                                style: TextStyle(color: Colors.white)),
-                            content: Text(
-                                'Sei sicuro di voler eliminare questa scadenza?',
-                                style: TextStyle(color: Colors.white.withOpacity(0.7))),
-                            actions: [
-                              TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(ctx, false),
-                                  child: Text('Annulla')),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.redAccent),
-                                onPressed: () =>
-                                    Navigator.pop(ctx, true),
-                                child: Text('Elimina'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true) {
-                          await _dbHelper.deleteDeadline(d['id']);
-                          _loadDeadlines();
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold, shadows: [Shadow(color: color, blurRadius: 4)]),
       ),
     );
   }
@@ -1070,14 +1007,11 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.event_available,
-              color: Colors.white12, size: 72),
-          SizedBox(height: 16),
-          Text('Nessuna scadenza inserita',
-              style: TextStyle(color: Colors.white38, fontSize: 16)),
-          SizedBox(height: 8),
-          Text('Premi + per aggiungerne una',
-              style: TextStyle(color: Colors.white24, fontSize: 13)),
+          const Icon(Icons.event_available, color: Colors.white12, size: 72),
+          const SizedBox(height: 16),
+          const Text('Nessuna scadenza inserita', style: TextStyle(color: Colors.white38, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('Premi + per aggiungerne una', style: TextStyle(color: Colors.white24, fontSize: 13)),
         ],
       ),
     );
@@ -1085,6 +1019,3 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 }
 
 enum _DeadlineStatus { pending, paid, overdue }
-
-
-

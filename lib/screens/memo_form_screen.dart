@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dropdown_search/dropdown_search.dart';
@@ -299,7 +299,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                     style: TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Titolo Memo (opzionale)',
-                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                     ),
                   ),
                   SizedBox(height: 16),
@@ -312,7 +312,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: _memoType == 'MOVIMENTO' ? 'Data Pagamento' : 'Data Fattura',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                         ),
                       ),
                     ),
@@ -320,18 +320,19 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                   SizedBox(height: 16),
                   
                   DropdownSearch<Map<String, dynamic>>(
+                    compareFn: (Map<String, dynamic> a, Map<String, dynamic> b) => a['id'] == b['id'],
                     selectedItem: _customerId != null 
                       ? _customers.firstWhere((c) => c['id'].toString() == _customerId, orElse: () => {'id': '', 'name': 'Sconosciuto'})
                       : null,
                     items: (filter, _) => _customers,
                     itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                    popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), 
+                    popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), 
                       showSearchBox: true,
                       searchFieldProps: TextFieldProps(
-                        style: TextStyle(color: Colors.black),
+                        style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: 'Cerca cliente...',
-                          hintStyle: TextStyle(color: Colors.black54),
+                          hintStyle: TextStyle(color: Colors.white54),
                         ),
                       ),
                     ),
@@ -339,7 +340,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                       baseStyle: TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Cliente',
-                        labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                       ),
                     ),
                     onSelected: (Map<String, dynamic>? val) {
@@ -363,7 +364,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                     style: TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Cellulare Cliente',
-                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                     ),
                   ),
                   SizedBox(height: 16),
@@ -373,23 +374,24 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                     style: TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Email Cliente',
-                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                     ),
                   ),
                   SizedBox(height: 16),
                   
                   DropdownSearch<Map<String, dynamic>>(
+                    compareFn: (Map<String, dynamic> a, Map<String, dynamic> b) => a['id'] == b['id'],
                     selectedItem: _categoryId != null 
                       ? _categories.firstWhere((c) => c['id'].toString() == _categoryId, orElse: () => {'id': '', 'name': 'Sconosciuto'})
                       : null,
                     items: (filter, _) => _categories,
                     itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                    popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), showSearchBox: true),
+                    popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), showSearchBox: true),
                     decoratorProps: DropDownDecoratorProps(
                       baseStyle: TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Categoria',
-                        labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                       ),
                     ),
                     onSelected: (Map<String, dynamic>? val) {
@@ -399,17 +401,18 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                   SizedBox(height: 16),
                   
                   DropdownSearch<Map<String, dynamic>>(
+                    compareFn: (Map<String, dynamic> a, Map<String, dynamic> b) => a['id'] == b['id'],
                     selectedItem: _serviceId != null 
                       ? _services.firstWhere((s) => s['id'].toString() == _serviceId, orElse: () => {'id': '', 'name': 'Sconosciuto'})
                       : null,
                     items: (filter, _) => _services,
                     itemAsString: (Map<String, dynamic> s) => s['name'] ?? '',
-                    popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), showSearchBox: true),
+                    popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), showSearchBox: true),
                     decoratorProps: DropDownDecoratorProps(
                       baseStyle: TextStyle(color: Colors.black),
                       decoration: InputDecoration(
                         labelText: 'Tipo Servizio',
-                        labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                       ),
                     ),
                     onSelected: (Map<String, dynamic>? val) {
@@ -426,7 +429,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                       labelText: 'Importo',
                       prefixText: '€ ',
                       prefixStyle: TextStyle(color: Colors.white),
-                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                     ),
                   ),
                   SizedBox(height: 16),
@@ -434,13 +437,14 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                   // --- Campi Specifici Movimento ---
                   if (_memoType == 'MOVIMENTO') ...[
                     DropdownSearch<String>(
+                        compareFn: (a, b) => a == b,
                       selectedItem: _paymentMethod,
                       items: (filter, _) => ['Bonifico', 'Contanti', 'Assegno', 'POS', 'Altro'],
                       decoratorProps: DropDownDecoratorProps(
                         baseStyle: TextStyle(color: Colors.black),
                         decoration: InputDecoration(
                           labelText: 'Metodo di Pagamento',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                         ),
                       ),
                       onSelected: (val) => setState(() => _paymentMethod = val ?? 'Bonifico'),
@@ -454,7 +458,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                           style: TextStyle(color: Colors.white),
                           decoration: InputDecoration(
                             labelText: 'Data Fattura Relativa (Opzionale)',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                           ),
                         ),
                       ),
@@ -468,19 +472,20 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: 'Numero Fattura (es. FPA 2/26)',
-                        labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                       ),
                     ),
                     SizedBox(height: 16),
                     DropdownSearch<String>(
+                        compareFn: (a, b) => a == b,
                       selectedItem: _vatCode,
                       items: (filter, _) => _vatCodes,
-                      popupProps: PopupProps.menu(menuProps: const MenuProps(backgroundColor: Color(0xFF2A2D34)), showSearchBox: true),
+                      popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), showSearchBox: true),
                       decoratorProps: DropDownDecoratorProps(
                         baseStyle: TextStyle(color: Colors.black),
                         decoration: InputDecoration(
                           labelText: 'Codice IVA',
-                          labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                         ),
                       ),
                       onSelected: (val) => setState(() => _vatCode = val),
@@ -494,7 +499,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                           style: TextStyle(color: Colors.white),
                           decoration: InputDecoration(
                             labelText: 'Data Evento (opzionale)',
-                            labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                           ),
                         ),
                       ),
@@ -508,14 +513,14 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                     maxLines: 3,
                     decoration: InputDecoration(
                       labelText: 'Note Evento',
-                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
+                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
                     ),
                   ),
                   SizedBox(height: 24),
                   
                   // --- Allegati ---
                   Text('Allegati (Foto/File)',
-                      style: TextStyle(color: Colors.white.withOpacity(0.7), fontWeight: FontWeight.bold, fontSize: 14)),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontWeight: FontWeight.bold, fontSize: 14)),
                   SizedBox(height: 8),
                   if (_attachments.isNotEmpty)
                     ..._attachments.asMap().entries.map((entry) {
@@ -571,11 +576,11 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                     children: [
                       if (Platform.isAndroid || Platform.isIOS)
                         IconButton(
-                          icon: Icon(Icons.camera_alt, color: Colors.white.withOpacity(0.54)),
+                          icon: Icon(Icons.camera_alt, color: Colors.white.withValues(alpha: 0.54)),
                           onPressed: () => _pickAttachment(true),
                         ),
                       IconButton(
-                        icon: Icon(Icons.image, color: Colors.white.withOpacity(0.54)),
+                        icon: Icon(Icons.image, color: Colors.white.withValues(alpha: 0.54)),
                         onPressed: () => _pickAttachment(false),
                       ),
                     ],

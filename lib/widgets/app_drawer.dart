@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../providers/app_theme_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -20,30 +20,25 @@ class AppDrawer extends StatelessWidget {
     final theme = context.watch<AppThemeProvider>();
 
     return Drawer(
-      backgroundColor: const Color(0xFF1A1D24),
+      backgroundColor: const Color(0xFF080812), // Stesso colore di app_sidebar
       child: Column(
         children: [
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF3A3F4B),
-                  const Color(0xFF2A2D34),
-                  const Color(0xFF4A4F5A),
-                  const Color(0xFF2A2D34),
-                  const Color(0xFF3A3F4B),
-                ],
-                stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+              color: const Color(0xFF080812),
+              border: Border(
+                right: BorderSide(
+                  color: theme.currentColors.primary,
+                  width: 1.0,
+                ),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.white.withOpacity(0.05),
+                  color: theme.currentColors.primary.withValues(alpha: 0.2),
                   blurRadius: 12,
-                  offset: const Offset(0, 2),
+                  offset: const Offset(2, 0),
                 ),
               ],
             ),
@@ -52,10 +47,10 @@ class AppDrawer extends StatelessWidget {
                 Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
+                        color: Colors.black.withValues(alpha: 0.4),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -64,16 +59,7 @@ class AppDrawer extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 30,
                     backgroundColor: const Color(0xFF2A2D34),
-                    child: theme.hasValidLogo
-                        ? ClipOval(
-                            child: Image.file(
-                              File(theme.logoImagePath!),
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : Icon(Icons.account_balance_wallet, size: 30, color: theme.primaryColor),
+                    child: Icon(LucideIcons.wallet, size: 30, color: theme.primaryColor),
                   ),
                 ),
                 SizedBox(width: 16),
@@ -82,7 +68,7 @@ class AppDrawer extends StatelessWidget {
                     shaderCallback: (bounds) => LinearGradient(
                       colors: [
                         Colors.white,
-                        Colors.white.withOpacity(0.85),
+                        Colors.white.withValues(alpha: 0.85),
                         Colors.white,
                       ],
                       stops: const [0.0, 0.5, 1.0],
@@ -96,7 +82,7 @@ class AppDrawer extends StatelessWidget {
                         letterSpacing: 0.5,
                         shadows: [
                           Shadow(
-                            color: Colors.black.withOpacity(0.5),
+                            color: Colors.black.withValues(alpha: 0.5),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -124,11 +110,11 @@ class AppDrawer extends StatelessWidget {
           ),
           Divider(color: Colors.white24),
           ListTile(
-            leading: Icon(Icons.logout, color: Colors.redAccent),
-            title: Text('Esci', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            leading: Icon(Icons.logout, color: theme.currentColors.secondary),
+            title: Text('Esci', style: TextStyle(color: theme.currentColors.secondary, fontWeight: FontWeight.bold)),
             onTap: onLogout,
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -146,7 +132,7 @@ class AppDrawer extends StatelessWidget {
         ),
       ),
       selected: isSelected,
-      selectedTileColor: primaryColor.withOpacity(0.1),
+      selectedTileColor: primaryColor.withValues(alpha: 0.1),
       onTap: () {
         onItemSelected(index);
         Navigator.pop(context); // Chiudi il drawer

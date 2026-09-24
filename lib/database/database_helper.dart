@@ -5,8 +5,11 @@ import '../utils/crypto_utils.dart';
 class DatabaseHelper {
   static DatabaseHelper _instance = DatabaseHelper._internal();
   static void setMockInstance(DatabaseHelper mock) { _instance = mock; }
-  FirebaseFirestore _db = FirebaseFirestore.instance;
-  static void setMockFirestore(FirebaseFirestore mock) { _instance._db = mock; }
+  
+  FirebaseFirestore? _mockDb;
+  FirebaseFirestore get _db => _mockDb ?? FirebaseFirestore.instance;
+  
+  static void setMockFirestore(FirebaseFirestore mock) { _instance._mockDb = mock; }
 
   factory DatabaseHelper() => _instance;
 
@@ -27,7 +30,7 @@ class DatabaseHelper {
 
   Future<String> insertUser(Map<String, dynamic> user) async {
     final data = Map<String, dynamic>.from(user)..remove('id');
-    // Hash della password se non è già hashata
+    // Hash della password se non  gi hashata
     if (data['password_hash'] != null && !PasswordHasher.isHashed(data['password_hash'])) {
       data['password_hash'] = PasswordHasher.hashPassword(data['password_hash']);
     }
@@ -49,7 +52,7 @@ class DatabaseHelper {
   Future<void> updateUser(Map<String, dynamic> user) async {
     final id = user['id'];
     final data = Map<String, dynamic>.from(user)..remove('id');
-    // Hash della password se è stata cambiata e non è già hashata
+    // Hash della password se  stata cambiata e non  gi hashata
     if (data['password_hash'] != null && !PasswordHasher.isHashed(data['password_hash'])) {
       data['password_hash'] = PasswordHasher.hashPassword(data['password_hash']);
     }
@@ -83,7 +86,7 @@ class DatabaseHelper {
   }
 
   /// Verifica credenziali: cerca l'utente per username e verifica la password con hash.
-  /// Se la password è ancora in chiaro (legacy), la migra automaticamente ad hash.
+  /// Se la password  ancora in chiaro (legacy), la migra automaticamente ad hash.
   /// Ritorna la mappa dell'utente se le credenziali sono valide, null altrimenti.
   Future<Map<String, dynamic>?> verifyCredentials(String username, String password) async {
     final users = await getUsers();
@@ -163,7 +166,7 @@ class DatabaseHelper {
     return snapshot.docs.length;
   }
 
-  /// Pulisce i vecchi tentativi (più di 1 ora).
+  /// Pulisce i vecchi tentativi (pi di 1 ora).
   Future<void> cleanOldLoginAttempts() async {
     try {
       final cutoff = DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();

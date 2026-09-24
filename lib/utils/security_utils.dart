@@ -15,6 +15,7 @@ class SecurityUtils {
       }
     }
 
+    if (!context.mounted) return false;
     // Fallback: Richiedi password Amministratore
     return await _showAdminPasswordDialog(context);
   }
@@ -96,6 +97,8 @@ class SecurityUtils {
 
                             final dbHelper = DatabaseHelper();
                             final isValidAdmin = await dbHelper.verifyAdminPassword(password);
+
+                            if (!dialogContext.mounted) return;
 
                             if (isValidAdmin) {
                               Navigator.pop(dialogContext, true);

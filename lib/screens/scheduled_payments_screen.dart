@@ -3,7 +3,6 @@ import '../database/database_helper.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
 import 'payment_form_screen.dart';
-import 'payment_summary_screen.dart';
 import '../services/pdf_report_service.dart';
 import '../utils/report_utils.dart';
 import '../utils/security_utils.dart';
@@ -46,14 +45,14 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
         title: Text('Conferma', style: TextStyle(color: Colors.white)),
         content: Text(
           'Eliminare questo pagamento programmato?',
-          style: TextStyle(color: Colors.white.withOpacity(0.7)),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Annulla',
-              style: TextStyle(color: Colors.white.withOpacity(0.54)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
             ),
           ),
           TextButton(
@@ -80,14 +79,14 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
         title: Text('Conferma Pagamento', style: TextStyle(color: Colors.white)),
         content: Text(
           'Vuoi registrare questo pagamento programmato come pagato?',
-          style: TextStyle(color: Colors.white.withOpacity(0.7)),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Annulla',
-              style: TextStyle(color: Colors.white.withOpacity(0.54)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
             ),
           ),
           TextButton(
@@ -274,10 +273,12 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                 final notes = p['notes']?.toString() ?? '';
 
                 final List<String> infoLines = [];
-                if (customerName.isNotEmpty)
+                if (customerName.isNotEmpty) {
                   infoLines.add('\u{1F464} $customerName');
-                if (serviceName.isNotEmpty)
+                }
+                if (serviceName.isNotEmpty) {
                   infoLines.add('\u{1F3B5} $serviceName');
+                }
                 if (notes.isNotEmpty) infoLines.add('\u{1F4DD} $notes');
                 final subtitleText = infoLines.isNotEmpty
                     ? infoLines.join("  -  ")
@@ -322,8 +323,8 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: (p['status'] == 'Pagato' || p['status'] == 'PAID') 
-                                      ? Colors.greenAccent.withOpacity(0.1) 
-                                      : Colors.orangeAccent.withOpacity(0.1),
+                                      ? Colors.greenAccent.withValues(alpha: 0.1) 
+                                      : Colors.orangeAccent.withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -364,7 +365,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                                           return dateStr;
                                         }(),
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.54),
+                                          color: Colors.white.withValues(alpha: 0.54),
                                           fontSize: 12,
                                         ),
                                       ),

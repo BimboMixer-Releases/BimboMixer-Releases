@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../database/database_helper.dart';
@@ -10,6 +10,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/glass_container.dart';
 import '../services/pdf_report_service.dart';
 import '../utils/report_utils.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class CustomersScreen extends StatefulWidget {
@@ -23,6 +24,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Customer> _customers = [];
   bool _isLoading = true;
+  bool _showArchive = false;
+  bool _isCompactView = false;
+  final TextEditingController _mainSearchCtrl = TextEditingController();
+  String _mainSearchQuery = '';
+  String _statusFilter = 'Tutti';
 
   Customer? _selectedCustomer;
   List<Map<String, dynamic>> _customerPayments = [];
@@ -31,6 +37,26 @@ class _CustomersScreenState extends State<CustomersScreen> {
   // Ricerca operazioni
   final TextEditingController _opsSearchCtrl = TextEditingController();
   String _opsSearchQuery = '';
+
+  
+  List<Customer> get _filteredCustomers {
+    var list = _customers;
+    
+    if (_showArchive) {
+        list = list.where((c) => c.status == 'Archiviato').toList();
+    } else {
+        list = list.where((c) => c.status != 'Archiviato').toList();
+        if (_statusFilter != 'Tutti') {
+          list = list.where((c) => (c.status ?? 'Nuovo') == _statusFilter).toList();
+        }
+    }
+    
+    if (_mainSearchQuery.isNotEmpty) {
+      final q = _mainSearchQuery.toLowerCase();
+      list = list.where((c) => c.name.toLowerCase().contains(q) || (c.vatNumber?.toLowerCase().contains(q) ?? false)).toList();
+    }
+    return list;
+  }
 
   List<Map<String, dynamic>> get _filteredPayments {
     if (_opsSearchQuery.isEmpty) return _customerPayments;
@@ -95,6 +121,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   @override
   void dispose() {
     _opsSearchCtrl.dispose();
+    _mainSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -124,7 +151,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       style: TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
         enabledBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: Colors.white38),
         ),
@@ -178,6 +205,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final phoneController = TextEditingController(text: phoneText);
 
     String? logoPath = customer?.logoPath;
+    String selectedStatus = customer?.status ?? 'Nuovo';
+    if (!['Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archiviato'].contains(selectedStatus)) {
+      selectedStatus = 'Nuovo';
+    }
 
     showDialog(
       context: context,
@@ -185,46 +216,58 @@ class _CustomersScreenState extends State<CustomersScreen> {
         builder: (context, setStateSB) {
           Future<void> pickLogo() async {
             try {
-              final ImagePicker picker = ImagePicker();
-              final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
-              
-              if (photo != null) {
-                final directory = await getApplicationDocumentsDirectory();
-                final String targetPath = path.join(
-                  directory.path, 
-                  'contabile_logos', 
-                  'logo_${DateTime.now().millisecondsSinceEpoch}.jpg'
-                );
-                
-                final targetDir = Directory(path.dirname(targetPath));
-                if (!await targetDir.exists()) {
-                  await targetDir.create(recursive: true);
-                }
+              String? chosenPath;
+              final result = await FilePicker.platform.pickFiles(
+                type: FileType.image,
+              );
+              if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
+                chosenPath = result.files.single.path!;
+              } else {
+                try {
+                  final ImagePicker picker = ImagePicker();
+                  final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
+                  if (photo != null) {
+                    chosenPath = photo.path;
+                  }
+                } catch (_) {}
+              }
 
-                if (photo.name.toLowerCase().endsWith('.png')) {
-                  final File file = File(photo.path);
-                  final File savedFile = await file.copy(targetPath.replaceAll('.jpg', '.png'));
-                  setStateSB(() {
-                    logoPath = savedFile.path;
-                  });
-                } else {
-                  final XFile? compressedImage = await FlutterImageCompress.compressAndGetFile(
-                    photo.path,
-                    targetPath,
-                    quality: 60,
-                    minWidth: 500,
-                    minHeight: 500,
+              if (chosenPath != null) {
+                String finalPath = chosenPath;
+                try {
+                  final directory = await getApplicationDocumentsDirectory();
+                  final ext = path.extension(chosenPath).toLowerCase().isEmpty
+                      ? '.png'
+                      : path.extension(chosenPath).toLowerCase();
+                  final String targetPath = path.join(
+                    directory.path,
+                    'contabile_logos',
+                    'logo_${DateTime.now().millisecondsSinceEpoch}$ext',
                   );
 
-                  if (compressedImage != null) {
-                    setStateSB(() {
-                      logoPath = compressedImage.path;
-                    });
+                  final targetDir = Directory(path.dirname(targetPath));
+                  if (!await targetDir.exists()) {
+                    await targetDir.create(recursive: true);
                   }
+
+                  final File file = File(chosenPath);
+                  final File savedFile = await file.copy(targetPath);
+                  finalPath = savedFile.path;
+                } catch (copyErr) {
+                  debugPrint("Errore copia logo: $copyErr");
                 }
+                
+                setStateSB(() {
+                  logoPath = finalPath;
+                });
               }
             } catch (e) {
-              debugPrint("Errore fotocamera/compressione logo: $e");
+              debugPrint("Errore selezione logo: $e");
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(content: Text('Errore selezione logo: $e'), backgroundColor: Colors.red),
+                );
+              }
             }
           }
 
@@ -240,36 +283,56 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     children: [
                       Text(
                         customer == null ? 'Nuovo Cliente' : 'Modifica Cliente',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      SizedBox(height: 16),
-                      GestureDetector(
-                        onTap: pickLogo,
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.white12,
-                            shape: BoxShape.circle,
-                            image: logoPath != null && File(logoPath!).existsSync()
-                                ? DecorationImage(
-                                    image: FileImage(File(logoPath!)),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                            border: Border.all(color: Colors.white.withOpacity(0.54)),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onTap: pickLogo,
+                            child: Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.white12,
+                                shape: BoxShape.circle,
+                                image: logoPath != null && File(logoPath!).existsSync()
+                                    ? DecorationImage(
+                                        image: FileImage(File(logoPath!)),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                                border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
+                              ),
+                              child: logoPath == null || !File(logoPath!).existsSync()
+                                  ? const Icon(Icons.add_a_photo, color: Colors.white70, size: 28)
+                                  : null,
+                            ),
                           ),
-                          child: logoPath == null || !File(logoPath!).existsSync()
-                              ? Icon(Icons.add_a_photo, color: Colors.white.withOpacity(0.54), size: 30)
-                              : null,
-                        ),
+                          if (logoPath != null && File(logoPath!).existsSync()) ...[
+                            const SizedBox(width: 12),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                              tooltip: 'Rimuovi logo',
+                              onPressed: () {
+                                setStateSB(() {
+                                  logoPath = null;
+                                });
+                              },
+                            ),
+                          ],
+                        ],
                       ),
-                      SizedBox(height: 8),
-                      Text('Aggiungi Logo', style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 12)),
+                      const SizedBox(height: 8),
+                      Text(
+                        logoPath != null && File(logoPath!).existsSync() ? 'Clicca sul logo per cambiarlo' : 'Aggiungi Logo / Immagine',
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                      ),
                       
                       _buildSectionTitle('Dati Principali', Icons.business),
                       Row(
@@ -282,8 +345,32 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       SizedBox(height: 8),
                       Row(
                         children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: selectedStatus,
+                              dropdownColor: const Color(0xFF1E1E2C),
+                              style: const TextStyle(color: Colors.white),
+                              decoration: InputDecoration(
+                                labelText: 'Stato Cliente',
+                                labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
+                                enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
+                                focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                              ),
+                              items: ['Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archiviato']
+                                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) setStateSB(() => selectedStatus = val);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
                           _buildDialogTextField(sdiController, 'Codice Univoco (SDI)'),
-                          SizedBox(width: 16),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
                           _buildDialogTextField(taxCodeController, 'Codice Fiscale'),
                         ],
                       ),
@@ -347,7 +434,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                             onPressed: () => Navigator.pop(dialogContext),
                             child: Text(
                               'ANNULLA',
-                              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                             ),
                           ),
                           SizedBox(width: 8),
@@ -375,6 +462,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 paReference: paRefController.text.trim().isEmpty ? null : paRefController.text.trim(),
                                 paContract: paContractController.text.trim().isEmpty ? null : paContractController.text.trim(),
                                 logoPath: logoPath,
+                                status: selectedStatus,
                               );
 
                               if (customer == null) {
@@ -422,7 +510,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               SizedBox(height: 16),
               Text(
                 'Eliminando questo cliente, i pagamenti associati rimarranno senza cliente. Procedere?',
-                style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
               ),
               SizedBox(height: 24),
               Row(
@@ -432,7 +520,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     onPressed: () => Navigator.pop(context, false),
                     child: Text(
                       'ANNULLA',
-                      style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                     ),
                   ),
                   SizedBox(width: 8),
@@ -485,61 +573,137 @@ class _CustomersScreenState extends State<CustomersScreen> {
   // --- WIDGETS ---
 
   Widget _buildFilterBar() {
+    final statusList = ['Tutti', 'Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archivio'];
+
     return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.filter_alt, color: Colors.white.withOpacity(0.7)),
-          SizedBox(width: 12),
-          Expanded(
-            child: Autocomplete<Customer>(
-              optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text.isEmpty) {
-                  return _customers;
-                }
-                return _customers.where((Customer customer) {
-                  return customer.name.toLowerCase().contains(
-                    textEditingValue.text.toLowerCase(),
-                  );
-                });
-              },
-              displayStringForOption: (Customer option) => option.name,
-              onSelected: (Customer selection) {
-                _onCustomerSelected(selection);
-              },
-              fieldViewBuilder:
-                  (
-                    BuildContext context,
-                    TextEditingController textEditingController,
-                    FocusNode focusNode,
-                    VoidCallback onFieldSubmitted,
-                  ) {
-                    if (_selectedCustomer != null &&
-                        textEditingController.text.isEmpty) {
-                      textEditingController.text = _selectedCustomer!.name;
+          Row(
+            children: [
+              Icon(Icons.filter_alt, color: Colors.white.withValues(alpha: 0.7)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Autocomplete<Customer>(
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (textEditingValue.text.isEmpty) {
+                      return _customers;
                     }
-                    return TextField(
-                      controller: textEditingController,
-                      focusNode: focusNode,
-                      style: TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Cerca Cliente (Tutti i Clienti)',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.54)),
-                        border: InputBorder.none,
-                        suffixIcon: IconButton(
-                          icon: Icon(Icons.clear, color: Colors.white.withOpacity(0.54)),
-                          onPressed: () {
-                            textEditingController.clear();
-                            _onCustomerSelected(null);
-                          },
-                        ),
-                      ),
-                      onSubmitted: (String value) {
-                        onFieldSubmitted();
-                      },
-                    );
+                    return _customers.where((Customer customer) {
+                      return customer.name.toLowerCase().contains(
+                        textEditingValue.text.toLowerCase(),
+                      );
+                    });
                   },
+                  displayStringForOption: (Customer option) => option.name,
+                  onSelected: (Customer selection) {
+                    _onCustomerSelected(selection);
+                  },
+                  fieldViewBuilder:
+                      (
+                        BuildContext context,
+                        TextEditingController textEditingController,
+                        FocusNode focusNode,
+                        VoidCallback onFieldSubmitted,
+                      ) {
+                        if (_selectedCustomer != null &&
+                            textEditingController.text.isEmpty) {
+                          textEditingController.text = _selectedCustomer!.name;
+                        }
+                        return TextField(
+                          controller: textEditingController,
+                          focusNode: focusNode,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Cerca Cliente (Tutti i Clienti)',
+                            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+                            border: InputBorder.none,
+                            suffixIcon: IconButton(
+                              icon: Icon(Icons.clear, color: Colors.white.withValues(alpha: 0.54)),
+                              onPressed: () {
+                                textEditingController.clear();
+                                _onCustomerSelected(null);
+                              },
+                            ),
+                          ),
+                          onSubmitted: (String value) {
+                            onFieldSubmitted();
+                          },
+                        );
+                      },
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _isCompactView ? Icons.view_agenda_outlined : Icons.table_rows_outlined,
+                  color: Colors.white70,
+                ),
+                tooltip: _isCompactView ? 'Vista a schede' : 'Vista compatta',
+                onPressed: () {
+                  setState(() {
+                    _isCompactView = !_isCompactView;
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: statusList.map((status) {
+                final isSelected = (_showArchive && status == 'Archivio') || (!_showArchive && _statusFilter == status);
+                Color activeColor = Colors.blueAccent;
+                if (status == 'Attivo') {
+                  activeColor = Colors.green;
+                } else if (status == 'In Sospeso') {
+                  activeColor = Colors.orange;
+                } else if (status == 'Priorità Alta') {
+                  activeColor = Colors.redAccent;
+                } else if (status == 'In Revisione') {
+                  activeColor = Colors.blue;
+                } else if (status == 'Nuovo') {
+                  activeColor = Colors.purpleAccent;
+                } else if (status == 'Chiuso') {
+                  activeColor = Colors.blueGrey;
+                } else if (status == 'Archivio') {
+                  activeColor = Colors.amber;
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: FilterChip(
+                    label: Text(status),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (status == 'Archivio') {
+                          _showArchive = selected;
+                        } else {
+                          _showArchive = false;
+                          _statusFilter = selected ? status : 'Tutti';
+                        }
+                      });
+                    },
+                    selectedColor: activeColor.withValues(alpha: 0.25),
+                    checkmarkColor: activeColor,
+                    backgroundColor: Colors.white.withValues(alpha: 0.05),
+                    labelStyle: TextStyle(
+                      color: isSelected ? activeColor : Colors.white70,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: isSelected ? activeColor : Colors.white.withValues(alpha: 0.15),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -548,203 +712,651 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Widget _buildCustomerCard(Customer customer) {
+    Color statusColor = Colors.green;
+    switch (customer.status) {
+      case 'Attivo': statusColor = Colors.green; break;
+      case 'In Sospeso': statusColor = Colors.orange; break;
+      case 'Priorità Alta': statusColor = Colors.redAccent; break;
+      case 'In Revisione': statusColor = Colors.blueAccent; break;
+      case 'Nuovo': statusColor = Colors.purpleAccent; break;
+      case 'Chiuso':
+      case 'Archiviato': statusColor = Colors.grey; break;
+    }
+
     return GlassContainer(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.blueAccent,
-              image: customer.logoPath != null && File(customer.logoPath!).existsSync()
-                  ? DecorationImage(
-                      image: FileImage(File(customer.logoPath!)),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: customer.logoPath == null || !File(customer.logoPath!).existsSync()
-                ? Icon(Icons.person, color: Colors.white, size: 28)
-                : null,
-          ),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  customer.name,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+          // Header: Avatar, Name, Status & Actions
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.blueAccent.withValues(alpha: 0.2),
+                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5), width: 1.5),
+                  image: customer.logoPath != null && File(customer.logoPath!).existsSync()
+                      ? DecorationImage(
+                          image: FileImage(File(customer.logoPath!)),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                SizedBox(height: 12),
-                
-                // Dati Principali
-                if (customer.vatNumber?.isNotEmpty == true || customer.taxCode?.isNotEmpty == true || customer.sdiCode?.isNotEmpty == true)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (customer.vatNumber?.isNotEmpty == true)
-                          Text('P.IVA: ${customer.vatNumber}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)),
-                        if (customer.taxCode?.isNotEmpty == true)
-                          Text('C.F.: ${customer.taxCode}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)),
-                        if (customer.sdiCode?.isNotEmpty == true)
-                          Text('SDI: ${customer.sdiCode}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)),
-                      ],
+                child: customer.logoPath == null || !File(customer.logoPath!).existsSync()
+                    ? const Icon(Icons.person, color: Colors.white, size: 24)
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-
-                // Sede
-                if (customer.addressStreet?.isNotEmpty == true || customer.addressCity?.isNotEmpty == true)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.location_on, color: Colors.white.withOpacity(0.54), size: 20),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            [
-                              customer.addressStreet,
-                              if (customer.addressZip?.isNotEmpty == true) customer.addressZip,
-                              customer.addressCity,
-                              if (customer.addressProvince?.isNotEmpty == true) '(${customer.addressProvince})'
-                            ].where((e) => e != null && e.toString().isNotEmpty).join(' '),
-                            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16),
+                    if (customer.status != null && customer.status!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      PopupMenuButton<String>(
+                        initialValue: customer.status,
+                        tooltip: 'Cambia stato',
+                        color: const Color(0xFF1E1E2C),
+                        onSelected: (newStatus) async {
+                          if (newStatus != customer.status) {
+                            final updatedCustomer = Customer(
+                              id: customer.id,
+                              name: customer.name,
+                              vatNumber: customer.vatNumber,
+                              sdiCode: customer.sdiCode,
+                              taxCode: customer.taxCode,
+                              addressStreet: customer.addressStreet,
+                              addressZip: customer.addressZip,
+                              addressCity: customer.addressCity,
+                              addressProvince: customer.addressProvince,
+                              email: customer.email,
+                              pec: customer.pec,
+                              phone: customer.phone,
+                              contacts: customer.contacts,
+                              cig: customer.cig,
+                              cup: customer.cup,
+                              paReference: customer.paReference,
+                              paContract: customer.paContract,
+                              logoPath: customer.logoPath,
+                              status: newStatus,
+                            );
+                            await _dbHelper.updateCustomer(updatedCustomer.toMap());
+                            _refreshCustomers();
+                          }
+                        },
+                        itemBuilder: (context) => ['Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archiviato']
+                            .map((s) => PopupMenuItem(
+                                  value: s,
+                                  child: Text(s, style: const TextStyle(color: Colors.white)),
+                                ))
+                            .toList(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                customer.status!,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.arrow_drop_down, size: 14, color: statusColor),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-
-                // Contatti
-                if (customer.email?.isNotEmpty == true || customer.pec?.isNotEmpty == true || customer.phone?.isNotEmpty == true || customer.contacts?.isNotEmpty == true)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (customer.email?.isNotEmpty == true)
-                          Row(children: [Icon(Icons.email, color: Colors.white.withOpacity(0.54), size: 20), SizedBox(width: 8), Expanded(child: Text(customer.email!, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)))]),
-                        if (customer.pec?.isNotEmpty == true)
-                          Row(children: [Icon(Icons.mark_email_read, color: Colors.white.withOpacity(0.54), size: 20), SizedBox(width: 8), Expanded(child: Text('PEC: ${customer.pec}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)))]),
-                        if (customer.phone?.isNotEmpty == true)
-                          Row(children: [Icon(Icons.phone, color: Colors.white.withOpacity(0.54), size: 20), SizedBox(width: 8), Expanded(child: Text(customer.phone!, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)))]),
-                        if (customer.contacts?.isNotEmpty == true && customer.email?.isEmpty == true && customer.phone?.isEmpty == true)
-                          Row(children: [Icon(Icons.contact_mail, color: Colors.white.withOpacity(0.54), size: 20), SizedBox(width: 8), Expanded(child: Text(customer.contacts!, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)))]),
-                      ],
-                    ),
-                  ),
-
-                // Codici PA
-                if (customer.cig?.isNotEmpty == true || customer.cup?.isNotEmpty == true || customer.paReference?.isNotEmpty == true || customer.paContract?.isNotEmpty == true)
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (customer.cig?.isNotEmpty == true || customer.cup?.isNotEmpty == true)
-                          Text(
-                            'CIG: ${customer.cig ?? "-"} | CUP: ${customer.cup ?? "-"}',
-                            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16),
-                          ),
-                        if (customer.paReference?.isNotEmpty == true)
-                          Text('Rif. Ammin.: ${customer.paReference}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)),
-                        if (customer.paContract?.isNotEmpty == true)
-                          Text('Commessa/Conv.: ${customer.paContract}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Column(
-            children: [
-              IconButton(
-                icon: Icon(Icons.edit, color: Colors.blueAccent),
-                onPressed: () => _showCustomerDialog(customer),
-                tooltip: 'Modifica',
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              IconButton(
-                icon: Icon(Icons.delete, color: Colors.redAccent),
-                onPressed: () => _deleteCustomer(customer.id!),
-                tooltip: 'Elimina',
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, color: Colors.cyanAccent, size: 20),
+                    onPressed: () => _showCustomerDialog(customer),
+                    tooltip: 'Modifica',
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, color: Colors.redAccent.shade100, size: 20),
+                    onPressed: () => _deleteCustomer(customer.id!),
+                    tooltip: 'Elimina',
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ),
             ],
           ),
+          
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(color: Colors.white12, height: 1),
+          ),
+
+          // Dati Fiscali (P.IVA, C.F., SDI)
+          if (customer.vatNumber?.isNotEmpty == true || customer.taxCode?.isNotEmpty == true || customer.sdiCode?.isNotEmpty == true)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (customer.vatNumber?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Text('P.IVA: ${customer.vatNumber}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    ),
+                  if (customer.taxCode?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Text('C.F.: ${customer.taxCode}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    ),
+                  if (customer.sdiCode?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Text('SDI: ${customer.sdiCode}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    ),
+                ],
+              ),
+            ),
+
+          // Sede
+          if (customer.addressStreet?.isNotEmpty == true || customer.addressCity?.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on_outlined, color: Colors.white54, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      [
+                        customer.addressStreet,
+                        if (customer.addressZip?.isNotEmpty == true) customer.addressZip,
+                        customer.addressCity,
+                        if (customer.addressProvince?.isNotEmpty == true) '(${customer.addressProvince})'
+                      ].where((e) => e != null && e.toString().isNotEmpty).join(' '),
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Contatti
+          if (customer.email?.isNotEmpty == true || customer.pec?.isNotEmpty == true || customer.phone?.isNotEmpty == true || customer.contacts?.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (customer.email?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.email_outlined, color: Colors.white54, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(customer.email!, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                        ],
+                      ),
+                    ),
+                  if (customer.pec?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.mark_email_read_outlined, color: Colors.white54, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text('PEC: ${customer.pec}', style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                        ],
+                      ),
+                    ),
+                  if (customer.phone?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.phone_outlined, color: Colors.white54, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(customer.phone!, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                        ],
+                      ),
+                    ),
+                  if (customer.contacts?.isNotEmpty == true && customer.email?.isEmpty == true && customer.phone?.isEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.contact_mail_outlined, color: Colors.white54, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(customer.contacts!, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+          // Codici PA
+          if (customer.cig?.isNotEmpty == true || customer.cup?.isNotEmpty == true || customer.paReference?.isNotEmpty == true || customer.paContract?.isNotEmpty == true)
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.02),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (customer.cig?.isNotEmpty == true || customer.cup?.isNotEmpty == true)
+                    Text(
+                      'CIG: ${customer.cig ?? "-"} | CUP: ${customer.cup ?? "-"}',
+                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                    ),
+                  if (customer.paReference?.isNotEmpty == true)
+                    Text('Rif. Ammin.: ${customer.paReference}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  if (customer.paContract?.isNotEmpty == true)
+                    Text('Commessa/Conv.: ${customer.paContract}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildAllCustomersList() {
-    if (_customers.isEmpty) {
+    final sortedCustomers = _filteredCustomers;
+    if (sortedCustomers.isEmpty) {
       return Center(
         child: Text(
           'Nessun cliente in anagrafica.',
-          style: TextStyle(color: Colors.white.withOpacity(0.54)),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
         ),
       );
     }
-    return ListView.builder(
-      itemCount: _customers.length,
-      itemBuilder: (context, index) {
-        final customer = _customers[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: GlassContainer(
-            child: Material(
-              type: MaterialType.transparency,
-              child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Colors.blueAccent,
-                  child: Icon(Icons.person, color: Colors.white),
-                ),
-                title: Text(
-                  customer.name,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                subtitle: Text(
-                  customer.vatNumber?.isNotEmpty == true
-                      ? 'P.IVA: ${customer.vatNumber}'
-                      : 'Nessuna P.IVA specificata',
-                  style: TextStyle(color: Colors.white.withOpacity(0.7)),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.edit, color: Colors.blueAccent),
-                      onPressed: () => _showCustomerDialog(customer),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete, color: Colors.redAccent),
-                      onPressed: () => _deleteCustomer(customer.id!),
-                    ),
-                  ],
-                ),
-                onTap: () => _onCustomerSelected(customer),
-              ),
-            ),
-          ),
+    if (_isCompactView) {
+      return ListView.builder(
+        itemCount: sortedCustomers.length,
+        itemBuilder: (context, index) {
+          return _buildCompactClientRow(sortedCustomers[index]);
+        },
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 850;
+
+        return ListView.builder(
+          itemCount: sortedCustomers.length,
+          itemBuilder: (context, index) {
+            // First 2 cards in a row if wide screen, matching reference image
+            if (isWide && index == 0 && sortedCustomers.length >= 2) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildNeonClientCard(sortedCustomers[0], 0, isCompact: true)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildNeonClientCard(sortedCustomers[1], 1, isCompact: true)),
+                ],
+              );
+            }
+            if (isWide && index == 1 && sortedCustomers.length >= 2) {
+              return const SizedBox.shrink();
+            }
+
+            return _buildNeonClientCard(sortedCustomers[index], index);
+          },
         );
       },
     );
+  }
+
+  Widget _buildNeonClientCard(Customer customer, int index, {bool isCompact = false}) {
+    // Alternating electric cyan and neon purple borders
+    final neonColor = index % 2 == 0 ? const Color(0xFF38BDF8) : const Color(0xFFC084FC);
+
+    Color statusColor = const Color(0xFF4ADE80);
+    switch (customer.status) {
+      case 'Attivo': statusColor = const Color(0xFF4ADE80); break;
+      case 'In Sospeso': statusColor = const Color(0xFFFBBF24); break;
+      case 'Priorità Alta': statusColor = const Color(0xFFF87171); break;
+      case 'In Revisione': statusColor = const Color(0xFF818CF8); break;
+      case 'Nuovo': statusColor = const Color(0xFFC084FC); break;
+      case 'Chiuso':
+      case 'Archiviato': statusColor = Colors.grey; break;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101322).withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: neonColor.withValues(alpha: 0.45),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: neonColor.withValues(alpha: 0.12),
+            blurRadius: 16,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _onCustomerSelected(customer),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header: Avatar, Name & Subtitle, Status Pill
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: neonColor.withValues(alpha: 0.15),
+                        border: Border.all(color: neonColor, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: neonColor.withValues(alpha: 0.4),
+                            blurRadius: 8,
+                          ),
+                        ],
+                        image: customer.logoPath != null && File(customer.logoPath!).existsSync()
+                            ? DecorationImage(
+                                image: FileImage(File(customer.logoPath!)),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: customer.logoPath == null || !File(customer.logoPath!).existsSync()
+                          ? const Icon(Icons.person, color: Colors.white, size: 24)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            customer.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            customer.addressCity?.isNotEmpty == true
+                                ? customer.addressCity!
+                                : (customer.vatNumber?.isNotEmpty == true ? 'P.IVA: ${customer.vatNumber}' : 'Cliente registrato'),
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: statusColor.withValues(alpha: 0.7), width: 1.2),
+                      ),
+                      child: Text(
+                        customer.status ?? 'Attivo',
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                // Metrics Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('P.IVA / ID', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          const SizedBox(height: 3),
+                          Text(
+                            customer.vatNumber?.isNotEmpty == true
+                                ? customer.vatNumber!
+                                : (customer.taxCode?.isNotEmpty == true ? customer.taxCode! : '-'),
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Sede', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          const SizedBox(height: 3),
+                          Text(
+                            customer.addressCity?.isNotEmpty == true ? customer.addressCity! : '-',
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Stato Account', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          const SizedBox(height: 3),
+                          Text(
+                            customer.status ?? 'Attivo',
+                            style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!isCompact)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Contatto', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                            const SizedBox(height: 3),
+                            Text(
+                              customer.phone?.isNotEmpty == true
+                                  ? customer.phone!
+                                  : (customer.email?.isNotEmpty == true ? customer.email! : '-'),
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+                const Divider(color: Colors.white10, height: 1),
+                const SizedBox(height: 8),
+
+                // Bottom Action Bar
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildCardActionBtn(
+                      icon: Icons.person_search_outlined,
+                      label: 'Vedi Storico',
+                      onTap: () => _onCustomerSelected(customer),
+                    ),
+                    _buildCardActionBtn(
+                      icon: Icons.email_outlined,
+                      label: 'Invia Email',
+                      onTap: () => _sendEmail(customer),
+                    ),
+                    _buildCardActionBtn(
+                      icon: Icons.phone_outlined,
+                      label: 'Chiama',
+                      onTap: () => _makeCall(customer),
+                    ),
+                    _buildCardActionBtn(
+                      icon: Icons.edit_outlined,
+                      label: 'Modifica',
+                      onTap: () => _showCustomerDialog(customer),
+                    ),
+                    _buildCardActionBtn(
+                      icon: Icons.delete_outline,
+                      label: 'Elimina',
+                      onTap: () => _deleteCustomer(customer.id!),
+                      color: Colors.redAccent.shade100,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardActionBtn({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color ?? Colors.white70),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color ?? Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendEmail(Customer customer) async {
+    if (customer.email != null && customer.email!.isNotEmpty) {
+      if (Platform.isWindows) {
+        try {
+          await Process.start('cmd', ['/c', 'start', 'outlook', '/c', 'ipm.note', '/m', customer.email!]);
+        } catch (e) {
+          final Uri emailLaunchUri = Uri(scheme: 'mailto', path: customer.email);
+          if (await canLaunchUrl(emailLaunchUri)) await launchUrl(emailLaunchUri);
+        }
+      } else {
+        final Uri emailLaunchUri = Uri(scheme: 'mailto', path: customer.email);
+        if (await canLaunchUrl(emailLaunchUri)) {
+          await launchUrl(emailLaunchUri);
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nessuna email salvata per questo cliente.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _makeCall(Customer customer) async {
+    if (customer.phone != null && customer.phone!.isNotEmpty) {
+      final Uri phoneUri = Uri(scheme: 'tel', path: customer.phone);
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nessun numero di telefono salvato.')),
+        );
+      }
+    }
   }
 
   Widget _buildOperationsSearchBar() {
@@ -872,7 +1484,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       return Center(
         child: Text(
           'Nessuna operazione registrata per questo cliente.',
-          style: TextStyle(color: Colors.white.withOpacity(0.54)),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
         ),
       );
     }
@@ -881,7 +1493,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       return Center(
         child: Text(
           'Nessun risultato per questa ricerca.',
-          style: TextStyle(color: Colors.white.withOpacity(0.54)),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
         ),
       );
     }
@@ -918,7 +1530,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       Expanded(
                         child: Text(
                           serviceName,
-                          style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -930,7 +1542,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   children: [
                     Text(
                       payment['date'] ?? '',
-                      style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 12),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 12),
                     ),
                     if (description.isNotEmpty)
                       Text(
@@ -944,7 +1556,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 trailing: payment['payment_method'] != null
                     ? Text(
                         payment['payment_method'],
-                        style: TextStyle(color: Colors.white.withOpacity(0.54), fontSize: 11),
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 11),
                       )
                     : null,
               ),
@@ -952,6 +1564,90 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ),
         );
       },
+    );
+  }
+
+
+  Widget _buildCompactClientRow(Customer customer) {
+    Color statusColor = Colors.white;
+    switch (customer.status) {
+      case 'Attivo': statusColor = Colors.green; break;
+      case 'In Sospeso': statusColor = Colors.orange; break;
+      case 'Priorità Alta': statusColor = Colors.redAccent; break;
+      case 'In Revisione': statusColor = Colors.blueAccent; break;
+      case 'Nuovo': statusColor = Colors.purpleAccent; break;
+      case 'Chiuso':
+      case 'Archiviato': statusColor = Colors.grey; break;
+    }
+
+    return InkWell(
+      onTap: () => _onCustomerSelected(customer),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: statusColor,
+                boxShadow: [
+                  BoxShadow(color: statusColor.withValues(alpha: 0.5), blurRadius: 4, spreadRadius: 1),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: Text(
+                customer.name,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                customer.email ?? 'N/A',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Text(
+                customer.phone ?? 'N/A',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Text(
+                customer.vatNumber ?? 'N/A',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.white54, size: 20),
+              onPressed: () => _showCustomerDialog(customer),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
