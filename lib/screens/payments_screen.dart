@@ -177,6 +177,28 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     }
   }
 
+  Future<void> _downloadSinglePayment(Map<String, dynamic> p) async {
+    final dt = p['date'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(p['date'])) : '';
+    final imp = p['amount'] != null ? '€ ${p['amount'].toStringAsFixed(2)}' : '';
+    final cliente = p['customer_name'] ?? 'N/D';
+    final descr = p['description'] ?? 'N/D';
+    final tipo = p['type'] ?? 'N/D';
+    final metodo = p['payment_method'] ?? 'N/D';
+    
+    await PDFReportService.generateAndDownloadReport(
+      title: 'Dettaglio Movimento',
+      headers: ['Campo', 'Valore'],
+      data: [
+        ['Data', dt],
+        ['Cliente', cliente],
+        ['Descrizione', descr],
+        ['Importo', imp],
+        ['Tipo', tipo],
+        ['Metodo', metodo],
+      ],
+    );
+  }
+
   Future<void> _openAttachment(Map<String, dynamic> payment) async {
     final att = payment['attachments'];
     if (att == null || att.toString() == '[]' || att.toString().isEmpty) {
@@ -665,7 +687,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                                     mainAxisAlignment: MainAxisAlignment.center,
                                                     children: [
                                                       InkWell(
-                                                        onTap: () => _openAttachment(p),
+                                                        onTap: () => _downloadSinglePayment(p),
                                                         borderRadius: BorderRadius.circular(8),
                                                         child: Padding(
                                                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -675,7 +697,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                                               Icon(Icons.download_rounded, color: Color(0xFF22D3EE), size: 18),
                                                               SizedBox(height: 2),
                                                               Text(
-                                                                'Down.',
+                                                                'PDF',
                                                                 style: TextStyle(
                                                                   color: Color(0xFF22D3EE),
                                                                   fontSize: 9,
@@ -788,53 +810,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
             const SizedBox(width: 16),
 
-            // Notification Bell with Badge
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.notifications_none, color: Colors.white70, size: 20),
-                ),
-                Positioned(
-                  top: -2,
-                  right: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEC4899),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Text(
-                      '3',
-                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
 
-            const SizedBox(width: 18),
-
-            // AXION Neon Logo
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [Color(0xFF22D3EE), Color(0xFFEC4899)],
-              ).createShader(bounds),
-              child: const Text(
-                'AXION',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ),
           ],
         ),
       ],
