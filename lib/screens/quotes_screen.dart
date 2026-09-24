@@ -33,7 +33,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (widget.openDialog) _showQuoteDialog();
+        if (widget.openDialog) _showQuoteFormDialog();
     });
     _loadQuotes();
   }
