@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_theme_provider.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/gradient_scaffold.dart';
@@ -175,6 +176,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'v1.0.3 (Build 42)',
                           style: TextStyle(color: theme.currentColors.primary, fontWeight: FontWeight.bold),
                         ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.notifications_active_outlined, color: Colors.yellowAccent),
+                        tooltip: 'Controlla aggiornamenti',
+                        onPressed: () async {
+                          final uri = Uri.parse('https://github.com'); // Sostituisci con il link alla tua repo
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
                       ),
                     ],
                   ),

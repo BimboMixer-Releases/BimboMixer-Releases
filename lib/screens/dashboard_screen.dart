@@ -115,6 +115,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     tempColors['Fatturato'] = Colors.blueAccent;
     tempColors['Contante'] = Colors.greenAccent;
 
+    if (!mounted) return;
     setState(() {
       _totalIn = metrics.totalIn;
       _totalOut = metrics.totalOut;

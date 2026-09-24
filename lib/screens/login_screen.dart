@@ -31,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final SecureStorageService _secureStorage = SecureStorageService();
 
   // Rate limiting
-  static const int _maxLoginAttempts = 5;
+  static const int _maxLoginAttempts = 3;
   static const int _lockoutMinutes = 5;
 
   @override

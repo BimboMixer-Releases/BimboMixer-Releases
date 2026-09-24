@@ -56,7 +56,7 @@ class LogoBimbomixer extends StatelessWidget {
             ),
           ),
           
-          // Outer glass reflection (simulate the glass app icon look)
+          // Outer glass reflection
           Positioned(
             top: 4.0,
             left: 4.0,
@@ -77,7 +77,6 @@ class LogoBimbomixer extends StatelessWidget {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // BIMBOMIXER (Sans-serif bold)
               Text(
                 'BIMBOMIXER',
                 style: GoogleFonts.inter(
@@ -98,7 +97,6 @@ class LogoBimbomixer extends StatelessWidget {
                   ],
                 ),
               ),
-              // Contabilità (Cursive, positioned slightly overlapping)
               Transform.translate(
                 offset: Offset(0, -(height * 0.05)),
                 child: Text(

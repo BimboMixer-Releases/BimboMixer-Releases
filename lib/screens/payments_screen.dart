@@ -88,7 +88,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   }
 
   String _formatInvoiceId(int index) {
-    return (index + 1).toString().padLeft(4, '0');
+    return (index + 1).toString().padLeft(3, '0');
   }
 
   Future<void> _editPayment(Map<String, dynamic> p) async {
