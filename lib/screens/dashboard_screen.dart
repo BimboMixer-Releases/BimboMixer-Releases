@@ -1406,7 +1406,9 @@ class AutoScrollText extends StatelessWidget {
         )..layout(maxWidth: double.infinity);
 
         if (textPainter.width > constraints.maxWidth) {
-          return Marquee(
+          return SizedBox(
+            height: textPainter.height,
+            child: Marquee(
             text: text,
             style: style,
             scrollAxis: Axis.horizontal,
@@ -1419,6 +1421,7 @@ class AutoScrollText extends StatelessWidget {
             accelerationCurve: Curves.linear,
             decelerationDuration: const Duration(milliseconds: 500),
             decelerationCurve: Curves.easeOut,
+            ),
           );
         } else {
           return Text(
