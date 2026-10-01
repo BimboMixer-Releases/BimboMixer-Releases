@@ -13,7 +13,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     tester.platformDispatcher.textScaleFactorTestValue = 1.5;
 
-    // Assicuriamoci di ripristinare SEMPRE con addTearDown
+    // Ripristini
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.view.resetPhysicalSize();
@@ -21,9 +21,7 @@ void main() {
       tester.platformDispatcher.clearTextScaleFactorTestValue();
     });
 
-    // Eseguiamo in runAsync per evitare errori sui timer finti di Marquee (AutoScrollText)
-    await tester.runAsync(() async {
-      await tester.pumpWidget(
+    await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AppThemeProvider()),
@@ -38,6 +36,8 @@ void main() {
       ),
     );
 
+    // NON USARE pumpAndSettle! L'appBar contiene AutoScrollText (Marquee) che non si ferma mai.
+    // Usiamo pump manuali per evitare timeout.
     await tester.pump(const Duration(milliseconds: 100));
 
     // Controllo apertura Drawer
@@ -45,19 +45,24 @@ void main() {
     expect(menuIcon, findsOneWidget);
 
     await tester.tap(menuIcon);
-    await tester.pumpAndSettle(const Duration(milliseconds: 100)); // Aspettiamo che l'animazione del drawer finisca
+    
+    // Avanziamo il tempo manualmente per l'animazione del Drawer (invece di pumpAndSettle)
+    for (int i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
-    // Verifica che il Drawer sia effettivamente aperto
+    // Verifica che il Drawer sia aperto
     expect(find.text('Menu Drawer Content'), findsOneWidget);
 
-    // Controlla testo (BIMBOMIXER)
-    // Non potendo usare textContaining perché usa un TextPainter custom, cerchiamo il widget padre (AutoScrollText)
-    // O verifichiamo semplicemente che non ci siano eccezioni
-      expect(tester.takeException(), isNull);
+    // Nessuna eccezione fino a qui (incluso overflow)
+    expect(tester.takeException(), isNull);
 
-      // Distruggi l'albero
-      await tester.pumpWidget(Container());
-      await tester.pump(const Duration(seconds: 5));
-    });
+    // Per prevenire "A Timer is still pending" causato dal Marquee:
+    // 1. Rimpiazziamo l'albero per chiamare il dispose() di Marquee
+    await tester.pumpWidget(Container());
+    // 2. Facciamo avanzare il tempo per consumare i timer orfani nella coda di fake_async
+    await tester.pump(const Duration(seconds: 10));
+
+    debugDefaultTargetPlatformOverride = null;
   });
 }
