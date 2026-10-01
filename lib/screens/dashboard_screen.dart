@@ -159,249 +159,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ? AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
-            },
-          ),
-        ),
-        title: Row(
-          children: [
-            const CircleAvatar(
-              radius: 14,
-              backgroundColor: Color(0xFF2A2D34),
-              backgroundImage: AssetImage('assets/images/logo_bimbomixer_neon.jpg'),
-            ),
-            SizedBox(width: 8),
-            Expanded(
-              child: AutoScrollText(
-                text: 'BIMBOMIXER CONTABILITÀ $_selectedYear',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8.0, right: 8.0),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-          
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
-            child: PopupMenuButton<String>(
-              offset: const Offset(0, 45),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              color: const Color(0xFF1E1E24),
-              onSelected: (value) {
-                if (value == 'Fattura') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen(openDialog: true)));
-                } else if (value == 'SpesaIncasso') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen()));
-                } else if (value == 'Scadenza') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
-                } else if (value == 'Preventivo') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const QuotesScreen(openDialog: true)));
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'Fattura', child: Row(children: [Icon(Icons.receipt, color: Colors.blueAccent), SizedBox(width:8), Text('Nuova Fattura', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'SpesaIncasso', child: Row(children: [Icon(Icons.swap_horiz, color: Colors.greenAccent), SizedBox(width:8), Text('Nuova Spesa / Incasso', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'Scadenza', child: Row(children: [Icon(Icons.event, color: Colors.orangeAccent), SizedBox(width:8), Text('Nuova Scadenza', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'Preventivo', child: Row(children: [Icon(Icons.description, color: Colors.purpleAccent), SizedBox(width:8), Text('Nuovo Preventivo', style: TextStyle(color: Colors.white))])),
-              ],
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.blueAccent]),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 1),
-                  ],
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.add, color: Colors.white, size: 18),
-                    SizedBox(width: 4),
-                    Text('Nuova operazione', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          if (widget.role == 'admin')
-            IconButton(
-              icon: Icon(Icons.security, color: Colors.white),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SecurityCenterScreen()),
-                );
-              },
-            ),
-          IconButton(
-            icon: Icon(Icons.notifications_none, color: Colors.white),
-            onPressed: () async {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Controllo aggiornamenti in corso..."), duration: Duration(seconds: 1)),
-              );
-              final updateService = UpdateService();
-              final updateData = await updateService.checkForUpdate();
-              if (updateData != null && context.mounted) {
-                try {
-                  final player = AudioPlayer();
-                  await player.play(AssetSource('audio/notification.mp3'));
-                } catch (e) {
-                  print("Errore riproduzione suono: $e");
-                }
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (ctx) => UpdateDialog(updateData: updateData, updateService: updateService),
-                );
-              } else if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Nessun aggiornamento disponibile.")),
-                );
-              }
-            },
-          ),
-          SizedBox(width: 8),
-        ],
-            ),
-          ),
-        ),
-        ), // end SingleChildScrollView
-      ) : AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
-            },
-          ),
-        ),
-        title: Row(
-          children: [
-            const CircleAvatar(
-              radius: 14,
-              backgroundColor: Color(0xFF2A2D34),
-              backgroundImage: AssetImage('assets/images/logo_bimbomixer_neon.jpg'),
-            ),
-            SizedBox(width: 8),
-            Expanded(
-              child: AutoScrollText(
-                text: 'BIMBOMIXER CONTABILITÀ $_selectedYear',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
-            child: PopupMenuButton<String>(
-              offset: const Offset(0, 45),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              color: const Color(0xFF1E1E24),
-              onSelected: (value) {
-                if (value == 'Fattura') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen(openDialog: true)));
-                } else if (value == 'SpesaIncasso') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen()));
-                } else if (value == 'Scadenza') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
-                } else if (value == 'Preventivo') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const QuotesScreen(openDialog: true)));
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'Fattura', child: Row(children: [Icon(Icons.receipt, color: Colors.blueAccent), SizedBox(width:8), Text('Nuova Fattura', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'SpesaIncasso', child: Row(children: [Icon(Icons.swap_horiz, color: Colors.greenAccent), SizedBox(width:8), Text('Nuova Spesa / Incasso', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'Scadenza', child: Row(children: [Icon(Icons.event, color: Colors.orangeAccent), SizedBox(width:8), Text('Nuova Scadenza', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'Preventivo', child: Row(children: [Icon(Icons.description, color: Colors.purpleAccent), SizedBox(width:8), Text('Nuovo Preventivo', style: TextStyle(color: Colors.white))])),
-              ],
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.blueAccent]),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 1),
-                  ],
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.add, color: Colors.white, size: 18),
-                    SizedBox(width: 4),
-                    Text('Nuova operazione', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          if (widget.role == 'admin')
-            IconButton(
-              icon: Icon(Icons.security, color: Colors.white),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SecurityCenterScreen()),
-                );
-              },
-            ),
-          IconButton(
-            icon: Icon(Icons.notifications_none, color: Colors.white),
-            onPressed: () async {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Controllo aggiornamenti in corso..."), duration: Duration(seconds: 1)),
-              );
-              final updateService = UpdateService();
-              final updateData = await updateService.checkForUpdate();
-              if (updateData != null && context.mounted) {
-                try {
-                  final player = AudioPlayer();
-                  await player.play(AssetSource('audio/notification.mp3'));
-                } catch (e) {
-                  print("Errore riproduzione suono: $e");
-                }
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (ctx) => UpdateDialog(updateData: updateData, updateService: updateService),
-                );
-              } else if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Nessun aggiornamento disponibile.")),
-                );
-              }
-            },
-          ),
-          SizedBox(width: 8),
-        ],
-      ),
+      appBar: (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) 
+          ? MobileDashboardAppBar(role: widget.role, selectedYear: _selectedYear) 
+          : DesktopDashboardAppBar(role: widget.role, selectedYear: _selectedYear),
       body: _isLoading
           ? Center(
               child: CircularProgressIndicator(color: Colors.blueAccent),
@@ -2115,5 +1875,278 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
         );
       },
     );
+  }
+}
+
+
+class MobileDashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final String role;
+  final int selectedYear;
+
+  const MobileDashboardAppBar({Key? key, required this.role, required this.selectedYear}) : super(key: key);
+
+  @override
+  Size get preferredSize => const Size.fromHeight(116); // 56 + 60 bottom
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBar(
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu, color: Colors.white),
+            onPressed: () {
+              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
+            },
+          ),
+        ),
+        title: Row(
+          children: [
+            const CircleAvatar(
+              radius: 14,
+              backgroundColor: Color(0xFF2A2D34),
+              backgroundImage: AssetImage('assets/images/logo_bimbomixer_neon.jpg'),
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: AutoScrollText(
+                text: 'BIMBOMIXER CONTABILITÀ $selectedYear',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8.0, right: 8.0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+          
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
+            child: PopupMenuButton<String>(
+              offset: const Offset(0, 45),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: const Color(0xFF1E1E24),
+              onSelected: (value) {
+                if (value == 'Fattura') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen(openDialog: true)));
+                } else if (value == 'SpesaIncasso') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen()));
+                } else if (value == 'Scadenza') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
+                } else if (value == 'Preventivo') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const QuotesScreen(openDialog: true)));
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'Fattura', child: Row(children: [Icon(Icons.receipt, color: Colors.blueAccent), SizedBox(width:8), Text('Nuova Fattura', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'SpesaIncasso', child: Row(children: [Icon(Icons.swap_horiz, color: Colors.greenAccent), SizedBox(width:8), Text('Nuova Spesa / Incasso', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Scadenza', child: Row(children: [Icon(Icons.event, color: Colors.orangeAccent), SizedBox(width:8), Text('Nuova Scadenza', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Preventivo', child: Row(children: [Icon(Icons.description, color: Colors.purpleAccent), SizedBox(width:8), Text('Nuovo Preventivo', style: TextStyle(color: Colors.white))])),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.blueAccent]),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 1),
+                  ],
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 18),
+                    SizedBox(width: 4),
+                    Text('Nuova operazione', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (role == 'admin')
+            IconButton(
+              icon: Icon(Icons.security, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SecurityCenterScreen()),
+                );
+              },
+            ),
+          IconButton(
+            icon: Icon(Icons.notifications_none, color: Colors.white),
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Controllo aggiornamenti in corso..."), duration: Duration(seconds: 1)),
+              );
+              final updateService = UpdateService();
+              final updateData = await updateService.checkForUpdate();
+              if (updateData != null && context.mounted) {
+                try {
+                  final player = AudioPlayer();
+                  await player.play(AssetSource('audio/notification.mp3'));
+                } catch (e) {
+                  print("Errore riproduzione suono: $e");
+                }
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => UpdateDialog(updateData: updateData, updateService: updateService),
+                );
+              } else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Nessun aggiornamento disponibile.")),
+                );
+              }
+            },
+          ),
+          SizedBox(width: 8),
+        ],
+            ),
+          ),
+        ),
+        ), // end SingleChildScrollView
+      );
+  }
+}
+
+class DesktopDashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final String role;
+  final int selectedYear;
+
+  const DesktopDashboardAppBar({Key? key, required this.role, required this.selectedYear}) : super(key: key);
+
+  @override
+  Size get preferredSize => const Size.fromHeight(116); // 56 + 60 bottom
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBar(
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu, color: Colors.white),
+            onPressed: () {
+              context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer();
+            },
+          ),
+        ),
+        title: Row(
+          children: [
+            const CircleAvatar(
+              radius: 14,
+              backgroundColor: Color(0xFF2A2D34),
+              backgroundImage: AssetImage('assets/images/logo_bimbomixer_neon.jpg'),
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: AutoScrollText(
+                text: 'BIMBOMIXER CONTABILITÀ $selectedYear',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
+            child: PopupMenuButton<String>(
+              offset: const Offset(0, 45),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: const Color(0xFF1E1E24),
+              onSelected: (value) {
+                if (value == 'Fattura') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen(openDialog: true)));
+                } else if (value == 'SpesaIncasso') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen()));
+                } else if (value == 'Scadenza') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
+                } else if (value == 'Preventivo') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const QuotesScreen(openDialog: true)));
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'Fattura', child: Row(children: [Icon(Icons.receipt, color: Colors.blueAccent), SizedBox(width:8), Text('Nuova Fattura', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'SpesaIncasso', child: Row(children: [Icon(Icons.swap_horiz, color: Colors.greenAccent), SizedBox(width:8), Text('Nuova Spesa / Incasso', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Scadenza', child: Row(children: [Icon(Icons.event, color: Colors.orangeAccent), SizedBox(width:8), Text('Nuova Scadenza', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Preventivo', child: Row(children: [Icon(Icons.description, color: Colors.purpleAccent), SizedBox(width:8), Text('Nuovo Preventivo', style: TextStyle(color: Colors.white))])),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.blueAccent]),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 1),
+                  ],
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 18),
+                    SizedBox(width: 4),
+                    Text('Nuova operazione', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (role == 'admin')
+            IconButton(
+              icon: Icon(Icons.security, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SecurityCenterScreen()),
+                );
+              },
+            ),
+          IconButton(
+            icon: Icon(Icons.notifications_none, color: Colors.white),
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Controllo aggiornamenti in corso..."), duration: Duration(seconds: 1)),
+              );
+              final updateService = UpdateService();
+              final updateData = await updateService.checkForUpdate();
+              if (updateData != null && context.mounted) {
+                try {
+                  final player = AudioPlayer();
+                  await player.play(AssetSource('audio/notification.mp3'));
+                } catch (e) {
+                  print("Errore riproduzione suono: $e");
+                }
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => UpdateDialog(updateData: updateData, updateService: updateService),
+                );
+              } else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Nessun aggiornamento disponibile.")),
+                );
+              }
+            },
+          ),
+          SizedBox(width: 8),
+        ],
+      );
   }
 }
