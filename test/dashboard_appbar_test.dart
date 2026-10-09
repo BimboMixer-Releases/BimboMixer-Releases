@@ -26,7 +26,7 @@ void main() {
         providers: [
           ChangeNotifierProvider(create: (_) => AppThemeProvider()),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
           home: Scaffold(
             appBar: MobileDashboardAppBar(role: 'admin', selectedYear: 2026),
             drawer: Drawer(child: Text('Menu Drawer Content')),
@@ -66,3 +66,4 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 }
+

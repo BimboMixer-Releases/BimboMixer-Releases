@@ -10,6 +10,7 @@ import 'package:contabile_app/services/update_service.dart';
 import 'package:contabile_app/widgets/update_dialog.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:contabile_app/screens/invoices_screen.dart';
+import 'package:contabile_app/screens/memo_events_screen.dart';
 import 'package:contabile_app/screens/payment_form_screen.dart';
 
 
@@ -41,6 +42,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _payments = [];
   List<Map<String, dynamic>> _deadlines = [];
   List<Map<String, dynamic>> _invoices = [];
+  List<Map<String, dynamic>> _scheduledPayments = [];
+  List<Map<String, dynamic>> _memoEvents = [];
   Map<int, double> _monthlyNet = {};
   Map<int, double> _monthlyIn = {};
   Map<int, double> _monthlyOut = {};
@@ -69,6 +72,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final deadlines = await _dbHelper.getDeadlines();
     final invoices = await _dbHelper.getInvoices();
+    final scheduled = await _dbHelper.getScheduledPayments();
+    final memoEvents = await _dbHelper.getMemoEvents();
 
     final categories = await _dbHelper.getCategories();
     Map<String, String> categoryNames = {};
@@ -95,6 +100,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       paymentsLastYear: paymentsLastYear,
       invoices: invoices,
       deadlines: deadlines,
+      scheduledPayments: scheduled,
+      scheduledPaymentsLastYear: scheduled,
       categoryNames: categoryNames,
       serviceNames: serviceNames,
       selectedYear: _selectedYear,
@@ -105,6 +112,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       paymentsLastYear: [],
       invoices: invoices,
       deadlines: deadlines,
+      scheduledPayments: scheduled,
+      scheduledPaymentsLastYear: scheduled,
       categoryNames: categoryNames,
       serviceNames: serviceNames,
       selectedYear: _selectedYear - 1,
@@ -135,6 +144,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _payments = payments;
       _deadlines = deadlines;
       _invoices = invoices;
+      _scheduledPayments = scheduled;
+      _memoEvents = memoEvents;
       _monthlyNet = metrics.monthlyNet;
       _monthlyIn = metrics.monthlyIn;
       _monthlyOut = metrics.monthlyOut;
@@ -203,8 +214,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'PATRIMONIO NETTO',
@@ -232,11 +244,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     size: 16,
                   ),
                   SizedBox(width: 4),
-                  Text(
-                    '$change rispetto all\'anno scorso',
-                    style: TextStyle(
-                      color: isPositive ? Colors.greenAccent : Colors.redAccent,
-                      fontSize: 14,
+                  Expanded(
+                    child: Text(
+                      '$change rispetto all\'anno scorso',
+                      style: TextStyle(
+                        color: isPositive ? Colors.greenAccent : Colors.redAccent,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ],
@@ -247,14 +261,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Icon(Icons.event_busy, color: Colors.orangeAccent, size: 13),
                     SizedBox(width: 4),
-                    Text(
-                      '- € ${_totalDeadlinesPaid.toStringAsFixed(2)} scadenze pagate',
-                      style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                    Expanded(
+                      child: Text(
+                        '- € ${_totalDeadlinesPaid.toStringAsFixed(2)} scadenze pagate',
+                        style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                      ),
                     ),
                   ],
                 ),
               ],
             ],
+          ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -299,18 +316,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? ((_totalIn - _totalOut) / _totalIn) * 100
         : 0;
 
-    int unpaidInvoices = _invoices.where((i) => i['status'] != 'PAID').length;
+    int baseUnpaidInvoices = _invoices.where((i) => i['status'] != 'PAID' && i['status'] != 'Incassata').length;
+    int memoUnpaidFatture = _memoEvents.where((m) => m['memo_type']?.toString().toUpperCase() == 'FATTURA' && m['memo_status']?.toString().toUpperCase() != 'PAGATO').length;
+    int unpaidInvoices = baseUnpaidInvoices + memoUnpaidFatture;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         int crossAxisCount = constraints.maxWidth > 800 ? 4 : 2;
+        double aspectRatio = constraints.maxWidth > 800 ? 2.5 : (constraints.maxWidth < 400 ? 1.3 : 2.0);
         return GridView.count(
           crossAxisCount: crossAxisCount,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 2.5,
+          childAspectRatio: aspectRatio,
           children: [
             _metricCard(
               theme,
@@ -332,15 +352,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               theme,
               "FATTURE DA INCASSARE",
               '$unpaidInvoices',
-              '$unpaidInvoices fatture in sospeso',
+              '$baseUnpaidInvoices normali, $memoUnpaidFatture programmate',
               Icons.receipt,
               Colors.orangeAccent,
               isAmount: false,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const InvoicesScreen()),
-                );
+                  MaterialPageRoute(builder: (_) => const MemoEventsScreen()),
+                ).then((_) {
+                  if (mounted) _loadDashboardData();
+                });
               },
             ),
             _metricCard(
@@ -393,9 +415,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  height: 14,
+                Flexible(
                   child: AutoScrollText(
                     text: title,
                     style: TextStyle(
@@ -406,8 +428,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 SizedBox(height: 4),
-                SizedBox(
-                  height: 24,
+                Flexible(
+                  flex: 2,
                   child: AutoScrollText(
                     text: value,
                     style: TextStyle(
@@ -418,8 +440,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 SizedBox(height: 2),
-                SizedBox(
-                  height: 14,
+                Flexible(
                   child: AutoScrollText(
                     text: isAmount ? '$subtitle vs ${_selectedYear - 1}' : subtitle,
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 10),
@@ -494,7 +515,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 'ANDAMENTO MENSILE',
@@ -504,15 +527,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Spacer(),
-              Icon(Icons.circle, color: Colors.blueAccent, size: 10),
-              SizedBox(width: 4),
-              Text('Incassi', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
-              SizedBox(width: 16),
-              Icon(Icons.circle, color: Colors.purpleAccent, size: 10),
-              SizedBox(width: 4),
-              Text('Spese', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
-              SizedBox(width: 8),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Icon(Icons.circle, color: Colors.blueAccent, size: 10),
+                  SizedBox(width: 4),
+                  Text('Incassi', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                  SizedBox(width: 16),
+                  Icon(Icons.circle, color: Colors.purpleAccent, size: 10),
+                  SizedBox(width: 4),
+                  Text('Spese', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                  SizedBox(width: 8),
+                ],
+              ),
             ],
           ),
           SizedBox(height: 24),
@@ -644,7 +671,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ─── Dati torta condivisi ─────────────────────────────────────────────────
+  // â”€â”€â”€ Dati torta condivisi â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   List<MapEntry<String, double>> _getSortedCats() {
     Map<String, double> targetMap;
     if (_chartFilter == 'Prestazione') {
@@ -706,7 +733,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ─── Card sulla dashboard ─────────────────────────────────────────────────
+  // â”€â”€â”€ Card sulla dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildPieChartCard(AppThemeProvider theme) {
     final sortedCats = _getSortedCats();
     final palette = _piePalette();
@@ -804,7 +831,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   SizedBox(width: 8),
-                  // Legenda — Column invece di ListView così è sempre visibile su APK
+                  // Legenda â€” Column invece di ListView così è sempre visibile su APK
                   Expanded(
                     flex: 3,
                     child: LayoutBuilder(
@@ -865,7 +892,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ─── Finestra full-screen torta interattiva ────────────────────────────────
+  // â”€â”€â”€ Finestra full-screen torta interattiva â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   void _showPieChartFullScreen(
     List<MapEntry<String, double>> sortedCats,
     List<Color> palette,
@@ -938,12 +965,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'ULTIME FATTURE',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.54),
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'ULTIME FATTURE',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.54),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               InkWell(
@@ -1037,12 +1067,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'ULTIMI MOVIMENTI',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.54),
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'ULTIMI MOVIMENTI',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.54),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               InkWell(
@@ -1152,17 +1185,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'SCADENZE IN ARRIVO',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.54),
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'SCADENZE IN ARRIVO',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.54),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               InkWell(
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen()));
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MemoEventsScreen()));
                 },
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
@@ -1208,7 +1244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MemoEventsScreen(openForm: true)));
                         },
                         icon: Icon(Icons.add, color: Colors.white, size: 18),
                         label: Text('Nuova Scadenza', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -1334,9 +1370,9 @@ Color _darkenColor(Color c, [double amount = 0.25]) {
   return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Dialogo full-screen torta interattiva
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _PieChartFullScreenDialog extends StatefulWidget {
   final List<MapEntry<String, double>> sortedCats;
   final Map<String, Color> categoryColors;
@@ -1426,7 +1462,7 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
         child: SafeArea(
           child: Column(
             children: [
-              // ── AppBar custom ──
+              // â”€â”€ AppBar custom â”€â”€
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
@@ -1468,7 +1504,7 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                   ),
                 ),
 
-              // ── Contenuto principale ──
+              // â”€â”€ Contenuto principale â”€â”€
               Expanded(
                 child: LayoutBuilder(
                   builder: (ctx, constraints) {
@@ -1720,7 +1756,7 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
                 ),
               ),
 
-              // ── Legenda scrollabile in fondo (se nessuna selezione) ──
+              // â”€â”€ Legenda scrollabile in fondo (se nessuna selezione) â”€â”€
               if (_selectedIndex < 0)
                 Container(
                   height: 80,
@@ -1940,21 +1976,15 @@ class MobileDashboardAppBar extends StatelessWidget implements PreferredSizeWidg
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               color: const Color(0xFF1E1E24),
               onSelected: (value) {
-                if (value == 'Fattura') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen(openDialog: true)));
-                } else if (value == 'SpesaIncasso') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen()));
-                } else if (value == 'Scadenza') {
+                if (value == 'Scadenza') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const MemoEventsScreen(openForm: true)));
+                } else if (value == 'Tasse') {
                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
-                } else if (value == 'Preventivo') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const QuotesScreen(openDialog: true)));
                 }
               },
               itemBuilder: (context) => [
-                PopupMenuItem(value: 'Fattura', child: Row(children: [Icon(Icons.receipt, color: Colors.blueAccent), SizedBox(width:8), Text('Nuova Fattura', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'SpesaIncasso', child: Row(children: [Icon(Icons.swap_horiz, color: Colors.greenAccent), SizedBox(width:8), Text('Nuova Spesa / Incasso', style: TextStyle(color: Colors.white))])),
                 PopupMenuItem(value: 'Scadenza', child: Row(children: [Icon(Icons.event, color: Colors.orangeAccent), SizedBox(width:8), Text('Nuova Scadenza', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'Preventivo', child: Row(children: [Icon(Icons.description, color: Colors.purpleAccent), SizedBox(width:8), Text('Nuovo Preventivo', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Tasse', child: Row(children: [Icon(Icons.account_balance, color: Colors.redAccent), SizedBox(width:8), Text('Pagamento Tasse', style: TextStyle(color: Colors.white))])),
               ],
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
@@ -2073,21 +2103,15 @@ class DesktopDashboardAppBar extends StatelessWidget implements PreferredSizeWid
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               color: const Color(0xFF1E1E24),
               onSelected: (value) {
-                if (value == 'Fattura') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen(openDialog: true)));
-                } else if (value == 'SpesaIncasso') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen()));
-                } else if (value == 'Scadenza') {
+                if (value == 'Scadenza') {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const MemoEventsScreen(openForm: true)));
+                } else if (value == 'Tasse') {
                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DeadlinesScreen(openDialog: true)));
-                } else if (value == 'Preventivo') {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const QuotesScreen(openDialog: true)));
                 }
               },
               itemBuilder: (context) => [
-                PopupMenuItem(value: 'Fattura', child: Row(children: [Icon(Icons.receipt, color: Colors.blueAccent), SizedBox(width:8), Text('Nuova Fattura', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'SpesaIncasso', child: Row(children: [Icon(Icons.swap_horiz, color: Colors.greenAccent), SizedBox(width:8), Text('Nuova Spesa / Incasso', style: TextStyle(color: Colors.white))])),
                 PopupMenuItem(value: 'Scadenza', child: Row(children: [Icon(Icons.event, color: Colors.orangeAccent), SizedBox(width:8), Text('Nuova Scadenza', style: TextStyle(color: Colors.white))])),
-                PopupMenuItem(value: 'Preventivo', child: Row(children: [Icon(Icons.description, color: Colors.purpleAccent), SizedBox(width:8), Text('Nuovo Preventivo', style: TextStyle(color: Colors.white))])),
+                PopupMenuItem(value: 'Tasse', child: Row(children: [Icon(Icons.account_balance, color: Colors.redAccent), SizedBox(width:8), Text('Pagamento Tasse', style: TextStyle(color: Colors.white))])),
               ],
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),

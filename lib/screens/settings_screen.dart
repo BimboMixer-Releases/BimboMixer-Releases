@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'reports_screen.dart';
+import 'users_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_theme_provider.dart';
@@ -22,6 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return GradientScaffold(
       appBar: AppBar(
+        
         title: Text('Impostazioni', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -41,7 +44,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Text(
                     'Seleziona uno dei 7 preset di colore per personalizzare l\'aspetto.',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
                   ),
                   SizedBox(height: 16),
                   Wrap(
@@ -50,7 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: ThemePreset.values.map((preset) {
                       final isSelected = theme.currentPreset == preset;
                       final colors = AppColors.presets[preset]!;
-                      
+
                       return GestureDetector(
                         onTap: () {
                           theme.setPreset(preset);
@@ -67,18 +73,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 color: colors.primary,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: isSelected ? Colors.white : Colors.transparent,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.transparent,
                                   width: 3,
                                 ),
-                                boxShadow: isSelected ? [
-                                  BoxShadow(
-                                    color: colors.primary.withValues(alpha: 0.5),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
-                                  )
-                                ] : [],
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: colors.primary.withValues(
+                                            alpha: 0.5,
+                                          ),
+                                          blurRadius: 10,
+                                          spreadRadius: 2,
+                                        ),
+                                      ]
+                                    : [],
                               ),
-                              child: isSelected 
+                              child: isSelected
                                   ? Icon(LucideIcons.check, color: Colors.white)
                                   : null,
                             ),
@@ -86,9 +98,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             Text(
                               preset.name.toUpperCase(),
                               style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.white54,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.white54,
                                 fontSize: 12,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           ],
@@ -99,9 +115,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            
+
             SizedBox(height: 24),
-            
+
+            // -- SEZIONE AMMINISTRATORI ------------------------------
+            _sectionHeader(LucideIcons.users, 'Amministratori e Sicurezza'),
+            SizedBox(height: 12),
+            GlassContainer(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Gestisci gli account amministratore, cambia le password e abilita il login tramite Fingerprint (impronta digitale/riconoscimento facciale).',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const UsersScreen()),
+                      );
+                    },
+                    icon: Icon(LucideIcons.shield),
+                    label: Text('GESTIONE AMMINISTRATORI'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.currentColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 24),
+
             // ── SEZIONE 2: Migrazione ────────────────────────────────
             _sectionHeader(LucideIcons.database, 'Migrazione Dati'),
             SizedBox(height: 12),
@@ -112,25 +168,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Text(
                     'Usa questo strumento per recuperare i vecchi dati salvati in locale e portarli sul nuovo sistema in Cloud. Premi il pulsante solo una volta.',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
                   ),
                   SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: () async {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Migrazione in corso... attendi...')),
+                        const SnackBar(
+                          content: Text('Migrazione in corso... attendi...'),
+                        ),
                       );
                       try {
                         await MigrationHelper.migrate();
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Migrazione Completata! I tuoi vecchi dati sono ora nel Cloud.'), backgroundColor: Colors.green),
+                            const SnackBar(
+                              content: Text(
+                                'Migrazione Completata! I tuoi vecchi dati sono ora nel Cloud.',
+                              ),
+                              backgroundColor: Colors.green,
+                            ),
                           );
                         }
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Errore migrazione: '), backgroundColor: Colors.red, duration: const Duration(seconds: 10)),
+                            SnackBar(
+                              content: Text('Errore migrazione: '),
+                              backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 10),
+                            ),
                           );
                         }
                       }
@@ -141,16 +211,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       backgroundColor: theme.currentColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+
+            SizedBox(height: 24),
+
             
             SizedBox(height: 24),
 
-            // ── SEZIONE 3: Informazioni e Aggiornamenti ────────────────────────────────
+            // ── SEZIONE 3: Report e Feedback ────────────────────────────────
+            _sectionHeader(LucideIcons.barChart2, 'Report e Feedback'),
+            SizedBox(height: 12),
+            GlassContainer(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Invia feedback, segnala bug o proponi nuove idee per migliorare l\'applicazione.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ReportsScreen()),
+                      );
+                    },
+                    icon: Icon(LucideIcons.messageSquare),
+                    label: Text('Apri Sezione Report'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 24),
+
+            // ── SEZIONE 4: Informazioni e Aggiornamenti ────────────────────────────────
             _sectionHeader(LucideIcons.info, 'Informazioni e Aggiornamenti'),
             SizedBox(height: 12),
             GlassContainer(
@@ -163,27 +278,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Text(
                         'Versione App',
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: theme.currentColors.primary.withValues(alpha: 0.2),
+                          color: theme.currentColors.primary.withValues(
+                            alpha: 0.2,
+                          ),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: theme.currentColors.primary.withValues(alpha: 0.5)),
+                          border: Border.all(
+                            color: theme.currentColors.primary.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
                         ),
                         child: Text(
-                          'v1.0.3 (Build 42)',
-                          style: TextStyle(color: theme.currentColors.primary, fontWeight: FontWeight.bold),
+                          'v1.9.26 (Build 137)',
+                          style: TextStyle(
+                            color: theme.currentColors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       IconButton(
-                        icon: Icon(Icons.notifications_active_outlined, color: Colors.yellowAccent),
+                        icon: Icon(
+                          Icons.notifications_active_outlined,
+                          color: Colors.yellowAccent,
+                        ),
                         tooltip: 'Controlla aggiornamenti',
                         onPressed: () async {
-                          final uri = Uri.parse('https://github.com'); // Sostituisci con il link alla tua repo
+                          final uri = Uri.parse(
+                            'https://github.com',
+                          ); // Sostituisci con il link alla tua repo
                           if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            await launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            );
                           }
                         },
                       ),
@@ -192,13 +331,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SizedBox(height: 16),
                   Text(
                     'Modifiche recenti (Changelog):',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   SizedBox(height: 8),
-                  _buildChangelogItem('Dashboard ridisegnata con stile Axion (Glassmorphism e neon)'),
-                  _buildChangelogItem('Aggiunta la sezione Feedback/Bug Report avanzata'),
-                  _buildChangelogItem('Fix calcolo Utile Netto (evitate doppie sottrazioni per fatture pagate e scadenze)'),
-                  _buildChangelogItem('Migliorato sistema di Login con sicurezza avanzata (SHA-256 e lockout)'),
+                  _buildChangelogItem('Nuova UI Fatture/Movimenti e modifica rapida dello stato',),
+                  _buildChangelogItem('Aggiunto tasto eliminazione Preventivi con richiesta password/biometria',),
+                    _buildChangelogItem('Risolto crash tasto download PDF singolo movimento',),
+                  _buildChangelogItem('Aggiunto filtro data ascendente/discendente su Movimenti e Fatture',),
+                  _buildChangelogItem(
+                    'Ordinamento automatico per data più recente di default su tutto',
+                  ),
+                  _buildChangelogItem(
+                    'Sincronizzazione Dashboard in tempo reale quando modifichi/aggiungi',
+                  ),
+                  _buildChangelogItem(
+                    'Risolto Errore di Connessione Firestore sulla pagina Report e Idee',
+                  ),
+                  _buildChangelogItem(
+                    'Fix database sorting per liste Fatture e Movimenti',
+                  ),
                 ],
               ),
             ),
@@ -215,7 +370,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SizedBox(width: 8),
         Text(
           title,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
       ],
     );
@@ -231,7 +390,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Expanded(
             child: Text(
               text,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 13,
+              ),
             ),
           ),
         ],
@@ -239,3 +401,5 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+
+

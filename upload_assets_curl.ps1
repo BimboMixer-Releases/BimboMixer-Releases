@@ -7,8 +7,8 @@ $version = "1.8.7"
 $releaseId = "366374819"
 
 # Local paths
-$apkDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v$($version)_update.apk"
-$zipDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v$($version)_update.zip"
+$apkDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v$($version)_update.apk"
+$zipDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v$($version)_update.zip"
 
 function Upload-Asset-Curl {
     param(

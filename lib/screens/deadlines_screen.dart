@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:contabile_app/utils/currency_utils.dart';
+import 'package:contabile_app/widgets/glass_date_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
@@ -181,20 +183,10 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         StateSetter setD, bool isFrom) async {
       final now = DateTime.now();
       final initial = isFrom ? (dateFrom ?? now) : (dateTo ?? dateFrom ?? now);
-      final picked = await showDatePicker(
-        context: context,
+      final picked = await GlassDatePicker.show(context,
         initialDate: initial,
         firstDate: DateTime(2020),
         lastDate: DateTime(2035),
-        builder: (ctx, child) => Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.blueAccent,
-              surface: Color(0xFF1E1E24),
-            ),
-          ),
-          child: child!,
-        ),
       );
       if (picked != null) {
         setD(() {
@@ -502,7 +494,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                                       .split('T')
                                       .first,
                               'amount':
-                                  double.tryParse(amountCtrl.text) ?? 0.0,
+                                  CurrencyUtils.parseCurrency(amountCtrl.text),
                               'notes': notesCtrl.text.trim(),
                               'status': status,
                               'attachments': attachments,
@@ -951,16 +943,15 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
                             )
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
   }
 
   Widget _buildInfoColumn(String label, String value, {IconData? icon, Color? iconColor, Color? dotColor}) {
@@ -1022,3 +1013,4 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 }
 
 enum _DeadlineStatus { pending, paid, overdue }
+

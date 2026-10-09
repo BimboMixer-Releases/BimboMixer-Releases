@@ -33,10 +33,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   void _showServiceDialog([ServiceType? service]) {
     final nameController = TextEditingController(text: service?.name);
-    
+
     // Default color if none is set
-    Color selectedColor = service?.colorHex != null 
-        ? Color(int.parse(service!.colorHex!)) 
+    Color selectedColor = service?.colorHex != null
+        ? Color(int.parse(service!.colorHex!))
         : Colors.grey;
 
     showDialog(
@@ -51,7 +51,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
               children: [
                 Text(
                   service == null ? 'Nuovo Servizio' : 'Modifica Servizio',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 SizedBox(height: 16),
                 TextField(
@@ -59,8 +63,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   style: TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     labelText: 'Nome Servizio *',
-                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                    labelStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
                 ),
                 SizedBox(height: 16),
@@ -69,36 +79,64 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Colore (per grafico)', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12)),
+                        Text(
+                          'Colore (per grafico)',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                          ),
+                        ),
                         SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: [
-                            Colors.redAccent, Colors.pinkAccent, Colors.purpleAccent, Colors.deepPurpleAccent,
-                            Colors.indigoAccent, Colors.blueAccent, Colors.lightBlueAccent, Colors.cyanAccent,
-                            Colors.tealAccent, Colors.greenAccent, Colors.lightGreenAccent, Colors.limeAccent,
-                            Colors.yellowAccent, Colors.amberAccent, Colors.orangeAccent, Colors.deepOrangeAccent,
-                            Colors.grey
-                          ].map((c) => GestureDetector(
-                            onTap: () => setStateSB(() => selectedColor = c),
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: c,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: selectedColor.toARGB32() == c.toARGB32() ? Colors.white : Colors.transparent,
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                          )).toList(),
+                          children:
+                              [
+                                    Colors.redAccent,
+                                    Colors.pinkAccent,
+                                    Colors.purpleAccent,
+                                    Colors.deepPurpleAccent,
+                                    Colors.indigoAccent,
+                                    Colors.blueAccent,
+                                    Colors.lightBlueAccent,
+                                    Colors.cyanAccent,
+                                    Colors.tealAccent,
+                                    Colors.greenAccent,
+                                    Colors.lightGreenAccent,
+                                    Colors.limeAccent,
+                                    Colors.yellowAccent,
+                                    Colors.amberAccent,
+                                    Colors.orangeAccent,
+                                    Colors.deepOrangeAccent,
+                                    Colors.grey,
+                                  ]
+                                  .map(
+                                    (c) => GestureDetector(
+                                      onTap: () =>
+                                          setStateSB(() => selectedColor = c),
+                                      child: Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: BoxDecoration(
+                                          color: c,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color:
+                                                selectedColor.toARGB32() ==
+                                                    c.toARGB32()
+                                                ? Colors.white
+                                                : Colors.transparent,
+                                            width: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                         ),
                       ],
                     );
-                  }
+                  },
                 ),
                 SizedBox(height: 24),
                 Row(
@@ -106,7 +144,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(dialogContext),
-                      child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                      child: Text(
+                        'ANNULLA',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
                     ),
                     SizedBox(width: 8),
                     ElevatedButton(
@@ -130,7 +173,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       child: Text('SALVA'),
                     ),
                   ],
-                )
+                ),
               ],
             ),
           ),
@@ -149,25 +192,42 @@ class _ServicesScreenState extends State<ServicesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Conferma Eliminazione', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(
+                'Conferma Eliminazione',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               SizedBox(height: 16),
-              Text('Eliminando questo servizio, i pagamenti associati rimarranno senza servizio. Procedere?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+              Text(
+                'Eliminando questo servizio, i pagamenti associati rimarranno senza servizio. Procedere?',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              ),
               SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                    child: Text(
+                      'ANNULLA',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
                     onPressed: () => Navigator.pop(context, true),
                     child: Text('ELIMINA'),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),
@@ -184,6 +244,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   Widget build(BuildContext context) {
     return GradientScaffold(
       appBar: AppBar(
+        
         title: Text('Servizi Erogati', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -192,49 +253,67 @@ class _ServicesScreenState extends State<ServicesScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: Colors.white))
           : _services.isEmpty
-              ? Center(child: Text('Nessun servizio definito.', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _services.length,
-                  itemBuilder: (context, index) {
-                    final srv = _services[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: GlassContainer(
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: ListTile(
-                          leading: Icon(Icons.design_services, color: Colors.blueAccent),
-                          title: Text(srv.name, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (srv.colorHex != null)
-                                Container(
-                                  margin: const EdgeInsets.only(right: 12),
-                                  width: 16,
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    color: Color(int.parse(srv.colorHex!)),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
+          ? Center(
+              child: Text(
+                'Nessun servizio definito.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _services.length,
+              itemBuilder: (context, index) {
+                final srv = _services[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: GlassContainer(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.design_services,
+                          color: Colors.blueAccent,
+                        ),
+                        title: Text(
+                          srv.name,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (srv.colorHex != null)
+                              Container(
+                                margin: const EdgeInsets.only(right: 12),
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: Color(int.parse(srv.colorHex!)),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
                                   ),
                                 ),
-                              IconButton(
-                                icon: Icon(Icons.edit, color: Colors.blueAccent),
-                                onPressed: () => _showServiceDialog(srv),
                               ),
-                              IconButton(
-                                icon: Icon(Icons.delete, color: Colors.redAccent),
-                                onPressed: () => _deleteService(srv.id!),
-                              ),
-                            ],
-                          ),
-                        )),
+                            IconButton(
+                              icon: Icon(Icons.edit, color: Colors.blueAccent),
+                              onPressed: () => _showServiceDialog(srv),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete, color: Colors.redAccent),
+                              onPressed: () => _deleteService(srv.id!),
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showServiceDialog(),
         backgroundColor: Colors.blueAccent,
@@ -243,5 +322,3 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 }
-
-

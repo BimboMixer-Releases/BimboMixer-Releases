@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/sort_utils.dart';
 import '../utils/password_hasher.dart';
 import '../utils/crypto_utils.dart';
 
@@ -8,6 +9,7 @@ class DatabaseHelper {
   
   FirebaseFirestore? _mockDb;
   FirebaseFirestore get _db => _mockDb ?? FirebaseFirestore.instance;
+  FirebaseFirestore get db => _db;
   
   static void setMockFirestore(FirebaseFirestore mock) { _instance._mockDb = mock; }
 
@@ -97,18 +99,7 @@ class DatabaseHelper {
         final storedHash = user['password_hash']?.toString() ?? user['password']?.toString() ?? '';
         
         if (PasswordHasher.verifyPassword(password, storedHash)) {
-          // Se la password era in chiaro, migra a hash
-          if (!PasswordHasher.isHashed(storedHash)) {
-            try {
-              final updateData = {
-                'password_hash': PasswordHasher.hashPassword(password),
-              };
-              await _db.collection('users').doc(user['id']).update(updateData);
-            } catch (e) {
-              // Non bloccare il login se la migrazione fallisce
-              print('Errore migrazione password: $e');
-            }
-          }
+          // Nessuna migrazione automatica delle credenziali (regola di protezione dati)
           return user;
         }
         return null; // Username trovato ma password sbagliata
@@ -126,17 +117,7 @@ class DatabaseHelper {
         final storedHash = user['password_hash']?.toString() ?? user['password']?.toString() ?? '';
         
         if (PasswordHasher.verifyPassword(password, storedHash)) {
-          // Migra se legacy
-          if (!PasswordHasher.isHashed(storedHash)) {
-            try {
-              final updateData = {
-                'password_hash': PasswordHasher.hashPassword(password),
-              };
-              await _db.collection('users').doc(user['id']).update(updateData);
-            } catch (e) {
-              print('Errore migrazione password admin: $e');
-            }
-          }
+          // Nessuna migrazione automatica delle credenziali
           return true;
         }
       }
@@ -271,10 +252,85 @@ class DatabaseHelper {
   }
 
   // --- CRUD PAYMENTS ---
+  Future<void> _initializeCounterIfNeeded() async {
+    final counterRef = _db.collection('metadata').doc('payment_counter');
+    
+    // Check locally first outside transaction
+    final counterSnap = await counterRef.get();
+    if (counterSnap.exists && counterSnap.data() != null && counterSnap.data()!.containsKey('last_id')) {
+      return;
+    }
+    
+    // Inizializza leggendo i documenti esistenti (solo al primo avvio della nuova logica)
+    final snapshot = await _db.collection('payments').get();
+    String maxId = 'A000';
+    for (var doc in snapshot.docs) {
+      final id = doc.id;
+      if (RegExp(r'^[A-Z]\d{3}$').hasMatch(id)) {
+        if (id.compareTo(maxId) > 0) {
+          maxId = id;
+        }
+      }
+    }
+    
+    // Usa transazione per impostare solo se non esiste ancora, prevenendo race conditions
+    await _db.runTransaction((transaction) async {
+      final snap = await transaction.get(counterRef);
+      if (!snap.exists || snap.data() == null || !snap.data()!.containsKey('last_id')) {
+        transaction.set(counterRef, {'last_id': maxId});
+      }
+    });
+  }
+
   Future<String> insertPayment(Map<String, dynamic> payment) async {
     final data = Map<String, dynamic>.from(payment)..remove('id');
-    final docRef = await _db.collection('payments').add(data);
-    return docRef.id;
+    
+    // 1. Assicura che il contatore esista, altrimenti lo inizializza (fuori dalla transazione)
+    await _initializeCounterIfNeeded();
+
+    // 2. Transazione atomica per allocare il nuovo ID senza concorrenza
+    return await _db.runTransaction((transaction) async {
+      final counterRef = _db.collection('metadata').doc('payment_counter');
+      final counterSnap = await transaction.get(counterRef);
+      
+      String currentId = 'A000';
+      if (counterSnap.exists && counterSnap.data() != null && counterSnap.data()!.containsKey('last_id')) {
+        currentId = counterSnap.data()!['last_id'] as String;
+      }
+      
+      if (!RegExp(r'^[A-Z]\d{3}$').hasMatch(currentId)) {
+        throw Exception('INVALID_COUNTER_STATE: $currentId');
+      }
+      
+      String letter = currentId.substring(0, 1);
+      int number = int.parse(currentId.substring(1));
+      
+      number++;
+      if (number > 999) {
+        number = 1;
+        int charCode = letter.codeUnitAt(0);
+        charCode++;
+        if (charCode > 90) { // Limite Z999
+          throw Exception('LIMIT_Z999_REACHED');
+        }
+        letter = String.fromCharCode(charCode);
+      }
+      
+      final newId = '$letter${number.toString().padLeft(3, '0')}';
+      
+      final docRef = _db.collection('payments').doc(newId);
+      final docSnap = await transaction.get(docRef);
+      
+      if (docSnap.exists) {
+        // Nessuna sovrascrittura! Se il record esiste, fallisce (il chiamante/UI potrà riprovare)
+        throw Exception('DOCUMENT_ALREADY_EXISTS');
+      }
+      
+      transaction.set(counterRef, {'last_id': newId}, SetOptions(merge: true));
+      transaction.set(docRef, data);
+      
+      return newId;
+    });
   }
 
   Future<void> updatePayment(Map<String, dynamic> payment) async {
@@ -298,7 +354,79 @@ class DatabaseHelper {
     }
   }
 
+  bool _paymentsMigrationDone = false;
+  
+  Future<void> _runPaymentsRenumberingMigration() async {
+    try {
+      final configSnap = await _db.collection('metadata').doc('app_config').get();
+      if (configSnap.exists && configSnap.data()?['migration_a001_done'] == true) {
+        return;
+      }
+      
+      final snapshot = await _db.collection('payments').get();
+      if (snapshot.docs.isEmpty) {
+        await _db.collection('metadata').doc('app_config').set({'migration_a001_done': true}, SetOptions(merge: true));
+        return;
+      }
+      
+      var docs = snapshot.docs.map((d) {
+        final data = d.data();
+        data['original_id'] = d.id;
+        return data;
+      }).toList();
+      
+      docs.sort((a, b) => compareDates(a['date']?.toString(), b['date']?.toString(), descending: false));
+      
+      var batch = _db.batch();
+      int count = 0;
+      
+      int number = 1;
+      String letter = 'A';
+      String lastId = 'A000';
+      
+      for (var doc in docs) {
+        final originalId = doc['original_id'] as String;
+        
+        if (number > 999) {
+           number = 1;
+           letter = String.fromCharCode(letter.codeUnitAt(0) + 1);
+        }
+        final newId = '';
+        lastId = newId;
+        number++;
+        
+        final data = Map<String, dynamic>.from(doc)..remove('original_id')..remove('id');
+        
+        if (originalId != newId) {
+          batch.delete(_db.collection('payments').doc(originalId));
+        }
+        batch.set(_db.collection('payments').doc(newId), data);
+        
+        count++;
+        if (count >= 480) {
+          await batch.commit();
+          batch = _db.batch();
+          count = 0;
+        }
+      }
+      
+      final counterRef = _db.collection('metadata').doc('payment_counter');
+      batch.set(counterRef, {'last_id': lastId});
+      batch.set(_db.collection('metadata').doc('app_config'), {'migration_a001_done': true}, SetOptions(merge: true));
+      
+      await batch.commit();
+      print('Migration A001 completata con successo. Ultimo ID: $lastId');
+    } catch (e) {
+      print('Errore migrazione A001: $e');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getPayments({int? year, String? startDate, String? endDate}) async {
+    if (!_paymentsMigrationDone) {
+      _paymentsMigrationDone = true;
+      await _runPaymentsRenumberingMigration();
+    }
+  
     Query query = _db.collection('payments');
     
     if (startDate != null && endDate != null) {
@@ -318,9 +446,7 @@ class DatabaseHelper {
 
     // Ordina per data discendente (ultimi inseriti prima)
     docs.sort((a, b) {
-      String dateA = a['date'] ?? '';
-      String dateB = b['date'] ?? '';
-      return dateB.compareTo(dateA);
+      return compareDates(a['date']?.toString(), b['date']?.toString(), descending: true);
     });
 
     // Arricchisce con nome cliente e servizio (join in memoria)
@@ -403,12 +529,14 @@ class DatabaseHelper {
   }
 
   Future<List<Map<String, dynamic>>> getInvoices() async {
-    final snapshot = await _db.collection('invoices').orderBy('date', descending: true).get();
-    return snapshot.docs.map((doc) {
+    final snapshot = await _db.collection('invoices').get();
+    final docs = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
+    docs.sort((a, b) => compareDates(a['date']?.toString(), b['date']?.toString(), descending: true));
+    return docs;
   }
 
   Future<Map<String, dynamic>?> getInvoiceById(String id) async {
@@ -439,12 +567,15 @@ class DatabaseHelper {
   }
 
   Future<List<Map<String, dynamic>>> getDeadlines() async {
-    final snapshot = await _db.collection('deadlines').orderBy('date').get();
-    return snapshot.docs.map((doc) {
+    final snapshot = await _db.collection('deadlines').get();
+    final docs = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
+    // Deadlines usually ascending (earliest first)
+    docs.sort((a, b) => compareDates(a['date']?.toString(), b['date']?.toString(), descending: false));
+    return docs;
   }
 
   // --- ACCESS LOGS ---
@@ -639,9 +770,7 @@ class DatabaseHelper {
       return data;
     }).toList();
     docs.sort((a, b) {
-      String dateA = a['date'] ?? '';
-      String dateB = b['date'] ?? '';
-      return dateB.compareTo(dateA);
+      return compareDates(a['date']?.toString(), b['date']?.toString(), descending: true);
     });
     return docs;
   }

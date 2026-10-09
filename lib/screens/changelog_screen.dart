@@ -12,9 +12,57 @@ class ChangelogScreen extends StatefulWidget {
 
 class _ChangelogScreenState extends State<ChangelogScreen> {
   String _currentVersion = '...';
-  
+
   // Hardcoded changelog for previous and current versions
   final List<Map<String, dynamic>> _changelogs = [
+    {
+      'version': '1.9.26', 
+      'date': '09/10/2026', 
+      'changes': [
+        'Nuova UI Fatture/Movimenti allineata a Pagamenti Programmati',
+        'Modifica immediata dello stato pagamenti con un tocco direttamente sulla riga',
+        'Apertura rapida della modifica saltando la schermata Summary'
+      ]
+    },
+    {'version': '1.8.98', 'date': '06/10/2026', 'changes': ['PDF Movimenti: salvataggio in Download e apertura (fallback font offline)', 'Movimenti: titolo, intestazioni italiane, ordinamento per data e ID formato A001', 'Preventivi: IVA di default 0%', 'Login: rimossa migrazione automatica password']},
+    {
+      'version': '1.8.97',
+      'date': '06/10/2026',
+      'changes': [
+        'Bugfix: Collegato il tasto "Nuovo Pagamento Programmato" della Dashboard alla corretta schermata "Nuova Programmazione"',
+        'Bugfix: Corretto il caricamento degli importi nei preventivi e programmazioni in formato italiano (000.000,00) evitando conversioni in formato inglese con il punto',
+      ]
+    },
+    {
+      'version': '1.8.96',
+      'date': '06/10/2026',
+      'changes': [
+        'Bugfix: Aggiunto fallback con password per l\'eliminazione dei preventivi quando il lettore di impronte digitali non è disponibile (es. su emulatore o dispositivi senza PIN/biometria)',
+      ]
+    },
+    {
+      'version': '1.8.95',
+      'date': '06/10/2026',
+      'changes': [
+        'Feature: Il riepilogo "Fatture da Incassare" nella Dashboard ora conteggia direttamente i pagamenti programmati in entrata nelle Scadenze',
+      ]
+    },
+    {
+      'version': '1.8.94',
+      'date': '06/10/2026',
+      'changes': [
+        'Fix: Allineamento totale del formato date (gg/mm/aaaa) in tutte le schermate',
+        'Feature: Ordinamento reale per data (più recente / meno recente) nei Movimenti e nelle Fatture',
+      ]
+    },
+    {
+      'version': '1.8.93',
+      'date': '06/10/2026',
+      'changes': [
+        'Fix: Formattazione degli importi (es. 1.500,00) ora salvata correttamente in Agenda, Fatture, Preventivi e Pagamenti',
+        'Fix: Risoluzione sovrascritture concorrenti e generazione codici progressivi sui Pagamenti (Firestore transactions)'
+      ]
+    },
     {
       'version': '1.8.50',
       'date': '24 Settembre 2026',
@@ -22,7 +70,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
         'Risoluzione dei problemi di layout su schermi piccoli (smartphone).',
         'Sistemati gli incolonnamenti e gli elementi fuori schermo in Clienti, Preventivi, Pagamenti e Scadenze.',
         'Migliorata la reattività generale delle tabelle.',
-      ]
+      ],
     },
     {
       'version': '1.8.49',
@@ -31,7 +79,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
         'Miglioramento grafico dell\'interfaccia utente (UI/UX).',
         'Rimozione testo di benvenuto errato e placeholder.',
         'Fix minori per la compatibilità con dispositivi Android e layout generale.',
-      ]
+      ],
     },
     {
       'version': '1.8.36',
@@ -39,7 +87,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
       'changes': [
         'Aggiunta sezione "Versione & Changelog" per visualizzare le note di rilascio.',
         "Aggiornato il nome visualizzato dell'app in \"Contabilità BM Music\".",
-      ]
+      ],
     },
     {
       'version': '1.8.35',
@@ -47,7 +95,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
       'changes': [
         "Risolto il problema della scomparsa del simbolo dell'Euro nei report PDF esportati.",
         'Impostato font predefinito (Roboto) per supportare nativamente i caratteri speciali nei PDF.',
-      ]
+      ],
     },
     {
       'version': '1.8.34',
@@ -56,7 +104,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
         'Rimossa la tabella doppia delle memo attive dalla dashboard.',
         "Cliccando sulla tabella delle memo si accede direttamente all'area Memo.",
         'Aggiunta la nuova sezione "Note Generali" con checklist customizzabili e strumenti di formattazione completi.',
-      ]
+      ],
     },
     {
       'version': '1.8.33',
@@ -64,7 +112,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
       'changes': [
         'Miglioramenti generali alle performance.',
         "Fix minori per l'interfaccia utente (UI).",
-      ]
+      ],
     },
     {
       'version': '1.8.32',
@@ -72,7 +120,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
       'changes': [
         'Aggiunta esportazione CSV per le sezioni principali (Clienti, Scadenze, Movimenti).',
         'Integrazione delle conferme di eliminazione con stile unificato (Security Center).',
-      ]
+      ],
     },
     {
       'version': '1.8.31',
@@ -80,8 +128,8 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
       'changes': [
         'Semplificato il design della Dashboard.',
         'Aggiunte funzionalità di personalizzazione del tema visivo e dei colori.',
-      ]
-    }
+      ],
+    },
   ];
 
   @override
@@ -124,17 +172,24 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                 SizedBox(height: 16),
                 Text(
                   'Contabile App',
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 SizedBox(height: 8),
                 Text(
                   'Versione corrente: $_currentVersion',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 16),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 16,
+                  ),
                 ),
               ],
             ),
           ),
-          
+
           // Changelog list
           Expanded(
             child: ListView.builder(
@@ -144,14 +199,18 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                 final log = _changelogs[index];
                 final bool isCurrent = log['version'] == _currentVersion;
                 final changes = log['changes'] as List<String>;
-                
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: isCurrent ? theme.primaryColor.withValues(alpha: 0.1) : theme.cardColor,
+                    color: isCurrent
+                        ? theme.primaryColor.withValues(alpha: 0.1)
+                        : theme.cardColor,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isCurrent ? theme.primaryColor.withValues(alpha: 0.5) : theme.borderColor,
+                      color: isCurrent
+                          ? theme.primaryColor.withValues(alpha: 0.5)
+                          : theme.borderColor,
                     ),
                   ),
                   child: Padding(
@@ -165,30 +224,51 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                             Text(
                               'Versione ${log['version']}',
                               style: TextStyle(
-                                color: isCurrent ? theme.primaryColor : Colors.white,
+                                color: isCurrent
+                                    ? theme.primaryColor
+                                    : Colors.white,
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             Text(
                               log['date'],
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 12),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.54),
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
                         SizedBox(height: 12),
-                        ...changes.map((c) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('• ', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
-                              Expanded(
-                                child: Text(c, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
-                              ),
-                            ],
+                        ...changes.map(
+                          (c) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '• ',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    c,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        )),
+                        ),
                       ],
                     ),
                   ),
@@ -201,5 +281,3 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     );
   }
 }
-
-

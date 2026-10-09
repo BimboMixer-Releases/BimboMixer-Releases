@@ -11,16 +11,17 @@ import 'payments_screen.dart';
 import 'invoices_screen.dart';
 import 'deadlines_selection_screen.dart';
 import 'menu_screen.dart';
+import 'bilancio_fisco_screen.dart';
 import 'notes_screen.dart';
 import 'quotes_screen.dart';
 import 'login_screen.dart';
 import '../widgets/app_sidebar.dart';
-import '../widgets/mobile_bottom_nav.dart';
+import '../widgets/app_drawer.dart';
 
 class MainScreen extends StatefulWidget {
   final String role;
   final String username;
-  
+
   const MainScreen({super.key, required this.role, this.username = ''});
 
   @override
@@ -29,6 +30,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  final List<int> _sectionHistory = [];
+  final _shellKey = GlobalKey<ScaffoldState>();
   DateTime? _lastActivity;
 
   // Timeout sessione: 30 minuti di inattività
@@ -54,6 +57,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       const ReportsScreen(),
       const SettingsScreen(),
       MenuScreen(role: widget.role),
+      const BilancioFiscoScreen(),
     ];
   }
 
@@ -88,7 +92,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     } catch (e) {
       // Non bloccare il logout
     }
-    
+
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
@@ -108,37 +112,99 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.panelBackground,
-        title: const Text('Disconnessione', style: TextStyle(color: AppColors.textMain)),
-        content: const Text('Sei sicuro di voler uscire dall\'app?', style: TextStyle(color: AppColors.textSecondary)),
+        title: const Text(
+          'Disconnessione',
+          style: TextStyle(color: AppColors.textMain),
+        ),
+        content: const Text(
+          'Sei sicuro di voler uscire dall\'app?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('ANNULLA', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'ANNULLA',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.expenseRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.expenseRed,
+            ),
             onPressed: () {
               Navigator.pop(context);
               _logout();
             },
-            child: const Text('ESCI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'ESCI',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
+  void _selectSection(int index) {
+    if (index == _currentIndex) return;
+    setState(() {
+      if (index == 0) {
+        _sectionHistory.clear();
+      } else {
+        _sectionHistory.add(_currentIndex);
+      }
+      _currentIndex = index;
+    });
+  }
+
+  void _goBack() {
+    if (_shellKey.currentState?.isDrawerOpen ?? false) {
+      _shellKey.currentState?.closeDrawer();
+      return;
+    }
+    if (_sectionHistory.isEmpty) return;
+    setState(() => _currentIndex = _sectionHistory.removeLast());
+  }
+
+  Widget _sectionBody() => Column(
+    children: [
+      if (_sectionHistory.isNotEmpty)
+        SafeArea(
+          bottom: false,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: IconButton(
+              tooltip: 'Torna alla sezione precedente',
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: _goBack,
+            ),
+          ),
+        ),
+      Expanded(child: _screens[_currentIndex]),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     _lastActivity = DateTime.now();
 
-    return LayoutBuilder(
+    return PopScope(
+      canPop: _sectionHistory.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _goBack();
+      },
+      child: LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth > 800;
-        
+
         if (isDesktop) {
           // DESKTOP LAYOUT (Sidebar)
           return Scaffold(
+            key: _shellKey,
             backgroundColor: const Color(0xFF080614), // Dark deep neon base
             body: Container(
               decoration: const BoxDecoration(
@@ -155,14 +221,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 children: [
                   AppSidebar(
                     currentIndex: _currentIndex,
-                    onItemSelected: (index) {
-                      setState(() => _currentIndex = index);
-                    },
+                    onItemSelected: _selectSection,
                     onLogout: _showLogoutConfirmation,
                   ),
-                  Expanded(
-                    child: _screens[_currentIndex],
-                  ),
+                  Expanded(child: _sectionBody()),
                 ],
               ),
             ),
@@ -170,29 +232,27 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         } else {
           // MOBILE LAYOUT (Bottom Navigation)
           return Scaffold(
+            key: _shellKey,
             backgroundColor: const Color(0xFF080614),
             body: Container(
               decoration: const BoxDecoration(
                 gradient: RadialGradient(
                   center: Alignment(0.0, -1.0),
                   radius: 1.5,
-                  colors: [
-                    Color(0xFF2A114A),
-                    Color(0xFF080614),
-                  ],
+                  colors: [Color(0xFF2A114A), Color(0xFF080614)],
                 ),
               ),
-              child: _screens[_currentIndex],
+              child: _sectionBody(),
             ),
-            bottomNavigationBar: MobileBottomNav(
+            drawer: AppDrawer(
               currentIndex: _currentIndex,
-              onItemSelected: (index) {
-                setState(() => _currentIndex = index);
-              },
+              onItemSelected: _selectSection,
+              onLogout: _showLogoutConfirmation,
             ),
           );
         }
       },
+      ),
     );
   }
 }

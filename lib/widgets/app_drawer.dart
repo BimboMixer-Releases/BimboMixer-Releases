@@ -47,7 +47,10 @@ class AppDrawer extends StatelessWidget {
                 Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.4),
@@ -56,10 +59,10 @@ class AppDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: CircleAvatar(
+                  child: const CircleAvatar(
                     radius: 30,
-                    backgroundColor: const Color(0xFF2A2D34),
-                    child: Icon(LucideIcons.wallet, size: 30, color: theme.primaryColor),
+                    backgroundColor: Color(0xFF2A2D34),
+                    backgroundImage: AssetImage('assets/images/logo_bimbomixer_neon.jpg'),
                   ),
                 ),
                 SizedBox(width: 16),
@@ -98,20 +101,96 @@ class AppDrawer extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                _buildDrawerItem(context, 0, Icons.dashboard, 'Dashboard', theme.primaryColor),
-                _buildDrawerItem(context, 1, Icons.swap_horiz, 'Movimenti', theme.primaryColor),
-                _buildDrawerItem(context, 2, Icons.receipt, 'Fatture', theme.primaryColor),
-                _buildDrawerItem(context, 3, Icons.calendar_today, 'Scadenze', theme.primaryColor),
-                _buildDrawerItem(context, 4, Icons.note, 'Note', theme.primaryColor),
-                _buildDrawerItem(context, 5, Icons.description, 'Preventivi', theme.primaryColor),
-                _buildDrawerItem(context, 6, Icons.menu, 'Altro', theme.primaryColor),
+                _buildDrawerItem(
+                  context,
+                  0,
+                  LucideIcons.home,
+                  'Dashboard',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  1,
+                  LucideIcons.arrowLeftRight,
+                  'Movimenti',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  2,
+                  LucideIcons.fileText,
+                  'Fatture',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  12,
+                  LucideIcons.pieChart,
+                  'Bilancio Fisco',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  5,
+                  LucideIcons.fileSignature,
+                  'Preventivi',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  3,
+                  LucideIcons.calendarDays,
+                  'Scadenze',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  4,
+                  LucideIcons.stickyNote,
+                  'Note',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  6,
+                  LucideIcons.users,
+                  'Clienti/Fornitori',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  7,
+                  LucideIcons.shoppingCart,
+                  'Servizi Erogati',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  8,
+                  LucideIcons.tags,
+                  'Categorie',
+                  theme.primaryColor,
+                ),
+                _buildDrawerItem(
+                  context,
+                  10,
+                  LucideIcons.settings,
+                  'Impostazioni',
+                  theme.primaryColor,
+                ),
               ],
             ),
           ),
           Divider(color: Colors.white24),
           ListTile(
             leading: Icon(Icons.logout, color: theme.currentColors.secondary),
-            title: Text('Esci', style: TextStyle(color: theme.currentColors.secondary, fontWeight: FontWeight.bold)),
+            title: Text(
+              'Esci',
+              style: TextStyle(
+                color: theme.currentColors.secondary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             onTap: onLogout,
           ),
           const SizedBox(height: 16),
@@ -120,7 +199,13 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildDrawerItem(BuildContext context, int index, IconData icon, String title, Color primaryColor) {
+  Widget _buildDrawerItem(
+    BuildContext context,
+    int index,
+    IconData icon,
+    String title,
+    Color primaryColor,
+  ) {
     bool isSelected = currentIndex == index;
     return ListTile(
       leading: Icon(icon, color: isSelected ? primaryColor : Colors.white70),

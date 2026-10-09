@@ -40,7 +40,7 @@ public class Uploader {
 }
 "@
 
-$zipDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v$($version)_update.zip"
+$zipDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v$($version)_update.zip"
 $uploadUriZip = "https://uploads.github.com/repos/$repo/releases/$releaseId/assets?name=BimboMixer_PC_Portable.zip"
 Write-Host "Uploading ZIP with C# HTTP stream..."
 [Uploader]::UploadFile($uploadUriZip, $zipDest, $token, "application/zip")

@@ -1,3 +1,4 @@
+import 'package:contabile_app/utils/currency_utils.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -38,22 +39,29 @@ class _CustomersScreenState extends State<CustomersScreen> {
   final TextEditingController _opsSearchCtrl = TextEditingController();
   String _opsSearchQuery = '';
 
-  
   List<Customer> get _filteredCustomers {
     var list = _customers;
-    
+
     if (_showArchive) {
-        list = list.where((c) => c.status == 'Archiviato').toList();
+      list = list.where((c) => c.status == 'Archiviato').toList();
     } else {
-        list = list.where((c) => c.status != 'Archiviato').toList();
-        if (_statusFilter != 'Tutti') {
-          list = list.where((c) => (c.status ?? 'Nuovo') == _statusFilter).toList();
-        }
+      list = list.where((c) => c.status != 'Archiviato').toList();
+      if (_statusFilter != 'Tutti') {
+        list = list
+            .where((c) => (c.status ?? 'Nuovo') == _statusFilter)
+            .toList();
+      }
     }
-    
+
     if (_mainSearchQuery.isNotEmpty) {
       final q = _mainSearchQuery.toLowerCase();
-      list = list.where((c) => c.name.toLowerCase().contains(q) || (c.vatNumber?.toLowerCase().contains(q) ?? false)).toList();
+      list = list
+          .where(
+            (c) =>
+                c.name.toLowerCase().contains(q) ||
+                (c.vatNumber?.toLowerCase().contains(q) ?? false),
+          )
+          .toList();
     }
     return list;
   }
@@ -62,11 +70,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
     if (_opsSearchQuery.isEmpty) return _customerPayments;
     final q = _opsSearchQuery.toLowerCase();
     return _customerPayments.where((p) {
-      final service = (p['service_name'] ?? p['category_name'] ?? '').toString().toLowerCase();
-      final desc = (p['description'] ?? p['notes'] ?? '').toString().toLowerCase();
+      final service = (p['service_name'] ?? p['category_name'] ?? '')
+          .toString()
+          .toLowerCase();
+      final desc = (p['description'] ?? p['notes'] ?? '')
+          .toString()
+          .toLowerCase();
       final method = (p['payment_method'] ?? '').toString().toLowerCase();
       final date = (p['date'] ?? '').toString().toLowerCase();
-      return service.contains(q) || desc.contains(q) || method.contains(q) || date.contains(q);
+      return service.contains(q) ||
+          desc.contains(q) ||
+          method.contains(q) ||
+          date.contains(q);
     }).toList();
   }
 
@@ -145,13 +160,20 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
-  Widget _buildDialogTextField(TextEditingController controller, String label, {int flex = 1}) {
+  Widget _buildDialogTextField(
+    TextEditingController controller,
+    String label, {
+    int flex = 1,
+  }) {
     final field = TextField(
       controller: controller,
       style: TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
+        labelStyle: TextStyle(
+          color: Colors.white.withValues(alpha: 0.7),
+          fontSize: 13,
+        ),
         enabledBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: Colors.white38),
         ),
@@ -168,17 +190,23 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final vatController = TextEditingController(text: customer?.vatNumber);
     final sdiController = TextEditingController(text: customer?.sdiCode);
     final taxCodeController = TextEditingController(text: customer?.taxCode);
-    
-    final streetController = TextEditingController(text: customer?.addressStreet);
+
+    final streetController = TextEditingController(
+      text: customer?.addressStreet,
+    );
     final zipController = TextEditingController(text: customer?.addressZip);
     final cityController = TextEditingController(text: customer?.addressCity);
-    final provController = TextEditingController(text: customer?.addressProvince);
-    
+    final provController = TextEditingController(
+      text: customer?.addressProvince,
+    );
+
     final pecController = TextEditingController(text: customer?.pec);
     final cigController = TextEditingController(text: customer?.cig);
     final cupController = TextEditingController(text: customer?.cup);
     final paRefController = TextEditingController(text: customer?.paReference);
-    final paContractController = TextEditingController(text: customer?.paContract);
+    final paContractController = TextEditingController(
+      text: customer?.paContract,
+    );
 
     // Parsare email e cellulare dalla stringa contacts se combinati (retrocompatibilità)
     String emailText = customer?.email ?? '';
@@ -206,7 +234,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
     String? logoPath = customer?.logoPath;
     String selectedStatus = customer?.status ?? 'Nuovo';
-    if (!['Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archiviato'].contains(selectedStatus)) {
+    if (![
+      'Attivo',
+      'In Sospeso',
+      'Priorità Alta',
+      'In Revisione',
+      'Nuovo',
+      'Chiuso',
+      'Archiviato',
+    ].contains(selectedStatus)) {
       selectedStatus = 'Nuovo';
     }
 
@@ -220,12 +256,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
               final result = await FilePicker.platform.pickFiles(
                 type: FileType.image,
               );
-              if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
+              if (result != null &&
+                  result.files.isNotEmpty &&
+                  result.files.single.path != null) {
                 chosenPath = result.files.single.path!;
               } else {
                 try {
                   final ImagePicker picker = ImagePicker();
-                  final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
+                  final XFile? photo = await picker.pickImage(
+                    source: ImageSource.gallery,
+                  );
                   if (photo != null) {
                     chosenPath = photo.path;
                   }
@@ -256,7 +296,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 } catch (copyErr) {
                   debugPrint("Errore copia logo: $copyErr");
                 }
-                
+
                 setStateSB(() {
                   logoPath = finalPath;
                 });
@@ -265,7 +305,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
               debugPrint("Errore selezione logo: $e");
               if (dialogContext.mounted) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(content: Text('Errore selezione logo: $e'), backgroundColor: Colors.red),
+                  SnackBar(
+                    content: Text('Errore selezione logo: $e'),
+                    backgroundColor: Colors.red,
+                  ),
                 );
               }
             }
@@ -301,23 +344,39 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               decoration: BoxDecoration(
                                 color: Colors.white12,
                                 shape: BoxShape.circle,
-                                image: logoPath != null && File(logoPath!).existsSync()
+                                image:
+                                    logoPath != null &&
+                                        File(logoPath!).existsSync()
                                     ? DecorationImage(
                                         image: FileImage(File(logoPath!)),
                                         fit: BoxFit.cover,
                                       )
                                     : null,
-                                border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
+                                border: Border.all(
+                                  color: const Color(0xFF38BDF8),
+                                  width: 1.5,
+                                ),
                               ),
-                              child: logoPath == null || !File(logoPath!).existsSync()
-                                  ? const Icon(Icons.add_a_photo, color: Colors.white70, size: 28)
+                              child:
+                                  logoPath == null ||
+                                      !File(logoPath!).existsSync()
+                                  ? const Icon(
+                                      Icons.add_a_photo,
+                                      color: Colors.white70,
+                                      size: 28,
+                                    )
                                   : null,
                             ),
                           ),
-                          if (logoPath != null && File(logoPath!).existsSync()) ...[
+                          if (logoPath != null &&
+                              File(logoPath!).existsSync()) ...[
                             const SizedBox(width: 12),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.redAccent,
+                                size: 22,
+                              ),
                               tooltip: 'Rimuovi logo',
                               onPressed: () {
                                 setStateSB(() {
@@ -330,16 +389,29 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        logoPath != null && File(logoPath!).existsSync() ? 'Clicca sul logo per cambiarlo' : 'Aggiungi Logo / Immagine',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                        logoPath != null && File(logoPath!).existsSync()
+                            ? 'Clicca sul logo per cambiarlo'
+                            : 'Aggiungi Logo / Immagine',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                        ),
                       ),
-                      
+
                       _buildSectionTitle('Dati Principali', Icons.business),
                       Row(
                         children: [
-                          _buildDialogTextField(nameController, 'Ragione Sociale / Nome Azienda *', flex: 2),
+                          _buildDialogTextField(
+                            nameController,
+                            'Ragione Sociale / Nome Azienda *',
+                            flex: 2,
+                          ),
                           SizedBox(width: 16),
-                          _buildDialogTextField(vatController, 'Partita IVA', flex: 1),
+                          _buildDialogTextField(
+                            vatController,
+                            'Partita IVA',
+                            flex: 1,
+                          ),
                         ],
                       ),
                       SizedBox(height: 8),
@@ -352,33 +424,70 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               style: const TextStyle(color: Colors.white),
                               decoration: InputDecoration(
                                 labelText: 'Stato Cliente',
-                                labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
-                                enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
-                                focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                                labelStyle: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 13,
+                                ),
+                                enabledBorder: const UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.white38),
+                                ),
+                                focusedBorder: const UnderlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: Colors.blueAccent,
+                                  ),
+                                ),
                               ),
-                              items: ['Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archiviato']
-                                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                                  .toList(),
+                              items:
+                                  [
+                                        'Attivo',
+                                        'In Sospeso',
+                                        'Priorità Alta',
+                                        'In Revisione',
+                                        'Nuovo',
+                                        'Chiuso',
+                                        'Archiviato',
+                                      ]
+                                      .map(
+                                        (s) => DropdownMenuItem(
+                                          value: s,
+                                          child: Text(s),
+                                        ),
+                                      )
+                                      .toList(),
                               onChanged: (val) {
-                                if (val != null) setStateSB(() => selectedStatus = val);
+                                if (val != null)
+                                  setStateSB(() => selectedStatus = val);
                               },
                             ),
                           ),
                           const SizedBox(width: 16),
-                          _buildDialogTextField(sdiController, 'Codice Univoco (SDI)'),
+                          _buildDialogTextField(
+                            sdiController,
+                            'Codice Univoco (SDI)',
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          _buildDialogTextField(taxCodeController, 'Codice Fiscale'),
+                          _buildDialogTextField(
+                            taxCodeController,
+                            'Codice Fiscale',
+                          ),
                         ],
                       ),
-                      
-                      _buildSectionTitle('Sede Legale / Operativa', Icons.location_on),
+
+                      _buildSectionTitle(
+                        'Sede Legale / Operativa',
+                        Icons.location_on,
+                      ),
                       Row(
                         children: [
-                          _buildDialogTextField(streetController, 'Via/Piazza e N° Civico', flex: 3),
+                          _buildDialogTextField(
+                            streetController,
+                            'Via/Piazza e N° Civico',
+                            flex: 3,
+                          ),
                           SizedBox(width: 16),
                           _buildDialogTextField(zipController, 'CAP', flex: 1),
                         ],
@@ -386,30 +495,56 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       SizedBox(height: 8),
                       Row(
                         children: [
-                          _buildDialogTextField(cityController, 'Città', flex: 2),
+                          _buildDialogTextField(
+                            cityController,
+                            'Città',
+                            flex: 2,
+                          ),
                           SizedBox(width: 16),
-                          _buildDialogTextField(provController, 'Provincia (Sigla)', flex: 1),
+                          _buildDialogTextField(
+                            provController,
+                            'Provincia (Sigla)',
+                            flex: 1,
+                          ),
                         ],
                       ),
 
-                      _buildSectionTitle('Recapiti e Contatti', Icons.contact_mail),
+                      _buildSectionTitle(
+                        'Recapiti e Contatti',
+                        Icons.contact_mail,
+                      ),
                       Row(
                         children: [
-                          _buildDialogTextField(emailController, 'Email', flex: 1),
+                          _buildDialogTextField(
+                            emailController,
+                            'Email',
+                            flex: 1,
+                          ),
                           SizedBox(width: 16),
-                          _buildDialogTextField(pecController, 'Indirizzo PEC', flex: 1),
+                          _buildDialogTextField(
+                            pecController,
+                            'Indirizzo PEC',
+                            flex: 1,
+                          ),
                         ],
                       ),
                       SizedBox(height: 8),
                       Row(
                         children: [
-                          _buildDialogTextField(phoneController, 'Cellulare / Telefono', flex: 1),
+                          _buildDialogTextField(
+                            phoneController,
+                            'Cellulare / Telefono',
+                            flex: 1,
+                          ),
                           SizedBox(width: 16),
                           Expanded(child: Container()), // Spazio vuoto
                         ],
                       ),
 
-                      _buildSectionTitle('Codici Pubblica Amministrazione', Icons.account_balance),
+                      _buildSectionTitle(
+                        'Codici Pubblica Amministrazione',
+                        Icons.account_balance,
+                      ),
                       Row(
                         children: [
                           _buildDialogTextField(cigController, 'Codice CIG'),
@@ -420,9 +555,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       SizedBox(height: 8),
                       Row(
                         children: [
-                          _buildDialogTextField(paRefController, 'Riferimento Amministrazione (es. N° Ordine)'),
+                          _buildDialogTextField(
+                            paRefController,
+                            'Riferimento Amministrazione (es. N° Ordine)',
+                          ),
                           SizedBox(width: 16),
-                          _buildDialogTextField(paContractController, 'Codice Commessa / Convenzione'),
+                          _buildDialogTextField(
+                            paContractController,
+                            'Codice Commessa / Convenzione',
+                          ),
                         ],
                       ),
 
@@ -434,7 +575,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                             onPressed: () => Navigator.pop(dialogContext),
                             child: Text(
                               'ANNULLA',
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
                             ),
                           ),
                           SizedBox(width: 8),
@@ -445,33 +588,69 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               final newCustomer = Customer(
                                 id: customer?.id,
                                 name: nameController.text.trim(),
-                                vatNumber: vatController.text.trim().isEmpty ? null : vatController.text.trim(),
-                                sdiCode: sdiController.text.trim().isEmpty ? null : sdiController.text.trim(),
-                                taxCode: taxCodeController.text.trim().isEmpty ? null : taxCodeController.text.trim(),
-                                addressStreet: streetController.text.trim().isEmpty ? null : streetController.text.trim(),
-                                addressZip: zipController.text.trim().isEmpty ? null : zipController.text.trim(),
-                                addressCity: cityController.text.trim().isEmpty ? null : cityController.text.trim(),
-                                addressProvince: provController.text.trim().isEmpty ? null : provController.text.trim(),
-                                email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
-                                pec: pecController.text.trim().isEmpty ? null : pecController.text.trim(),
-                                phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+                                vatNumber: vatController.text.trim().isEmpty
+                                    ? null
+                                    : vatController.text.trim(),
+                                sdiCode: sdiController.text.trim().isEmpty
+                                    ? null
+                                    : sdiController.text.trim(),
+                                taxCode: taxCodeController.text.trim().isEmpty
+                                    ? null
+                                    : taxCodeController.text.trim(),
+                                addressStreet:
+                                    streetController.text.trim().isEmpty
+                                    ? null
+                                    : streetController.text.trim(),
+                                addressZip: zipController.text.trim().isEmpty
+                                    ? null
+                                    : zipController.text.trim(),
+                                addressCity: cityController.text.trim().isEmpty
+                                    ? null
+                                    : cityController.text.trim(),
+                                addressProvince:
+                                    provController.text.trim().isEmpty
+                                    ? null
+                                    : provController.text.trim(),
+                                email: emailController.text.trim().isEmpty
+                                    ? null
+                                    : emailController.text.trim(),
+                                pec: pecController.text.trim().isEmpty
+                                    ? null
+                                    : pecController.text.trim(),
+                                phone: phoneController.text.trim().isEmpty
+                                    ? null
+                                    : phoneController.text.trim(),
                                 // Il vecchio campo contacts lo lasciamo null per i nuovi o lo ereditiamo se era l'unico
-                                contacts: customer?.contacts, 
-                                cig: cigController.text.trim().isEmpty ? null : cigController.text.trim(),
-                                cup: cupController.text.trim().isEmpty ? null : cupController.text.trim(),
-                                paReference: paRefController.text.trim().isEmpty ? null : paRefController.text.trim(),
-                                paContract: paContractController.text.trim().isEmpty ? null : paContractController.text.trim(),
+                                contacts: customer?.contacts,
+                                cig: cigController.text.trim().isEmpty
+                                    ? null
+                                    : cigController.text.trim(),
+                                cup: cupController.text.trim().isEmpty
+                                    ? null
+                                    : cupController.text.trim(),
+                                paReference: paRefController.text.trim().isEmpty
+                                    ? null
+                                    : paRefController.text.trim(),
+                                paContract:
+                                    paContractController.text.trim().isEmpty
+                                    ? null
+                                    : paContractController.text.trim(),
                                 logoPath: logoPath,
                                 status: selectedStatus,
                               );
 
                               if (customer == null) {
-                                await _dbHelper.insertCustomer(newCustomer.toMap());
+                                await _dbHelper.insertCustomer(
+                                  newCustomer.toMap(),
+                                );
                               } else {
-                                await _dbHelper.updateCustomer(newCustomer.toMap());
+                                await _dbHelper.updateCustomer(
+                                  newCustomer.toMap(),
+                                );
                               }
 
-                              if (dialogContext.mounted) Navigator.pop(dialogContext);
+                              if (dialogContext.mounted)
+                                Navigator.pop(dialogContext);
                               _refreshCustomers();
                             },
                             child: Text('SALVA'),
@@ -520,7 +699,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     onPressed: () => Navigator.pop(context, false),
                     child: Text(
                       'ANNULLA',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
                     ),
                   ),
                   SizedBox(width: 8),
@@ -573,7 +754,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
   // --- WIDGETS ---
 
   Widget _buildFilterBar() {
-    final statusList = ['Tutti', 'Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archivio'];
+    final statusList = [
+      'Tutti',
+      'Attivo',
+      'In Sospeso',
+      'Priorità Alta',
+      'In Revisione',
+      'Nuovo',
+      'Chiuso',
+      'Archivio',
+    ];
 
     return GlassContainer(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -583,7 +773,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.filter_alt, color: Colors.white.withValues(alpha: 0.7)),
+              Icon(
+                Icons.filter_alt,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Autocomplete<Customer>(
@@ -618,10 +811,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
                           style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
                             hintText: 'Cerca Cliente (Tutti i Clienti)',
-                            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+                            hintStyle: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.54),
+                            ),
                             border: InputBorder.none,
                             suffixIcon: IconButton(
-                              icon: Icon(Icons.clear, color: Colors.white.withValues(alpha: 0.54)),
+                              icon: Icon(
+                                Icons.clear,
+                                color: Colors.white.withValues(alpha: 0.54),
+                              ),
                               onPressed: () {
                                 textEditingController.clear();
                                 _onCustomerSelected(null);
@@ -637,7 +835,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
               ),
               IconButton(
                 icon: Icon(
-                  _isCompactView ? Icons.view_agenda_outlined : Icons.table_rows_outlined,
+                  _isCompactView
+                      ? Icons.view_agenda_outlined
+                      : Icons.table_rows_outlined,
                   color: Colors.white70,
                 ),
                 tooltip: _isCompactView ? 'Vista a schede' : 'Vista compatta',
@@ -654,7 +854,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: statusList.map((status) {
-                final isSelected = (_showArchive && status == 'Archivio') || (!_showArchive && _statusFilter == status);
+                final isSelected =
+                    (_showArchive && status == 'Archivio') ||
+                    (!_showArchive && _statusFilter == status);
                 Color activeColor = Colors.blueAccent;
                 if (status == 'Attivo') {
                   activeColor = Colors.green;
@@ -692,13 +894,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     backgroundColor: Colors.white.withValues(alpha: 0.05),
                     labelStyle: TextStyle(
                       color: isSelected ? activeColor : Colors.white70,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                       fontSize: 12,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(
-                        color: isSelected ? activeColor : Colors.white.withValues(alpha: 0.15),
+                        color: isSelected
+                            ? activeColor
+                            : Colors.white.withValues(alpha: 0.15),
                       ),
                     ),
                   ),
@@ -714,13 +920,25 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Widget _buildCustomerCard(Customer customer) {
     Color statusColor = Colors.green;
     switch (customer.status) {
-      case 'Attivo': statusColor = Colors.green; break;
-      case 'In Sospeso': statusColor = Colors.orange; break;
-      case 'Priorità Alta': statusColor = Colors.redAccent; break;
-      case 'In Revisione': statusColor = Colors.blueAccent; break;
-      case 'Nuovo': statusColor = Colors.purpleAccent; break;
+      case 'Attivo':
+        statusColor = Colors.green;
+        break;
+      case 'In Sospeso':
+        statusColor = Colors.orange;
+        break;
+      case 'Priorità Alta':
+        statusColor = Colors.redAccent;
+        break;
+      case 'In Revisione':
+        statusColor = Colors.blueAccent;
+        break;
+      case 'Nuovo':
+        statusColor = Colors.purpleAccent;
+        break;
       case 'Chiuso':
-      case 'Archiviato': statusColor = Colors.grey; break;
+      case 'Archiviato':
+        statusColor = Colors.grey;
+        break;
     }
 
     return GlassContainer(
@@ -739,15 +957,22 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.blueAccent.withValues(alpha: 0.2),
-                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5), width: 1.5),
-                  image: customer.logoPath != null && File(customer.logoPath!).existsSync()
+                  border: Border.all(
+                    color: Colors.blueAccent.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                  image:
+                      customer.logoPath != null &&
+                          File(customer.logoPath!).existsSync()
                       ? DecorationImage(
                           image: FileImage(File(customer.logoPath!)),
                           fit: BoxFit.cover,
                         )
                       : null,
                 ),
-                child: customer.logoPath == null || !File(customer.logoPath!).existsSync()
+                child:
+                    customer.logoPath == null ||
+                        !File(customer.logoPath!).existsSync()
                     ? const Icon(Icons.person, color: Colors.white, size: 24)
                     : null,
               ),
@@ -767,7 +992,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (customer.status != null && customer.status!.isNotEmpty) ...[
+                    if (customer.status != null &&
+                        customer.status!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       PopupMenuButton<String>(
                         initialValue: customer.status,
@@ -796,22 +1022,45 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               logoPath: customer.logoPath,
                               status: newStatus,
                             );
-                            await _dbHelper.updateCustomer(updatedCustomer.toMap());
+                            await _dbHelper.updateCustomer(
+                              updatedCustomer.toMap(),
+                            );
                             _refreshCustomers();
                           }
                         },
-                        itemBuilder: (context) => ['Attivo', 'In Sospeso', 'Priorità Alta', 'In Revisione', 'Nuovo', 'Chiuso', 'Archiviato']
-                            .map((s) => PopupMenuItem(
-                                  value: s,
-                                  child: Text(s, style: const TextStyle(color: Colors.white)),
-                                ))
-                            .toList(),
+                        itemBuilder: (context) =>
+                            [
+                                  'Attivo',
+                                  'In Sospeso',
+                                  'Priorità Alta',
+                                  'In Revisione',
+                                  'Nuovo',
+                                  'Chiuso',
+                                  'Archiviato',
+                                ]
+                                .map(
+                                  (s) => PopupMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: statusColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                            border: Border.all(
+                              color: statusColor.withValues(alpha: 0.4),
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -825,7 +1074,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              Icon(Icons.arrow_drop_down, size: 14, color: statusColor),
+                              Icon(
+                                Icons.arrow_drop_down,
+                                size: 14,
+                                color: statusColor,
+                              ),
                             ],
                           ),
                         ),
@@ -838,7 +1091,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined, color: Colors.cyanAccent, size: 20),
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      color: Colors.cyanAccent,
+                      size: 20,
+                    ),
                     onPressed: () => _showCustomerDialog(customer),
                     tooltip: 'Modifica',
                     padding: const EdgeInsets.all(6),
@@ -846,7 +1103,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   ),
                   const SizedBox(width: 6),
                   IconButton(
-                    icon: Icon(Icons.delete_outline, color: Colors.redAccent.shade100, size: 20),
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Colors.redAccent.shade100,
+                      size: 20,
+                    ),
                     onPressed: () => _deleteCustomer(customer.id!),
                     tooltip: 'Elimina',
                     padding: const EdgeInsets.all(6),
@@ -856,14 +1117,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
               ),
             ],
           ),
-          
+
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(color: Colors.white12, height: 1),
           ),
 
           // Dati Fiscali (P.IVA, C.F., SDI)
-          if (customer.vatNumber?.isNotEmpty == true || customer.taxCode?.isNotEmpty == true || customer.sdiCode?.isNotEmpty == true)
+          if (customer.vatNumber?.isNotEmpty == true ||
+              customer.taxCode?.isNotEmpty == true ||
+              customer.sdiCode?.isNotEmpty == true)
             Container(
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 12),
@@ -879,40 +1142,70 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   if (customer.vatNumber?.isNotEmpty == true)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 1),
-                      child: Text('P.IVA: ${customer.vatNumber}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      child: Text(
+                        'P.IVA: ${customer.vatNumber}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                   if (customer.taxCode?.isNotEmpty == true)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 1),
-                      child: Text('C.F.: ${customer.taxCode}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      child: Text(
+                        'C.F.: ${customer.taxCode}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                   if (customer.sdiCode?.isNotEmpty == true)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 1),
-                      child: Text('SDI: ${customer.sdiCode}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      child: Text(
+                        'SDI: ${customer.sdiCode}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                 ],
               ),
             ),
 
           // Sede
-          if (customer.addressStreet?.isNotEmpty == true || customer.addressCity?.isNotEmpty == true)
+          if (customer.addressStreet?.isNotEmpty == true ||
+              customer.addressCity?.isNotEmpty == true)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.location_on_outlined, color: Colors.white54, size: 16),
+                  const Icon(
+                    Icons.location_on_outlined,
+                    color: Colors.white54,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       [
-                        customer.addressStreet,
-                        if (customer.addressZip?.isNotEmpty == true) customer.addressZip,
-                        customer.addressCity,
-                        if (customer.addressProvince?.isNotEmpty == true) '(${customer.addressProvince})'
-                      ].where((e) => e != null && e.toString().isNotEmpty).join(' '),
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            customer.addressStreet,
+                            if (customer.addressZip?.isNotEmpty == true)
+                              customer.addressZip,
+                            customer.addressCity,
+                            if (customer.addressProvince?.isNotEmpty == true)
+                              '(${customer.addressProvince})',
+                          ]
+                          .where((e) => e != null && e.toString().isNotEmpty)
+                          .join(' '),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
@@ -920,7 +1213,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ),
 
           // Contatti
-          if (customer.email?.isNotEmpty == true || customer.pec?.isNotEmpty == true || customer.phone?.isNotEmpty == true || customer.contacts?.isNotEmpty == true)
+          if (customer.email?.isNotEmpty == true ||
+              customer.pec?.isNotEmpty == true ||
+              customer.phone?.isNotEmpty == true ||
+              customer.contacts?.isNotEmpty == true)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Column(
@@ -931,9 +1227,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [
-                          const Icon(Icons.email_outlined, color: Colors.white54, size: 16),
+                          const Icon(
+                            Icons.email_outlined,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(customer.email!, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                          Expanded(
+                            child: Text(
+                              customer.email!,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -942,9 +1250,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [
-                          const Icon(Icons.mark_email_read_outlined, color: Colors.white54, size: 16),
+                          const Icon(
+                            Icons.mark_email_read_outlined,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text('PEC: ${customer.pec}', style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                          Expanded(
+                            child: Text(
+                              'PEC: ${customer.pec}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -953,20 +1273,46 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [
-                          const Icon(Icons.phone_outlined, color: Colors.white54, size: 16),
+                          const Icon(
+                            Icons.phone_outlined,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(customer.phone!, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                          Expanded(
+                            child: Text(
+                              customer.phone!,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  if (customer.contacts?.isNotEmpty == true && customer.email?.isEmpty == true && customer.phone?.isEmpty == true)
+                  if (customer.contacts?.isNotEmpty == true &&
+                      customer.email?.isEmpty == true &&
+                      customer.phone?.isEmpty == true)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [
-                          const Icon(Icons.contact_mail_outlined, color: Colors.white54, size: 16),
+                          const Icon(
+                            Icons.contact_mail_outlined,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(customer.contacts!, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                          Expanded(
+                            child: Text(
+                              customer.contacts!,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -975,7 +1321,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ),
 
           // Codici PA
-          if (customer.cig?.isNotEmpty == true || customer.cup?.isNotEmpty == true || customer.paReference?.isNotEmpty == true || customer.paContract?.isNotEmpty == true)
+          if (customer.cig?.isNotEmpty == true ||
+              customer.cup?.isNotEmpty == true ||
+              customer.paReference?.isNotEmpty == true ||
+              customer.paContract?.isNotEmpty == true)
             Container(
               margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -986,15 +1335,31 @@ class _CustomersScreenState extends State<CustomersScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (customer.cig?.isNotEmpty == true || customer.cup?.isNotEmpty == true)
+                  if (customer.cig?.isNotEmpty == true ||
+                      customer.cup?.isNotEmpty == true)
                     Text(
                       'CIG: ${customer.cig ?? "-"} | CUP: ${customer.cup ?? "-"}',
-                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
                     ),
                   if (customer.paReference?.isNotEmpty == true)
-                    Text('Rif. Ammin.: ${customer.paReference}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text(
+                      'Rif. Ammin.: ${customer.paReference}',
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
                   if (customer.paContract?.isNotEmpty == true)
-                    Text('Commessa/Conv.: ${customer.paContract}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text(
+                      'Commessa/Conv.: ${customer.paContract}',
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1034,9 +1399,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildNeonClientCard(sortedCustomers[0], 0, isCompact: true)),
+                  Expanded(
+                    child: _buildNeonClientCard(
+                      sortedCustomers[0],
+                      0,
+                      isCompact: true,
+                    ),
+                  ),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildNeonClientCard(sortedCustomers[1], 1, isCompact: true)),
+                  Expanded(
+                    child: _buildNeonClientCard(
+                      sortedCustomers[1],
+                      1,
+                      isCompact: true,
+                    ),
+                  ),
                 ],
               );
             }
@@ -1051,19 +1428,37 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
-  Widget _buildNeonClientCard(Customer customer, int index, {bool isCompact = false}) {
+  Widget _buildNeonClientCard(
+    Customer customer,
+    int index, {
+    bool isCompact = false,
+  }) {
     // Alternating electric cyan and neon purple borders
-    final neonColor = index % 2 == 0 ? const Color(0xFF38BDF8) : const Color(0xFFC084FC);
+    final neonColor = index % 2 == 0
+        ? const Color(0xFF38BDF8)
+        : const Color(0xFFC084FC);
 
     Color statusColor = const Color(0xFF4ADE80);
     switch (customer.status) {
-      case 'Attivo': statusColor = const Color(0xFF4ADE80); break;
-      case 'In Sospeso': statusColor = const Color(0xFFFBBF24); break;
-      case 'Priorità Alta': statusColor = const Color(0xFFF87171); break;
-      case 'In Revisione': statusColor = const Color(0xFF818CF8); break;
-      case 'Nuovo': statusColor = const Color(0xFFC084FC); break;
+      case 'Attivo':
+        statusColor = const Color(0xFF4ADE80);
+        break;
+      case 'In Sospeso':
+        statusColor = const Color(0xFFFBBF24);
+        break;
+      case 'Priorità Alta':
+        statusColor = const Color(0xFFF87171);
+        break;
+      case 'In Revisione':
+        statusColor = const Color(0xFF818CF8);
+        break;
+      case 'Nuovo':
+        statusColor = const Color(0xFFC084FC);
+        break;
       case 'Chiuso':
-      case 'Archiviato': statusColor = Colors.grey; break;
+      case 'Archiviato':
+        statusColor = Colors.grey;
+        break;
     }
 
     return Container(
@@ -1111,15 +1506,23 @@ class _CustomersScreenState extends State<CustomersScreen> {
                             blurRadius: 8,
                           ),
                         ],
-                        image: customer.logoPath != null && File(customer.logoPath!).existsSync()
+                        image:
+                            customer.logoPath != null &&
+                                File(customer.logoPath!).existsSync()
                             ? DecorationImage(
                                 image: FileImage(File(customer.logoPath!)),
                                 fit: BoxFit.cover,
                               )
                             : null,
                       ),
-                      child: customer.logoPath == null || !File(customer.logoPath!).existsSync()
-                          ? const Icon(Icons.person, color: Colors.white, size: 24)
+                      child:
+                          customer.logoPath == null ||
+                              !File(customer.logoPath!).existsSync()
+                          ? const Icon(
+                              Icons.person,
+                              color: Colors.white,
+                              size: 24,
+                            )
                           : null,
                     ),
                     const SizedBox(width: 12),
@@ -1142,7 +1545,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                           Text(
                             customer.addressCity?.isNotEmpty == true
                                 ? customer.addressCity!
-                                : (customer.vatNumber?.isNotEmpty == true ? 'P.IVA: ${customer.vatNumber}' : 'Cliente registrato'),
+                                : (customer.vatNumber?.isNotEmpty == true
+                                      ? 'P.IVA: ${customer.vatNumber}'
+                                      : 'Cliente registrato'),
                             style: const TextStyle(
                               color: Colors.white54,
                               fontSize: 12,
@@ -1155,11 +1560,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: statusColor.withValues(alpha: 0.7), width: 1.2),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.7),
+                          width: 1.2,
+                        ),
                       ),
                       child: Text(
                         customer.status ?? 'Attivo',
@@ -1182,13 +1593,25 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('P.IVA / ID', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          const Text(
+                            'P.IVA / ID',
+                            style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                            ),
+                          ),
                           const SizedBox(height: 3),
                           Text(
                             customer.vatNumber?.isNotEmpty == true
                                 ? customer.vatNumber!
-                                : (customer.taxCode?.isNotEmpty == true ? customer.taxCode! : '-'),
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                : (customer.taxCode?.isNotEmpty == true
+                                      ? customer.taxCode!
+                                      : '-'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1199,11 +1622,23 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Sede', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          const Text(
+                            'Sede',
+                            style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                            ),
+                          ),
                           const SizedBox(height: 3),
                           Text(
-                            customer.addressCity?.isNotEmpty == true ? customer.addressCity! : '-',
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            customer.addressCity?.isNotEmpty == true
+                                ? customer.addressCity!
+                                : '-',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1214,11 +1649,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Stato Account', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          const Text(
+                            'Stato Account',
+                            style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                            ),
+                          ),
                           const SizedBox(height: 3),
                           Text(
                             customer.status ?? 'Attivo',
-                            style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1230,13 +1675,25 @@ class _CustomersScreenState extends State<CustomersScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Contatto', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                            const Text(
+                              'Contatto',
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 11,
+                              ),
+                            ),
                             const SizedBox(height: 3),
                             Text(
                               customer.phone?.isNotEmpty == true
                                   ? customer.phone!
-                                  : (customer.email?.isNotEmpty == true ? customer.email! : '-'),
-                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                  : (customer.email?.isNotEmpty == true
+                                        ? customer.email!
+                                        : '-'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1326,10 +1783,22 @@ class _CustomersScreenState extends State<CustomersScreen> {
     if (customer.email != null && customer.email!.isNotEmpty) {
       if (Platform.isWindows) {
         try {
-          await Process.start('cmd', ['/c', 'start', 'outlook', '/c', 'ipm.note', '/m', customer.email!]);
+          await Process.start('cmd', [
+            '/c',
+            'start',
+            'outlook',
+            '/c',
+            'ipm.note',
+            '/m',
+            customer.email!,
+          ]);
         } catch (e) {
-          final Uri emailLaunchUri = Uri(scheme: 'mailto', path: customer.email);
-          if (await canLaunchUrl(emailLaunchUri)) await launchUrl(emailLaunchUri);
+          final Uri emailLaunchUri = Uri(
+            scheme: 'mailto',
+            path: customer.email,
+          );
+          if (await canLaunchUrl(emailLaunchUri))
+            await launchUrl(emailLaunchUri);
         }
       } else {
         final Uri emailLaunchUri = Uri(scheme: 'mailto', path: customer.email);
@@ -1340,7 +1809,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nessuna email salvata per questo cliente.')),
+          const SnackBar(
+            content: Text('Nessuna email salvata per questo cliente.'),
+          ),
         );
       }
     }
@@ -1377,14 +1848,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 prefixIcon: Icon(Icons.search, color: Colors.white38, size: 18),
                 suffixIcon: _opsSearchQuery.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.clear, color: Colors.white38, size: 18),
+                        icon: Icon(
+                          Icons.clear,
+                          color: Colors.white38,
+                          size: 18,
+                        ),
                         onPressed: () => setState(() {
                           _opsSearchQuery = '';
                           _opsSearchCtrl.clear();
                         }),
                       )
                     : null,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 filled: true,
                 fillColor: Colors.white10,
                 border: OutlineInputBorder(
@@ -1400,55 +1878,89 @@ class _CustomersScreenState extends State<CustomersScreen> {
             tooltip: 'Esporta Storico Operazioni',
             onPressed: () async {
               if (_filteredPayments.isEmpty) return;
-              
-              final range = await ReportUtils.showDateRangeFilterDialog(context);
+
+              final range = await ReportUtils.showDateRangeFilterDialog(
+                context,
+              );
               if (range == null) return;
-              
+
               final filteredByDate = _filteredPayments.where((p) {
                 final date = p['date'] as String?;
                 if (date == null || date.isEmpty) return true;
                 return ReportUtils.isDateInRange(date, range);
               }).toList();
-              
+
               if (filteredByDate.isEmpty) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Nessuna operazione nel periodo selezionato.')),
+                    const SnackBar(
+                      content: Text(
+                        'Nessuna operazione nel periodo selezionato.',
+                      ),
+                    ),
                   );
                 }
                 return;
               }
-              
-              final List<List<String>> data = filteredByDate.map<List<String>>((p) {
-                final serviceName = p['service_name'] ?? p['category_name'] ?? '';
+
+              final List<List<String>> data = filteredByDate.map<List<String>>((
+                p,
+              ) {
+                final serviceName =
+                    p['service_name'] ?? p['category_name'] ?? '';
                 final notes = p['description'] ?? p['notes'] ?? '';
                 final List<String> descParts = [];
-                if (serviceName.toString().isNotEmpty) descParts.add(serviceName.toString());
-                if (notes.toString().isNotEmpty) descParts.add(notes.toString());
-                final descrizione = descParts.isNotEmpty ? descParts.join(' - ') : 'N/D';
-                
+                if (serviceName.toString().isNotEmpty)
+                  descParts.add(serviceName.toString());
+                if (notes.toString().isNotEmpty)
+                  descParts.add(notes.toString());
+                final descrizione = descParts.isNotEmpty
+                    ? descParts.join(' - ')
+                    : 'N/D';
+
                 final cliente = _selectedCustomer?.name ?? 'N/D';
                 final dataStr = p['date']?.toString() ?? '';
                 final tipo = p['type'] == 'IN' ? 'E' : 'U';
-                
+
                 String metodo = p['payment_method']?.toString() ?? '';
                 if (metodo.toLowerCase() == 'bonifico') {
                   metodo = 'BON';
-                } else if (metodo.toLowerCase() == 'contanti') metodo = 'C/C';
-                else if (metodo.toLowerCase() == 'assegno') metodo = 'ASS';
-                else if (metodo.toLowerCase() == 'pos') metodo = 'POS';
-                
-                final importo = '${double.tryParse(p['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'} €';
-                
-                final hasAtt = p['attachments'] != null && p['attachments'] != '[]';
+                } else if (metodo.toLowerCase() == 'contanti')
+                  metodo = 'C/C';
+                else if (metodo.toLowerCase() == 'assegno')
+                  metodo = 'ASS';
+                else if (metodo.toLowerCase() == 'pos')
+                  metodo = 'POS';
+
+                final importo =
+                    '${CurrencyUtils.formatEuro(double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0)}';
+
+                final hasAtt =
+                    p['attachments'] != null && p['attachments'] != '[]';
                 final allegati = hasAtt ? 'S' : 'N';
-                
-                return [cliente, descrizione, dataStr, tipo, metodo, importo, allegati];
+
+                return [
+                  cliente,
+                  descrizione,
+                  dataStr,
+                  tipo,
+                  metodo,
+                  importo,
+                  allegati,
+                ];
               }).toList();
-              
+
               await PDFReportService.generateAndDownloadReport(
                 title: 'Storico Operazioni - ${_selectedCustomer?.name ?? ''}',
-                headers: ['Cliente', 'Descrizione', 'Dt.', 'Tp.', 'Met.', 'Imp.', 'All.'],
+                headers: [
+                  'Cliente',
+                  'Descrizione',
+                  'Dt.',
+                  'Tp.',
+                  'Met.',
+                  'Imp.',
+                  'All.',
+                ],
                 data: data,
                 columnWidths: {
                   0: const pw.FlexColumnWidth(2),
@@ -1467,7 +1979,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   'Met.': 'Metodo (BON=Bonifico, C/C=Contanti, ASS=Assegno)',
                   'Imp.': 'Importo',
                   'All.': 'Allegati Presenti (S=Si, N=No)',
-                }
+                },
               );
             },
           ),
@@ -1478,9 +1990,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   Widget _buildCustomerPayments() {
     if (_isLoadingPayments) {
-      return Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
+      return Center(child: CircularProgressIndicator(color: Colors.white));
     }
     if (_customerPayments.isEmpty) {
       return Center(
@@ -1504,7 +2014,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
       itemBuilder: (context, index) {
         final payment = filtered[index];
         final isIncome = payment['type'] == 'IN';
-        final serviceName = payment['service_name'] ?? payment['category_name'] ?? '';
+        final serviceName =
+            payment['service_name'] ?? payment['category_name'] ?? '';
         final description = payment['description'] ?? payment['notes'] ?? '';
         return Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
@@ -1519,20 +2030,22 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 title: Row(
                   children: [
                     Text(
-                      '€ ${payment['amount'].toStringAsFixed(2)}',
+                      '${CurrencyUtils.formatEuro(payment['amount'])}',
                       style: TextStyle(
                         color: isIncome ? Colors.greenAccent : Colors.redAccent,
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
                       ),
                     ),
-                    if (serviceName.isNotEmpty) ...
-                    [
+                    if (serviceName.isNotEmpty) ...[
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           serviceName,
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1544,7 +2057,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   children: [
                     Text(
                       payment['date'] ?? '',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.54),
+                        fontSize: 12,
+                      ),
                     ),
                     if (description.isNotEmpty)
                       Text(
@@ -1558,7 +2074,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 trailing: payment['payment_method'] != null
                     ? Text(
                         payment['payment_method'],
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 11),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.54),
+                          fontSize: 11,
+                        ),
                       )
                     : null,
               ),
@@ -1569,17 +2088,28 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
-
   Widget _buildCompactClientRow(Customer customer) {
     Color statusColor = Colors.white;
     switch (customer.status) {
-      case 'Attivo': statusColor = Colors.green; break;
-      case 'In Sospeso': statusColor = Colors.orange; break;
-      case 'Priorità Alta': statusColor = Colors.redAccent; break;
-      case 'In Revisione': statusColor = Colors.blueAccent; break;
-      case 'Nuovo': statusColor = Colors.purpleAccent; break;
+      case 'Attivo':
+        statusColor = Colors.green;
+        break;
+      case 'In Sospeso':
+        statusColor = Colors.orange;
+        break;
+      case 'Priorità Alta':
+        statusColor = Colors.redAccent;
+        break;
+      case 'In Revisione':
+        statusColor = Colors.blueAccent;
+        break;
+      case 'Nuovo':
+        statusColor = Colors.purpleAccent;
+        break;
       case 'Chiuso':
-      case 'Archiviato': statusColor = Colors.grey; break;
+      case 'Archiviato':
+        statusColor = Colors.grey;
+        break;
     }
 
     return InkWell(
@@ -1602,7 +2132,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 shape: BoxShape.circle,
                 color: statusColor,
                 boxShadow: [
-                  BoxShadow(color: statusColor.withValues(alpha: 0.5), blurRadius: 4, spreadRadius: 1),
+                  BoxShadow(
+                    color: statusColor.withValues(alpha: 0.5),
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
                 ],
               ),
             ),
@@ -1611,7 +2145,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
               flex: 2,
               child: Text(
                 customer.name,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1657,6 +2195,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Widget build(BuildContext context) {
     return GradientScaffold(
       appBar: AppBar(
+        
         title: Text(
           'Anagrafica Clienti',
           style: TextStyle(color: Colors.white),
@@ -1756,5 +2295,3 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 }
-
-

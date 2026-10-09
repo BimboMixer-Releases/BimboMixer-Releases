@@ -26,19 +26,19 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
     try {
       // 1. Ottieni l'immagine ritagliata come ui.Image
       ui.Image bitmap = await _controller.croppedBitmap();
-      
+
       // 2. Converti in byte (PNG base)
       final data = await bitmap.toByteData(format: ui.ImageByteFormat.png);
       final bytes = data!.buffer.asUint8List();
 
       // 3. Elabora con il pacchetto "image" (compressione, contrasto, nitidezza)
       img.Image? decodedImage = img.decodeImage(bytes);
-      
+
       if (decodedImage != null) {
         // Ridimensionamento per evitare pesi eccessivi (max altezza/larghezza ~ 1600)
         if (decodedImage.width > 1600 || decodedImage.height > 1600) {
           decodedImage = img.copyResize(
-            decodedImage, 
+            decodedImage,
             width: decodedImage.width > decodedImage.height ? 1600 : null,
             height: decodedImage.height >= decodedImage.width ? 1600 : null,
           );
@@ -51,11 +51,7 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
         // Una matrice standard per sharpening
         decodedImage = img.convolution(
           decodedImage,
-          filter: [
-             0, -1,  0,
-            -1,  5, -1,
-             0, -1,  0
-          ],
+          filter: [0, -1, 0, -1, 5, -1, 0, -1, 0],
           div: 1,
           offset: 0,
         );
@@ -65,7 +61,9 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
 
         // Salva su un file temporaneo
         final tempDir = await getTemporaryDirectory();
-        final tempFile = File('${tempDir.path}/cropped_receipt_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        final tempFile = File(
+          '${tempDir.path}/cropped_receipt_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
         await tempFile.writeAsBytes(compressedBytes);
 
         if (mounted) {
@@ -80,7 +78,9 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Errore durante il ritaglio: $e')),
         );
-        Navigator.of(context).pop(widget.imageFile); // Fallback: ritorna l'originale
+        Navigator.of(
+          context,
+        ).pop(widget.imageFile); // Fallback: ritorna l'originale
       }
     } finally {
       if (mounted) {
@@ -99,9 +99,11 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.rotate_right),
-            onPressed: _isProcessing ? null : () {
-              _controller.rotateRight();
-            },
+            onPressed: _isProcessing
+                ? null
+                : () {
+                    _controller.rotateRight();
+                  },
           ),
           IconButton(
             icon: Icon(Icons.check),
@@ -139,5 +141,3 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
     );
   }
 }
-
-

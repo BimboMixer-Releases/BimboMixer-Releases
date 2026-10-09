@@ -1,0 +1,76 @@
+Widget _metricCard(
+    AppThemeProvider theme,
+    String title,
+    String value,
+    String subtitle,
+    IconData icon,
+    Color color, {
+    bool isAmount = true,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.borderColor),
+        ),
+        child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  height: 14,
+                  child: AutoScrollText(
+                    text: title,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.54),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+                SizedBox(
+                  height: 24,
+                  child: AutoScrollText(
+                    text: value,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 2),
+                SizedBox(
+                  height: 14,
+                  child: AutoScrollText(
+                    text: isAmount ? '$subtitle vs ${_selectedYear - 1}' : subtitle,
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ));
+  }
+
+  Widget _buildChartsSection

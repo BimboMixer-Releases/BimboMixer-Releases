@@ -25,7 +25,7 @@ Write-Host "`n[3/4] Copia locale su Desktop..." -ForegroundColor Yellow
 
 # APK
 $apkSrcPath = "build\app\outputs\flutter-apk\app-release.apk"
-$apkDestDir = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer"
+$apkDestDir = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer"
 $apkDestPath = "$apkDestDir\BimboMixer_v$($version)_update.apk"
 Remove-Item "$apkDestDir\*" -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $apkDestDir | Out-Null
@@ -33,7 +33,7 @@ Copy-Item $apkSrcPath $apkDestPath -Force
 Write-Host "APK copiato: $apkDestPath"
 
 # Portable ZIP
-$pcDestDir = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer"
+$pcDestDir = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer"
 Remove-Item "$pcDestDir\*" -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $pcDestDir | Out-Null
 

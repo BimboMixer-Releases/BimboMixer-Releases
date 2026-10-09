@@ -18,7 +18,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
   final DataImportService _importService = DataImportService();
   List<Map<String, dynamic>> _parsedData = [];
   bool _isLoading = false;
-  
+
   // Available data in DB
   List<Map<String, dynamic>> _customers = [];
   List<Map<String, dynamic>> _categories = [];
@@ -58,7 +58,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
       try {
         File file = File(result.files.single.path!);
         List<Map<String, dynamic>> data = await _importService.parseFile(file);
-        
+
         setState(() {
           _parsedData = data;
         });
@@ -84,17 +84,31 @@ class _DataImportScreenState extends State<DataImportScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: const Color(0xFF1E1E24),
-            title: Text('Cliente mancante', style: TextStyle(color: Colors.white)),
-            content: Text('Il cliente "${exp.customerName}" non esiste in anagrafica. Vuoi crearlo ora?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+            title: Text(
+              'Cliente mancante',
+              style: TextStyle(color: Colors.white),
+            ),
+            content: Text(
+              'Il cliente "${exp.customerName}" non esiste in anagrafica. Vuoi crearlo ora?',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: Text('Salta per ora', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))),
+                child: Text(
+                  'Salta per ora',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+                ),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                child: Text('Crea Cliente', style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                ),
+                child: Text(
+                  'Crea Cliente',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -119,7 +133,9 @@ class _DataImportScreenState extends State<DataImportScreen> {
 
           if (created == true) {
             // Find it in the updated list
-            final match = _customers.where((c) => c['name'] == exp.customerName).toList();
+            final match = _customers
+                .where((c) => c['name'] == exp.customerName)
+                .toList();
             if (match.isNotEmpty) {
               setState(() {
                 exp.customerId = match.first['id'];
@@ -135,19 +151,25 @@ class _DataImportScreenState extends State<DataImportScreen> {
     _mappedExpenses = _parsedData.map((row) {
       // Find key matching "ENTE" or "nome"
       String eventNameKey = row.keys.firstWhere(
-        (k) => k.toLowerCase().contains('ente') || k.toLowerCase().contains('evento') || k.toLowerCase().contains('nome'),
-        orElse: () => row.keys.first
+        (k) =>
+            k.toLowerCase().contains('ente') ||
+            k.toLowerCase().contains('evento') ||
+            k.toLowerCase().contains('nome'),
+        orElse: () => row.keys.first,
       );
       String eventName = row[eventNameKey]?.toString() ?? '';
 
       // Importo (PREVENTIVO)
       String amountKey = row.keys.firstWhere(
-        (k) => k.toLowerCase().contains('preventivo') || k.toLowerCase().contains('import') || k.toLowerCase().contains('total'),
-        orElse: () => ''
+        (k) =>
+            k.toLowerCase().contains('preventivo') ||
+            k.toLowerCase().contains('import') ||
+            k.toLowerCase().contains('total'),
+        orElse: () => '',
       );
       double amount = 0.0;
       String? notes;
-      
+
       if (amountKey.isNotEmpty && row[amountKey] != null) {
         String amtStr = row[amountKey].toString().replaceAll('€', '').trim();
         // Check for division like 1300/2
@@ -158,7 +180,8 @@ class _DataImportScreenState extends State<DataImportScreen> {
             double num2 = double.tryParse(parts[1].replaceAll(',', '.')) ?? 1.0;
             if (num2 != 0) {
               amount = num1 / num2;
-              notes = 'Guadagno iniziale: $num1 diviso per ${num2.toInt()} persone';
+              notes =
+                  'Guadagno iniziale: $num1 diviso per ${num2.toInt()} persone';
             }
           }
         } else {
@@ -168,29 +191,37 @@ class _DataImportScreenState extends State<DataImportScreen> {
 
       // Data (DATA EVENTO)
       String dateKey = row.keys.firstWhere(
-        (k) => k.toLowerCase().contains('data evento') || k.toLowerCase().contains('data'),
-        orElse: () => ''
+        (k) =>
+            k.toLowerCase().contains('data evento') ||
+            k.toLowerCase().contains('data'),
+        orElse: () => '',
       );
       String date = row[dateKey]?.toString() ?? '';
 
       // Metodo (Fattura / Contante / Ritenuta d'acconto)
       String methodKey = row.keys.firstWhere(
-        (k) => k.toLowerCase().contains('metodo di pagamento') || k.toLowerCase().contains('metodo'),
-        orElse: () => ''
+        (k) =>
+            k.toLowerCase().contains('metodo di pagamento') ||
+            k.toLowerCase().contains('metodo'),
+        orElse: () => '',
       );
       String method = 'Contante';
       if (methodKey.isNotEmpty && row[methodKey] != null) {
         String m = row[methodKey].toString().toLowerCase();
         if (m.contains('fattur')) {
           method = 'Fattura';
-        } else if (m.contains('ritenuta')) method = "Ritenuta d'acconto";
-        else if (m.contains('contant')) method = 'Contanti';
+        } else if (m.contains('ritenuta'))
+          method = "Ritenuta d'acconto";
+        else if (m.contains('contant'))
+          method = 'Contanti';
       }
 
       // Stato (Saldo - ATTESA)
       String statusKey = row.keys.firstWhere(
-        (k) => k.toLowerCase().contains('saldo') || k.toLowerCase().contains('stato'),
-        orElse: () => ''
+        (k) =>
+            k.toLowerCase().contains('saldo') ||
+            k.toLowerCase().contains('stato'),
+        orElse: () => '',
       );
       String status = 'PAID';
       if (statusKey.isNotEmpty && row[statusKey] != null) {
@@ -203,8 +234,14 @@ class _DataImportScreenState extends State<DataImportScreen> {
       // Try to find matching customer
       String? customerId;
       String customerName = eventName;
-      
-      var matchedCustomer = _customers.where((c) => c['name'].toString().toLowerCase() == customerName.toLowerCase()).toList();
+
+      var matchedCustomer = _customers
+          .where(
+            (c) =>
+                c['name'].toString().toLowerCase() ==
+                customerName.toLowerCase(),
+          )
+          .toList();
       if (matchedCustomer.isNotEmpty) {
         customerId = matchedCustomer.first['id'];
       }
@@ -248,6 +285,7 @@ class _DataImportScreenState extends State<DataImportScreen> {
   }
 
   Future<void> _saveAllToDatabase() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
     int saved = 0;
     try {
@@ -283,15 +321,15 @@ class _DataImportScreenState extends State<DataImportScreen> {
 
         saved++;
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Importati $saved movimenti con successo!')),
       );
       Navigator.pop(context, true); // Return to previous screen
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Errore salvataggio: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Errore salvataggio: $e')));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -311,162 +349,241 @@ class _DataImportScreenState extends State<DataImportScreen> {
               icon: Icon(Icons.save),
               onPressed: _saveAllToDatabase,
               tooltip: 'Salva Tutto',
-            )
+            ),
         ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : _mappedExpenses.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.upload_file, size: 80, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text('Nessun dato importato.'),
-                      SizedBox(height: 8),
-                      Text('Salva il tuo file Excel come CSV e caricalo qui.', style: TextStyle(color: Colors.grey)),
-                      SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        icon: Icon(Icons.file_open),
-                        label: Text('Seleziona File CSV'),
-                        onPressed: _pickAndParseFile,
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.upload_file, size: 80, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('Nessun dato importato.'),
+                  SizedBox(height: 8),
+                  Text(
+                    'Salva il tuo file Excel come CSV e caricalo qui.',
+                    style: TextStyle(color: Colors.grey),
                   ),
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.all(16),
-                  itemCount: _mappedExpenses.length,
-                  itemBuilder: (context, index) {
-                    var expense = _mappedExpenses[index];
-                    return Card(
-                      margin: EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.file_open),
+                    label: Text('Seleziona File CSV'),
+                    onPressed: _pickAndParseFile,
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: _mappedExpenses.length,
+              itemBuilder: (context, index) {
+                var expense = _mappedExpenses[index];
+                return Card(
+                  margin: EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    decoration: InputDecoration(
-                                      labelText: 'Nome Evento',
-                                      isDense: true,
-                                    ),
-                                    controller: TextEditingController(text: expense.eventName)
-                                      ..selection = TextSelection.collapsed(offset: expense.eventName.length),
-                                    onChanged: (val) => expense.eventName = val,
-                                  ),
+                            Expanded(
+                              child: TextField(
+                                decoration: InputDecoration(
+                                  labelText: 'Nome Evento',
+                                  isDense: true,
                                 ),
-                                SizedBox(width: 16),
-                                Expanded(
-                                  child: TextField(
-                                    decoration: InputDecoration(
-                                      labelText: 'Importo',
-                                      prefixText: '€ ',
-                                      isDense: true,
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    controller: TextEditingController(text: expense.totalAmount.toString())
-                                      ..selection = TextSelection.collapsed(offset: expense.totalAmount.toString().length),
-                                    onChanged: (val) => expense.totalAmount = double.tryParse(val) ?? 0.0,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: DropdownButtonFormField<String>(
-                                    decoration: InputDecoration(
-                                      labelText: 'Cliente',
-                                      isDense: true,
-                                    ),
-                                    initialValue: expense.customerId,
-                                    items: [
-                                      ..._customers.map((c) {
-                                        return DropdownMenuItem<String>(
-                                          value: c['id'],
-                                          child: Text(c['name']),
-                                        );
-                                      }),
-                                      DropdownMenuItem<String>(
-                                        value: 'NEW',
-                                        child: Text('+ Crea Nuovo Cliente', style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
+                                controller:
+                                    TextEditingController(
+                                        text: expense.eventName,
+                                      )
+                                      ..selection = TextSelection.collapsed(
+                                        offset: expense.eventName.length,
                                       ),
-                                    ],
-                                    onChanged: (val) {
-                                      if (val == 'NEW') {
-                                        _createNewCustomer(expense, index);
-                                      } else {
-                                        setState(() {
-                                          expense.customerId = val;
-                                          expense.customerName = _customers.firstWhere((c) => c['id'] == val)['name'];
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                SizedBox(width: 16),
-                                Expanded(
-                                  flex: 1,
-                                  child: DropdownButtonFormField<String>(
-                                    decoration: InputDecoration(
-                                      labelText: 'Metodo',
-                                      isDense: true,
-                                    ),
-                                    initialValue: expense.paymentMethod,
-                                    items: ['Contanti', 'Fattura', 'Ritenuta d\'acconto'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                                    onChanged: (val) => setState(() => expense.paymentMethod = val!),
-                                  ),
-                                ),
-                              ],
+                                onChanged: (val) => expense.eventName = val,
+                              ),
                             ),
-                            SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Stato:', style: TextStyle(fontWeight: FontWeight.bold)),
-                                Switch(
-                                  value: expense.status == 'PAID',
-                                  onChanged: (val) => setState(() => expense.status = val ? 'PAID' : 'PENDING'),
-                                  activeThumbColor: Colors.green,
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: TextField(
+                                decoration: InputDecoration(
+                                  labelText: 'Importo',
+                                  prefixText: '€ ',
+                                  isDense: true,
                                 ),
-                                Text(expense.status == 'PAID' ? 'Pagato' : 'In attesa', style: TextStyle(color: expense.status == 'PAID' ? Colors.green : Colors.orange)),
-                              ],
+                                keyboardType: TextInputType.number,
+                                controller:
+                                    TextEditingController(
+                                        text: expense.totalAmount.toString(),
+                                      )
+                                      ..selection = TextSelection.collapsed(
+                                        offset: expense.totalAmount
+                                            .toString()
+                                            .length,
+                                      ),
+                                onChanged: (val) => expense.totalAmount =
+                                    double.tryParse(val) ?? 0.0,
+                              ),
                             ),
-                            if (expense.notes != null) ...[
-                              SizedBox(height: 8),
-                              Text('Note: ${expense.notes}', style: TextStyle(color: Colors.blue, fontStyle: FontStyle.italic)),
-                            ],
-                            SizedBox(height: 8),
-                            ExpansionTile(
-                              title: Text('Vedi riga originale', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              children: expense.rawRowData.entries.map((e) => 
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('${e.key}: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                      Expanded(child: Text('${e.value}', style: TextStyle(fontSize: 12))),
-                                    ],
-                                  ),
-                                )
-                              ).toList(),
-                            )
                           ],
                         ),
-                      ),
-                    );
-                  },
-                ),
+                        SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: DropdownButtonFormField<String>(
+                                decoration: InputDecoration(
+                                  labelText: 'Cliente',
+                                  isDense: true,
+                                ),
+                                initialValue: expense.customerId,
+                                items: [
+                                  ..._customers.map((c) {
+                                    return DropdownMenuItem<String>(
+                                      value: c['id'],
+                                      child: Text(c['name']),
+                                    );
+                                  }),
+                                  DropdownMenuItem<String>(
+                                    value: 'NEW',
+                                    child: Text(
+                                      '+ Crea Nuovo Cliente',
+                                      style: TextStyle(
+                                        color: theme.primaryColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val == 'NEW') {
+                                    _createNewCustomer(expense, index);
+                                  } else {
+                                    setState(() {
+                                      expense.customerId = val;
+                                      expense.customerName = _customers
+                                          .firstWhere(
+                                            (c) => c['id'] == val,
+                                          )['name'];
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              flex: 1,
+                              child: DropdownButtonFormField<String>(
+                                decoration: InputDecoration(
+                                  labelText: 'Metodo',
+                                  isDense: true,
+                                ),
+                                initialValue: expense.paymentMethod,
+                                items:
+                                    [
+                                          'Contanti',
+                                          'Fattura',
+                                          'Ritenuta d\'acconto',
+                                        ]
+                                        .map(
+                                          (e) => DropdownMenuItem(
+                                            value: e,
+                                            child: Text(e),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (val) => setState(
+                                  () => expense.paymentMethod = val!,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Stato:',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Switch(
+                              value: expense.status == 'PAID',
+                              onChanged: (val) => setState(
+                                () => expense.status = val ? 'PAID' : 'PENDING',
+                              ),
+                              activeThumbColor: Colors.green,
+                            ),
+                            Text(
+                              expense.status == 'PAID' ? 'Pagato' : 'In attesa',
+                              style: TextStyle(
+                                color: expense.status == 'PAID'
+                                    ? Colors.green
+                                    : Colors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (expense.notes != null) ...[
+                          SizedBox(height: 8),
+                          Text(
+                            'Note: ${expense.notes}',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                        SizedBox(height: 8),
+                        ExpansionTile(
+                          title: Text(
+                            'Vedi riga originale',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          children: expense.rawRowData.entries
+                              .map(
+                                (e) => Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                    vertical: 4.0,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${e.key}: ',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          '${e.value}',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

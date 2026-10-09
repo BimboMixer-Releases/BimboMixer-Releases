@@ -51,6 +51,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   }
 
   Future<void> _saveNote() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 

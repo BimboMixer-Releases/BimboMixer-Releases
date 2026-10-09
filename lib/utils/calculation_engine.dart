@@ -4,12 +4,40 @@ import 'package:contabile_app/models/dashboard_metrics.dart';
 /// Pure calculation engine. Does not depend on UI, Firebase, or external state.
 /// Ensures all financial mathematics are strictly controlled and tested.
 class CalculationEngine {
+  static int _extractYear(String dateStr) {
+    if (dateStr.isEmpty) return 0;
+    if (dateStr.contains('/')) {
+      final parts = dateStr.split('/');
+      if (parts.length == 3) return int.tryParse(parts[2]) ?? 0;
+    } else if (dateStr.contains('-')) {
+      final parts = dateStr.split('-');
+      if (parts[0].length == 4) return int.tryParse(parts[0]) ?? 0;
+      if (parts.length == 3 && parts[2].length == 4) return int.tryParse(parts[2]) ?? 0;
+    }
+    return 0;
+  }
+
+  static int _extractMonth(String dateStr) {
+    if (dateStr.isEmpty) return 1;
+    if (dateStr.contains('/')) {
+      final parts = dateStr.split('/');
+      if (parts.length > 1) return int.tryParse(parts[1]) ?? 1;
+    } else if (dateStr.contains('-')) {
+      final parts = dateStr.split('-');
+      if (parts[0].length == 4 && parts.length > 1) return int.tryParse(parts[1]) ?? 1;
+      if (parts.length > 1) return int.tryParse(parts[1]) ?? 1;
+    }
+    return 1;
+  }
+
   /// Computes all metrics for the dashboard for a specific year.
   static DashboardMetrics computeDashboardMetrics({
     required List<Map<String, dynamic>> payments,
     required List<Map<String, dynamic>> paymentsLastYear,
     required List<Map<String, dynamic>> invoices,
     required List<Map<String, dynamic>> deadlines,
+    required List<Map<String, dynamic>> scheduledPayments,
+    required List<Map<String, dynamic>> scheduledPaymentsLastYear,
     required Map<String, String> categoryNames,
     required Map<String, String> serviceNames,
     required int selectedYear,
@@ -22,25 +50,31 @@ class CalculationEngine {
     Map<String, double> tempCat = {};
     Map<String, double> tempSrv = {};
     Map<String, double> tempFatCon = {};
-    
-    // We keep track of event IDs to avoid double counting Invoices vs Payments
-    // In many implementations, an invoice ID might be saved inside the payment.
-    // However, since we might not have a direct relation, we'll try to match by date, amount, and customer?
-    // Alternatively, the prompt indicated: "una fattura PAID non venga contata due volte se esiste anche un Payment associato".
-    // For now, if a payment has an invoice_id, we can track it.
-    Set<String> paidInvoiceIdsInPayments = {};
 
+    // Estrai i pagamenti che sono associati ad una fattura per evitare doppi conteggi
+    Set<String> paidInvoiceIds = {};
+    
     for (var p in payments) {
+      String status = (p['status'] ?? '').toString().toUpperCase();
+      if (status == 'PENDING' || status == 'LATE' || status == 'IN ATTESA' || status == 'IN SOSPESO' || status == 'NON PAGATO') {
+        continue;
+      }
+      
       double amount = CurrencyUtils.parseCurrency(p['amount']?.toString());
       if (amount == 0) continue;
 
       String dateStr = p['date'] ?? '';
       if (dateStr.isEmpty) continue;
       
-      int year = int.tryParse(dateStr.split('-')[0]) ?? 0;
+      int year = _extractYear(dateStr);
       if (year != selectedYear) continue; // Safety check
 
-      int month = int.tryParse(dateStr.split('-')[1]) ?? 1;
+      String? invId = p['invoice_id']?.toString();
+      if (invId != null && invId.isNotEmpty) {
+        paidInvoiceIds.add(invId);
+      }
+
+      int month = _extractMonth(dateStr);
       String catName = categoryNames[p['category_id']] ?? 'Altro';
       String srvName = serviceNames[p['service_id']] ?? 'Altro';
       String paymentMethod = (p['payment_method'] ?? '').toString().toLowerCase();
@@ -49,18 +83,12 @@ class CalculationEngine {
         totalIn += amount;
         monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) + amount);
         monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) + amount);
-        
-        // Track invoice if this payment comes from an invoice
-        if (p['invoice_id'] != null && p['invoice_id'].toString().isNotEmpty) {
-          paidInvoiceIdsInPayments.add(p['invoice_id'].toString());
-        }
       } else {
         totalOut += amount;
         monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) - amount);
         monthlyOut[month] = CurrencyUtils.roundMoney((monthlyOut[month] ?? 0.0) + amount);
       }
 
-      // Breakdown charts - count both IN and OUT as absolute values (as per previous logic)
       tempCat[catName] = CurrencyUtils.roundMoney((tempCat[catName] ?? 0.0) + amount);
       tempSrv[srvName] = CurrencyUtils.roundMoney((tempSrv[srvName] ?? 0.0) + amount);
       
@@ -69,31 +97,30 @@ class CalculationEngine {
       tempFatCon[fatConKey] = CurrencyUtils.roundMoney((tempFatCon[fatConKey] ?? 0.0) + amount);
     }
     
-    // Invoices processing
-    for (var i in invoices) {
-      if (i['status'] == 'PAID' && i['date'] != null) {
-        String invoiceId = i['id']?.toString() ?? '';
-        
-        int year = int.tryParse(i['date'].split('-')[0]) ?? 0;
-        if (year == selectedYear) {
-          // DOUBLE COUNTING PREVENTION
-          // If this invoice is already paid by a payment record in the same year, skip adding it to IN
-          if (paidInvoiceIdsInPayments.contains(invoiceId)) {
-            continue;
+    // Processa Invoices: aggiungi al totalIn e al Fatturato le fatture pagate che non hanno un pagamento associato
+    for (var inv in invoices) {
+      if (inv['status'] == 'PAID') {
+        String invId = inv['id']?.toString() ?? '';
+        if (invId.isNotEmpty && !paidInvoiceIds.contains(invId)) {
+          String dateStr = inv['date'] ?? '';
+          if (dateStr.isNotEmpty) {
+            int year = _extractYear(dateStr);
+            if (year == selectedYear) {
+              double amount = CurrencyUtils.parseCurrency(inv['amount']?.toString());
+              if (amount > 0) {
+                int month = _extractMonth(dateStr);
+                totalIn += amount;
+                monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) + amount);
+                monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) + amount);
+                tempFatCon['Fatturato'] = CurrencyUtils.roundMoney((tempFatCon['Fatturato'] ?? 0.0) + amount);
+              }
+            }
           }
-
-          double amount = CurrencyUtils.parseCurrency(i['amount']?.toString());
-          int month = int.tryParse(i['date'].split('-')[1]) ?? 1;
-          
-          totalIn += amount;
-          monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) + amount);
-          monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) + amount);
-          tempFatCon['Fatturato'] = CurrencyUtils.roundMoney((tempFatCon['Fatturato'] ?? 0.0) + amount);
         }
       }
     }
-
-    // Deadlines processing (filtered by selected year!)
+    
+    // Deadlines processing (filtered by selected year) - da sottrarre al patrimonio
     double totalDeadlinesPaid = 0.0;
     for (var d in deadlines) {
       if (d['status'] == 'PAID') {
@@ -102,25 +129,21 @@ class CalculationEngine {
           dateStr = d['date']?.toString();
         }
         if (dateStr != null && dateStr.isNotEmpty) {
-          int year = int.tryParse(dateStr.split('-')[0]) ?? 0;
+          int year = _extractYear(dateStr);
           if (year == selectedYear) {
             double amount = CurrencyUtils.parseCurrency(d['amount']?.toString());
             totalDeadlinesPaid += amount;
-            
-            int month = int.tryParse(dateStr.split('-')[1]) ?? 1;
-            monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) - amount);
-            monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) - amount);
           }
         }
       }
     }
 
     // Calculate final metrics
-    totalIn = CurrencyUtils.roundMoney(totalIn - totalDeadlinesPaid);
+    totalIn = CurrencyUtils.roundMoney(totalIn);
     totalOut = CurrencyUtils.roundMoney(totalOut);
     totalDeadlinesPaid = CurrencyUtils.roundMoney(totalDeadlinesPaid);
     
-    double patrimonio = CurrencyUtils.roundMoney(totalIn - totalOut);
+    double patrimonio = CurrencyUtils.roundMoney(totalIn - totalOut - totalDeadlinesPaid);
     
     double margine = 0.0;
     if (totalIn > 0) {
@@ -153,4 +176,3 @@ class CalculationEngine {
     return '$prefix${change.toStringAsFixed(1)}%';
   }
 }
-

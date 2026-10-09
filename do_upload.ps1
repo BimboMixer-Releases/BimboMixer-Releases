@@ -1,5 +1,5 @@
 $token = (Get-Content -Path "C:\Users\Hp\Documents\Sviluppo\Token di accesso\token.txt" -Raw).Trim()
-$apkPath = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v1.8.34_update.apk"
+$apkPath = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v1.8.34_update.apk"
 $releaseId = "375893889"
 $url = "https://uploads.github.com/repos/BimboMixer-Releases/BimboMixer-Releases/releases/$releaseId/assets?name=BimboMixer_v1.8.34_update.apk"
 

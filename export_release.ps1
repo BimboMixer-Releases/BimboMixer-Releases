@@ -6,8 +6,8 @@ if ($pubspecContent -match "version:\s*([\d.]+)\+") {
     exit 1
 }
 $winReleasePath = 'build\windows\x64\runner\Release'
-$pcDestDir = 'C:\Users\Hp\Desktop\CONTABILE APP\Aggiornamenti App PC'
-$apkDestDir = 'C:\Users\Hp\Desktop\CONTABILE APP\Aggiornamenti Apk Android'
+$pcDestDir = 'C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\Aggiornamenti App PC'
+$apkDestDir = 'C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\Aggiornamenti Apk Android'
 $winrar = "C:\Program Files\WinRAR\WinRAR.exe"
 $iconPath = (Resolve-Path "windows\runner\resources\app_icon.ico").Path
 

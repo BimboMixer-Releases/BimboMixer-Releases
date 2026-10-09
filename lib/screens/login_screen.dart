@@ -154,17 +154,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final String authEmail = '$sanitizedUser@bimbomixer.local';
 
     try {
-      // 1. Authenticate with Firebase Auth (only sign in, no auto-create)
-      try {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(email: authEmail, password: password);
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-          // L'utente potrebbe non esistere in Firebase Auth ma solo in Firestore
-          // Non creiamo automaticamente account Firebase Auth per sicurezza
-        }
-      } catch (e) {
-        // Auth Firebase non bloccante - i dati li verifichiamo su Firestore
-      }
+      // 1. Authenticate with Firebase Auth
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: authEmail,
+        password: password,
+      );
 
       // 2. Verifica credenziali in Firestore con password hashata
       var usersList = await dbHelper.getUsers();
@@ -232,10 +226,30 @@ class _LoginScreenState extends State<LoginScreen> {
           });
         }
       }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _isLoading = false;
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
+          _errorMessage = 'Credenziali di autenticazione non valide o account inesistente.';
+        } else if (e.code == 'network-request-failed') {
+          _errorMessage = 'Errore di rete. Verifica la connessione.';
+        } else {
+          _errorMessage = 'Errore di autenticazione (${e.code}).';
+        }
+      });
+    } on FirebaseException catch (e) {
+      setState(() {
+        _isLoading = false;
+        if (e.code == 'permission-denied') {
+          _errorMessage = 'Permessi insufficienti per accedere al database.';
+        } else {
+          _errorMessage = 'Errore database (${e.code}).';
+        }
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Errore di connessione. Riprova.';
+        _errorMessage = 'Errore imprevisto. Riprova.';
       });
     }
   }
@@ -328,7 +342,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Accedi al tuo account per\ngestire la tua attività in modo semplice.',
+                        'Accedi al tuo account per\ngestire la tua attivitÃ  in modo semplice.',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 14,
@@ -417,14 +431,16 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
-                          TextButton(
-                            onPressed: _showRecoveryWizard,
-                            child: const Text(
-                              'Password dimenticata?',
-                              style: TextStyle(
-                                color: Color(0xFFEC4899),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: TextButton(
+                              onPressed: _showRecoveryWizard,
+                              child: const Text(
+                                'Password dimenticata?',
+                                style: TextStyle(
+                                  color: Color(0xFFEC4899),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -561,7 +577,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const Icon(Icons.bar_chart, color: Color(0xFFEC4899)),
                                 const SizedBox(height: 8),
                                 const Text('Smart', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('Gestisci in mobilità', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10)),
+                                Text('Gestisci in mobilitÃ ', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10)),
                               ],
                             ),
                           ),
@@ -671,6 +687,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 }
+
+
 
 
 

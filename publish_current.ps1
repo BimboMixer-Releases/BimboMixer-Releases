@@ -19,8 +19,8 @@ $body = "Nuovo aggiornamento v$version della Contabile App."
 
 Write-Host "=== Rilascio versione $version ===" -ForegroundColor Cyan
 
-$apkDestPath = "C:\Users\Hp\Desktop\CONTABILE APP\Aggiornamenti Apk Android\BimboMixer_v$($version)_update.apk"
-$pcAssetPath = "C:\Users\Hp\Desktop\CONTABILE APP\Aggiornamenti App PC\BimboMixer_v$($version).exe"
+$apkDestPath = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\Aggiornamenti Apk Android\BimboMixer_v$($version)_update.apk"
+$pcAssetPath = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\Aggiornamenti App PC\BimboMixer_v$($version).exe"
 $pcAssetName = "BimboMixer_v$($version).exe"
 $pcContentType = "application/x-msdownload"
 

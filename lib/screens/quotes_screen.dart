@@ -1,6 +1,9 @@
+import '../services/biometric_service.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:contabile_app/utils/auth_fallback.dart';
+import 'package:contabile_app/utils/currency_utils.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:open_filex/open_filex.dart';
@@ -167,7 +170,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
             .replaceAll('.', '')
             .replaceAll(',', '.');
         extractedTotal = double.tryParse(numStr) ?? 0.0;
-        extractedSubtotal = extractedTotal / 1.22;
+        extractedSubtotal = extractedTotal; // IVA di default 0%
         extractedTax = extractedTotal - extractedSubtotal;
       }
 
@@ -214,8 +217,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
     if (extractedTotal <= 0) {
       extractedTotal = 1500.0;
-      extractedSubtotal = 1229.50;
-      extractedTax = 270.50;
+      extractedSubtotal = 1500.0;
+      extractedTax = 0.0;
     }
 
     return {
@@ -767,10 +770,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
         'rejected': status == 'Rifiutato',
         'items': items,
         'subtotal':
-            double.tryParse(subtotalCtrl.text.replaceAll(',', '.')) ?? 0.0,
-        'tax_amount': double.tryParse(taxCtrl.text.replaceAll(',', '.')) ?? 0.0,
+            CurrencyUtils.parseCurrency(subtotalCtrl.text),
+        'tax_amount': CurrencyUtils.parseCurrency(taxCtrl.text),
         'total_amount':
-            double.tryParse(totalCtrl.text.replaceAll(',', '.')) ?? 0.0,
+            CurrencyUtils.parseCurrency(totalCtrl.text),
         'file_name': fileName,
         'file_url': fileUrl ?? initialFile?.path ?? '',
         'local_path': initialFile?.path ?? existingQuote?['local_path'] ?? '',
@@ -911,6 +914,23 @@ class _QuotesScreenState extends State<QuotesScreen> {
     );
 
     if (confirm == true) {
+      final bioService = BiometricService();
+      bool isAuth = false;
+      if (await bioService.isBiometricAvailable()) {
+        isAuth = await bioService.authenticate(reason: 'Autenticati per eliminare il preventivo');
+      }
+      if (!isAuth && mounted) {
+        isAuth = await promptForPasswordFallback(context);
+      }
+      if (!isAuth) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Autenticazione fallita o annullata. Eliminazione annullata.'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+      
       await _dbHelper.deleteQuote(id);
       await _loadQuotes();
     }
@@ -1107,38 +1127,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
                     const SizedBox(height: 20),
 
-                    // 2. FEATURED NEON PREVIEW CARDS (Top Section matching image)
-                    if (filtered.isNotEmpty) ...[
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isWide = constraints.maxWidth > 850;
-                          final card1 = _selectedQuote ?? filtered[0];
-                          final card2 = filtered.length > 1
-                              ? (filtered[0] == card1
-                                    ? filtered[1]
-                                    : filtered[0])
-                              : null;
 
-                          if (isWide && card2 != null) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: _buildFeaturedQuoteCard(card1, 0),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _buildFeaturedQuoteCard(card2, 1),
-                                ),
-                              ],
-                            );
-                          }
-
-                          return _buildFeaturedQuoteCard(card1, 0);
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                    ],
 
                     // 3. BOTTOM SECTION: Table of Quotes with Status Filter Header
                     Expanded(
@@ -1193,33 +1182,37 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                             flex: 3,
                                             child: Row(
                                               children: [
-                                                PopupMenuButton<String>(
-                                                  color: const Color(
-                                                    0xFF16192B,
-                                                  ),
-                                                  offset: const Offset(0, 30),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          10,
-                                                        ),
-                                                    side: const BorderSide(
-                                                      color: Colors.white12,
+                                                Expanded(
+                                                  child: PopupMenuButton<String>(
+                                                    color: const Color(
+                                                      0xFF16192B,
                                                     ),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      Text(
-                                                        'Preventivi ($_selectedFilter)',
-                                                        style: const TextStyle(
-                                                          color: Colors.white70,
-                                                          fontSize: 13,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
+                                                    offset: const Offset(0, 30),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            10,
+                                                          ),
+                                                      side: const BorderSide(
+                                                        color: Colors.white12,
                                                       ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.max,
+                                                      children: [
+                                                        Expanded(
+                                                          child: Text(
+                                                            'Preventivi ($_selectedFilter)',
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: const TextStyle(
+                                                              color: Colors.white70,
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                            ),
+                                                          ),
+                                                        ),
                                                       const Icon(
                                                         Icons
                                                             .keyboard_arrow_down,
@@ -1255,6 +1248,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                             ),
                                                           )
                                                           .toList(),
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -1359,8 +1353,17 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
                                                 return InkWell(
                                                   onTap: () {
-                                                    setState(
-                                                      () => _selectedQuote = q,
+                                                    setState(() => _selectedQuote = q);
+                                                    showDialog(
+                                                      context: context,
+                                                      builder: (ctx) => Dialog(
+                                                        backgroundColor: Colors.transparent,
+                                                        insetPadding: const EdgeInsets.all(16),
+                                                        child: ConstrainedBox(
+                                                          constraints: const BoxConstraints(maxWidth: 600),
+                                                          child: _buildFeaturedQuoteCard(q, 0),
+                                                        ),
+                                                      ),
                                                     );
                                                   },
                                                   child: Container(
@@ -1457,7 +1460,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                           ),
                                                         ),
                                                         SizedBox(
-                                                          width: 80,
+                                                          width: 96,
                                                           child: Row(
                                                             mainAxisAlignment:
                                                                 MainAxisAlignment
@@ -1556,7 +1559,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
     final total =
         double.tryParse(quote['total_amount']?.toString() ?? '0') ?? 6850.0;
     final subtotal =
-        double.tryParse(quote['subtotal']?.toString() ?? '0') ?? (total / 1.22);
+        double.tryParse(quote['subtotal']?.toString() ?? '0') ?? total;
     final tax =
         double.tryParse(quote['tax_amount']?.toString() ?? '0') ??
         (total - subtotal);
@@ -1592,24 +1595,26 @@ class _QuotesScreenState extends State<QuotesScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    code,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      code,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Client: $client',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      'Client: $client',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1759,8 +1764,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'IVA (22%)',
+              Text(
+                'IVA (${subtotal > 0 ? (tax / subtotal * 100).toStringAsFixed(0) : 0}%)',
                 style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
               Text(
@@ -1824,6 +1829,25 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   label: const Text('Modifica', style: TextStyle(fontSize: 12)),
                 ),
               ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _deleteQuote(quote['id']);
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  side: BorderSide(
+                    color: Colors.redAccent.withValues(alpha: 0.3),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  minimumSize: Size.zero,
+                ),
+                child: const Icon(Icons.delete_outline, size: 16),
+              ),
             ],
           ),
         ],
@@ -1858,3 +1882,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
     );
   }
 }
+
+
+
+

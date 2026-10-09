@@ -41,12 +41,12 @@ public class Uploader {
 }
 "@
 
-$apkDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v$($version)_update.apk"
+$apkDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v$($version)_update.apk"
 $uploadUri = "https://uploads.github.com/repos/BimboMixer-Releases/BimboMixer-Releases/releases/$releaseId/assets?name=BimboMixer_update.apk"
 Write-Host "Uploading APK with C# HTTP stream..."
 [Uploader]::UploadFile($uploadUri, $apkDest, $token, "application/vnd.android.package-archive")
 
-$zipDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v$($version)_update.zip"
+$zipDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v$($version)_update.zip"
 $uploadUriZip = "https://uploads.github.com/repos/BimboMixer-Releases/BimboMixer-Releases/releases/$releaseId/assets?name=BimboMixer_PC_Portable.zip"
 Write-Host "Uploading ZIP with C# HTTP stream..."
 [Uploader]::UploadFile($uploadUriZip, $zipDest, $token, "application/zip")

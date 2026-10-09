@@ -13,7 +13,7 @@ class ClientUpdateScreen extends StatefulWidget {
 class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
   final UpdateService _updateService = UpdateService();
   final AudioPlayer _audioPlayer = AudioPlayer();
-  
+
   bool _isDownloading = false;
   double _progress = 0.0;
   String _statusMessage = "Pronto per il download";
@@ -48,7 +48,7 @@ class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
           _progress = progress;
         });
       });
-      
+
       setState(() {
         _statusMessage = "Download completato! Installazione in corso...";
       });
@@ -59,10 +59,7 @@ class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Errore: $e"),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text("Errore: $e"), backgroundColor: Colors.red),
         );
       }
     }
@@ -77,9 +74,7 @@ class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Aggiornamento Software"),
-      ),
+      appBar: AppBar(title: Text("Aggiornamento Software")),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -99,7 +94,7 @@ class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
                 textAlign: TextAlign.center,
               ),
               SizedBox(height: 48),
-              
+
               if (_isDownloading) ...[
                 LinearProgressIndicator(value: _progress),
                 SizedBox(height: 16),
@@ -112,7 +107,10 @@ class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
                   icon: Icon(Icons.download),
                   label: Text("Scarica e Installa"),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
                     textStyle: TextStyle(fontSize: 18),
                   ),
                 ),
@@ -124,5 +122,3 @@ class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
     );
   }
 }
-
-

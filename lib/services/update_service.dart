@@ -16,8 +16,8 @@ class UpdateService {
     String cleaned = version.replaceAll(RegExp(r'[^0-9.]'), '');
     List<String> parts = cleaned.split('.');
     int val = 0;
-    if (parts.isNotEmpty) val += (int.tryParse(parts[0]) ?? 0) * 10000;
-    if (parts.length > 1) val += (int.tryParse(parts[1]) ?? 0) * 100;
+    if (parts.isNotEmpty) val += (int.tryParse(parts[0]) ?? 0) * 1000000;
+    if (parts.length > 1) val += (int.tryParse(parts[1]) ?? 0) * 1000;
     if (parts.length > 2) val += (int.tryParse(parts[2]) ?? 0);
     return val;
   }
@@ -109,8 +109,17 @@ class UpdateService {
 
   Future<void> _downloadAndInstallAndroid(
       String url, Function(double) onProgress) async {
-    // Save in app-specific external directory to avoid Android scoped storage issues
-    Directory? downloadsDir = await getExternalStorageDirectory();
+    // Salviamo nella cartella pubblica Download per evitare il problema 
+    // "Il pacchetto non  valido" causato dallo Scoped Storage su Android 11+
+    Directory? downloadsDir;
+    if (Platform.isAndroid) {
+      downloadsDir = Directory('/storage/emulated/0/Download');
+      if (!downloadsDir.existsSync()) {
+        downloadsDir = await getExternalStorageDirectory();
+      }
+    } else {
+      downloadsDir = await getDownloadsDirectory();
+    }
     downloadsDir ??= await getApplicationDocumentsDirectory();
 
     final savePath = '${downloadsDir.path}/BimboMixer_update.apk';
@@ -120,20 +129,32 @@ class UpdateService {
     if (file.existsSync()) file.deleteSync();
 
     // Download con Dio
-    await _dio.download(
-      url,
-      savePath,
-      options: Options(
-        receiveTimeout: const Duration(minutes: 10),
-        sendTimeout: const Duration(minutes: 2),
-        headers: {'Accept': '*/*'},
-      ),
-      onReceiveProgress: (received, total) {
-        if (total > 0) {
-          onProgress(received / total);
-        }
-      },
-    );
+    try {
+      await _dio.download(
+        url,
+        savePath,
+        options: Options(
+          receiveTimeout: const Duration(minutes: 10),
+          sendTimeout: const Duration(minutes: 2),
+          headers: {
+            'Accept': '*/*',
+            'User-Agent': 'BimboMixer-App/1.0',
+          },
+        ),
+        onReceiveProgress: (received, total) {
+          if (total > 0) {
+            onProgress(received / total);
+          }
+        },
+      );
+    } catch (e) {
+      print('Errore Dio durante il download: $e');
+      // Fallback: apri nel browser
+      try {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } catch (_) {}
+      throw Exception('Server error o blocco download. Ti ho aperto il browser per scaricarlo manualmente!');
+    }
 
     // Verifica che il file esista e abbia dimensione ragionevole
     final downloaded = File(savePath);
@@ -171,19 +192,31 @@ class UpdateService {
     final file = File(savePath);
     if (file.existsSync()) file.deleteSync();
 
-    await _dio.download(
-      url,
-      savePath,
-      options: Options(
-        receiveTimeout: const Duration(minutes: 10),
-        sendTimeout: const Duration(minutes: 2),
-      ),
-      onReceiveProgress: (received, total) {
-        if (total > 0) {
-          onProgress(received / total);
-        }
-      },
-    );
+    try {
+      await _dio.download(
+        url,
+        savePath,
+        options: Options(
+          receiveTimeout: const Duration(minutes: 10),
+          sendTimeout: const Duration(minutes: 2),
+          headers: {
+            'Accept': '*/*',
+            'User-Agent': 'BimboMixer-App/1.0',
+          },
+        ),
+        onReceiveProgress: (received, total) {
+          if (total > 0) {
+            onProgress(received / total);
+          }
+        },
+      );
+    } catch (e) {
+      print('Errore Dio durante il download su Windows: $e');
+      try {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } catch (_) {}
+      throw Exception('Server error o blocco download. Ti ho aperto il browser per scaricarlo manualmente!');
+    }
 
     final downloaded = File(savePath);
     if (!downloaded.existsSync() || downloaded.lengthSync() < 1024) {

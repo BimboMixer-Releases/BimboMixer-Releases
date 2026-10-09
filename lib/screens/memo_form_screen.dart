@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:contabile_app/utils/currency_utils.dart';
+import 'package:contabile_app/widgets/glass_date_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:intl/intl.dart';
@@ -11,8 +13,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 class MemoFormScreen extends StatefulWidget {
   final Map<String, dynamic>? initialMemo;
+  final String? sourceTable;
 
-  const MemoFormScreen({super.key, this.initialMemo});
+  const MemoFormScreen({super.key, this.initialMemo, this.sourceTable});
 
   @override
   State<MemoFormScreen> createState() => _MemoFormScreenState();
@@ -24,84 +27,124 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
 
   bool _isUploading = false;
   List<String> _attachments = [];
-  
-  // Scelta del tipo di memo
-  String _memoType = 'MOVIMENTO'; // O 'FATTURA'
-  String _memoStatus = 'IN ATTESA'; // O 'SOLLECITARE', 'PAGATO'
-  
+
+  // Tipi principali
+  String _memoType = 'MOVIMENTO'; // MOVIMENTO o FATTURA
+  String _transactionType = 'ENTRATA'; // ENTRATA o USCITA
+  String _dateType = 'SINGOLA'; // SINGOLA o RANGE
+  String _memoStatus = 'IN ATTESA'; // IN ATTESA, PAGATO, DA SOLLECITARE
+
   // Dati relazionali
   List<Map<String, dynamic>> _customers = [];
   List<Map<String, dynamic>> _services = [];
   List<Map<String, dynamic>> _categories = [];
-  
-  // Controller Comuni
+
+  // Controllers
   String? _customerId;
-  final TextEditingController _amountCtrl = TextEditingController();
-  final TextEditingController _dateCtrl = TextEditingController(); // Data del movimento o data fattura
-  final TextEditingController _notesCtrl = TextEditingController();
   final TextEditingController _titleCtrl = TextEditingController();
+  final TextEditingController _dateCtrl = TextEditingController(); // data singola
+  final TextEditingController _fromDateCtrl = TextEditingController(); // range da
+  final TextEditingController _toDateCtrl = TextEditingController(); // range a
+  
+  final TextEditingController _invoiceNumberCtrl = TextEditingController();
+  final TextEditingController _invoiceDateCtrl = TextEditingController(); // data compilazione
+  
   final TextEditingController _clientPhoneCtrl = TextEditingController();
   final TextEditingController _clientEmailCtrl = TextEditingController();
-  
-  // Controller Categorie e Prestazioni per entrambi i tipi
+  final TextEditingController _clientVatCtrl = TextEditingController(); // PIVA/CF
+  final TextEditingController _clientAddressCtrl = TextEditingController();
+  final TextEditingController _clientSdiCtrl = TextEditingController(); // SDI/PEC
+
+  String? _paymentMethod = 'Bonifico';
   String? _categoryId;
   String? _serviceId;
-  String _paymentMethod = 'Bonifico';
-  final TextEditingController _invoiceDateCtrl = TextEditingController();
-  
-  // Controller Fattura
-  final TextEditingController _invoiceNumberCtrl = TextEditingController();
-  final TextEditingController _eventDateCtrl = TextEditingController();
+  final TextEditingController _amountCtrl = TextEditingController();
+  final TextEditingController _notesCtrl = TextEditingController();
+
+  final List<String> _vatCodes = ['22%', '10%', '4%', '0% (Esente)', '0% (Non Imponibile)'];
   String? _vatCode;
-  final List<String> _vatCodes = [
-    '22% (Ordinaria)',
-    '10% (Agevolata)',
-    '5% (Super agevolata)',
-    '4% (Minima)',
-    '0% (Esente)',
-    '2.1 (Non soggetta - Art. 15)',
-    '2.2 (Non soggetta - Altri casi)',
-    'Reverse Charge (Inversione contabile)'
-  ];
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    _initFields();
-  }
 
-  void _initFields() {
     if (widget.initialMemo != null) {
       final m = widget.initialMemo!;
-      _memoType = m['memo_type'] ?? 'MOVIMENTO';
-      _memoStatus = m['memo_status'] ?? 'IN ATTESA';
       
-      _customerId = m['customer_id']?.toString();
-      _amountCtrl.text = m['amount']?.toString() ?? '';
-      _notesCtrl.text = m['notes']?.toString() ?? '';
+      if (widget.sourceTable == 'payments') {
+        _memoType = 'MOVIMENTO';
+        _transactionType = (m['type'] == 'IN') ? 'ENTRATA' : 'USCITA';
+        _dateType = 'SINGOLA';
+        _memoStatus = (m['status'] == 'PAID' || m['status'] == 'Saldato') ? 'PAGATO' : 'IN ATTESA';
+        _titleCtrl.text = m['description']?.toString() ?? '';
+        _dateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy');
+        _customerId = m['client_id']?.toString();
+        _paymentMethod = m['payment_method']?.toString() ?? 'Bonifico';
+        _categoryId = m['category_id']?.toString();
+        if (m['amount'] != null) {
+          _amountCtrl.text = CurrencyUtils.formatNumber(double.tryParse(m['amount'].toString()) ?? 0.0);
+        }
+        if (m['attachments'] != null && m['attachments'] != '') {
+          _attachments = m['attachments'].toString().split(',');
+        }
+        return; // we can return or skip the rest
+      } else if (widget.sourceTable == 'invoices') {
+        _memoType = 'FATTURA';
+        _transactionType = 'ENTRATA';
+        _dateType = 'SINGOLA';
+        _memoStatus = (m['status'] == 'PAID' || m['status'] == 'Saldato') ? 'PAGATO' : 'IN ATTESA';
+        _titleCtrl.text = m['title']?.toString() ?? '';
+        _invoiceNumberCtrl.text = m['number']?.toString() ?? '';
+        _dateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy');
+        _invoiceDateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy');
+        _customerId = m['client_id']?.toString();
+        _vatCode = m['vat_code']?.toString();
+        _notesCtrl.text = m['notes']?.toString() ?? '';
+        if (m['amount'] != null) {
+          _amountCtrl.text = CurrencyUtils.formatNumber(double.tryParse(m['amount'].toString()) ?? 0.0);
+        }
+        if (m['attachments'] != null && m['attachments'] != '') {
+          _attachments = m['attachments'].toString().split(',');
+        }
+        return;
+      }
+
+      _memoType = m['memo_type'] ?? 'MOVIMENTO';
+      _transactionType = m['transaction_type'] ?? 'ENTRATA';
+      _dateType = m['date_type'] ?? 'SINGOLA';
+      _memoStatus = m['memo_status'] ?? 'IN ATTESA';
+
       _titleCtrl.text = m['title']?.toString() ?? '';
+      
+      _dateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy');
+      _fromDateCtrl.text = DateUtilsApp.formatDbDate(m['date_from']?.toString(), 'dd/MM/yyyy');
+      _toDateCtrl.text = DateUtilsApp.formatDbDate(m['date_to']?.toString(), 'dd/MM/yyyy');
+      
+      _invoiceNumberCtrl.text = m['invoice_number']?.toString() ?? '';
+      _invoiceDateCtrl.text = DateUtilsApp.formatDbDate(m['invoice_date']?.toString(), 'dd/MM/yyyy');
+
+      _customerId = m['customer_id']?.toString();
       _clientPhoneCtrl.text = m['client_phone']?.toString() ?? '';
       _clientEmailCtrl.text = m['client_email']?.toString() ?? '';
+      _clientVatCtrl.text = m['client_vat']?.toString() ?? '';
+      _clientAddressCtrl.text = m['client_address']?.toString() ?? '';
+      _clientSdiCtrl.text = m['client_sdi']?.toString() ?? '';
+
+      _paymentMethod = m['payment_method']?.toString() ?? 'Bonifico';
       _categoryId = m['category_id']?.toString();
       _serviceId = m['service_id']?.toString();
-      
+      if (m['amount'] != null) {
+          _amountCtrl.text = CurrencyUtils.formatNumber(double.tryParse(m['amount'].toString()) ?? 0.0);
+        } else {
+          _amountCtrl.text = '';
+        }
+      _notesCtrl.text = m['notes']?.toString() ?? '';
+      _vatCode = m['vat_code']?.toString();
+
       if (m['attachments'] != null) {
         _attachments = List<String>.from(m['attachments']);
       }
-
-      if (_memoType == 'MOVIMENTO') {
-        _dateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy'); // Verrà aggiornato in build in base al tema
-        _paymentMethod = m['payment_method'] ?? 'Bonifico';
-        _invoiceDateCtrl.text = DateUtilsApp.formatDbDate(m['invoice_date']?.toString(), 'dd/MM/yyyy');
-      } else {
-        _dateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy');
-        _invoiceNumberCtrl.text = m['number']?.toString() ?? '';
-        _eventDateCtrl.text = DateUtilsApp.formatDbDate(m['event_date']?.toString(), 'dd/MM/yyyy');
-        _vatCode = m['vat_code']?.toString();
-      }
-    } else {
-      _dateCtrl.text = DateUtilsApp.formatDbDate(DateTime.now().toIso8601String().split('T').first, 'dd/MM/yyyy');
     }
   }
 
@@ -113,7 +156,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
       _customers = customers;
       _services = services;
       _categories = categories;
-      
+
       if (_customerId != null && !_customers.any((c) => c['id'].toString() == _customerId)) {
         _customerId = null;
       }
@@ -123,53 +166,56 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
       if (_categoryId != null && !_categories.any((c) => c['id'].toString() == _categoryId)) {
         _categoryId = null;
       }
-      if (_vatCode != null && !_vatCodes.contains(_vatCode)) {
-        _vatCode = null;
-      }
     });
   }
 
-  Future<void> _selectDate(TextEditingController controller) async {
-    final theme = Provider.of<AppThemeProvider>(context, listen: false);
+  Future<void> _selectDate(TextEditingController ctrl) async {
+    final theme = context.read<AppThemeProvider>();
     DateTime initial = DateTime.now();
-    if (controller.text.isNotEmpty) {
+    if (ctrl.text.isNotEmpty) {
       try {
-        initial = DateFormat(theme.dateFormat).parseStrict(controller.text);
+        initial = DateFormat(theme.dateFormat).parseStrict(ctrl.text);
       } catch (_) {}
     }
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await GlassDatePicker.show(context,
       initialDate: initial,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      builder: (context, child) => Theme(
-        data: ThemeData.dark().copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: Colors.blueAccent,
-            surface: Color(0xFF1E1E24),
-          ),
-        ),
-        child: child!,
-      ),
     );
     if (picked != null) {
       setState(() {
-        controller.text = DateFormat(theme.dateFormat).format(picked);
+        ctrl.text = DateFormat(theme.dateFormat).format(picked);
       });
     }
   }
 
-  Future<void> _pickAttachment(bool fromCamera) async {
-    final file = fromCamera 
-      ? await _attachmentService.pickImageFromCamera(context)
-      : await _attachmentService.pickFile(context);
-      
-    if (file != null) {
-      setState(() => _isUploading = true);
-      final url = await _attachmentService.uploadAttachment(file, 'attachments/memo_events');
-      if (url != null) {
-        setState(() => _attachments.add(url));
+  Future<void> _pickAttachment(bool isCamera) async {
+    setState(() => _isUploading = true);
+    try {
+      File? file;
+      if (isCamera) {
+         file = await _attachmentService.pickImageFromCamera(context);
+      } else {
+         if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+            file = await _attachmentService.pickFile(context);
+         } else {
+            file = await _attachmentService.pickImageFromGallery(context);
+         }
       }
+      
+      if (file != null) {
+        String? url = await _attachmentService.uploadAttachment(file, 'memos');
+        if (url != null) {
+          setState(() {
+            _attachments.add(url);
+          });
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore durante l\'allegato: $e')),
+      );
+    } finally {
       setState(() => _isUploading = false);
     }
   }
@@ -182,41 +228,225 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
   }
 
   Future<void> _saveMemo() async {
-    final theme = Provider.of<AppThemeProvider>(context, listen: false);
+    final theme = context.read<AppThemeProvider>();
+    if (_titleCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inserisci un titolo per il memo')),
+      );
+      return;
+    }
+
     final data = <String, dynamic>{
       'memo_type': _memoType,
+      'transaction_type': _transactionType,
+      'date_type': _dateType,
       'memo_status': _memoStatus,
-      'customer_id': _customerId,
-      'amount': double.tryParse(_amountCtrl.text.replaceAll(',', '.')) ?? 0.0,
-      'date': DateUtilsApp.toDbDate(_dateCtrl.text, theme.dateFormat),
-      'notes': _notesCtrl.text,
       'title': _titleCtrl.text,
+      
+      'date': DateUtilsApp.toDbDate(_dateCtrl.text, theme.dateFormat),
+      'date_from': DateUtilsApp.toDbDate(_fromDateCtrl.text, theme.dateFormat),
+      'date_to': DateUtilsApp.toDbDate(_toDateCtrl.text, theme.dateFormat),
+      
+      'invoice_number': _invoiceNumberCtrl.text,
+      'invoice_date': DateUtilsApp.toDbDate(_invoiceDateCtrl.text, theme.dateFormat),
+      
+      'customer_id': _customerId,
       'client_phone': _clientPhoneCtrl.text,
       'client_email': _clientEmailCtrl.text,
+      'client_vat': _clientVatCtrl.text,
+      'client_address': _clientAddressCtrl.text,
+      'client_sdi': _clientSdiCtrl.text,
+
+      'payment_method': _paymentMethod,
       'category_id': _categoryId,
       'service_id': _serviceId,
+      'amount': CurrencyUtils.parseCurrency(_amountCtrl.text),
+      'notes': _notesCtrl.text,
+      'vat_code': _vatCode,
       'attachments': _attachments,
     };
 
-    if (_memoType == 'MOVIMENTO') {
-      data['payment_method'] = _paymentMethod;
-      data['invoice_date'] = DateUtilsApp.toDbDate(_invoiceDateCtrl.text, theme.dateFormat);
-    } else {
-      data['number'] = _invoiceNumberCtrl.text;
-      data['event_date'] = DateUtilsApp.toDbDate(_eventDateCtrl.text, theme.dateFormat);
-      data['vat_code'] = _vatCode;
-    }
+    try {
+      if (widget.sourceTable == 'payments') {
+        final paymentData = <String, dynamic>{
+          'id': widget.initialMemo!['id'],
+          'type': _transactionType == 'ENTRATA' ? 'IN' : 'OUT',
+          'amount': data['amount'],
+          'date': data['date'],
+          'client_id': data['customer_id'],
+          'category_id': data['category_id'],
+          'payment_method': data['payment_method'],
+          'description': data['title'],
+          'status': _memoStatus == 'PAGATO' ? 'PAID' : 'PENDING',
+          'attachments': data['attachments'] is List ? (data['attachments'] as List).join(',') : data['attachments'],
+        };
+        await _dbHelper.updatePayment(paymentData);
+        if (mounted) Navigator.pop(context, true);
+        return;
+      } else if (widget.sourceTable == 'invoices') {
+        final invoiceData = <String, dynamic>{
+          'id': widget.initialMemo!['id'],
+          'amount': data['amount'],
+          'date': data['date'],
+          'status': _memoStatus == 'PAGATO' ? 'PAID' : 'PENDING',
+          'client_id': data['customer_id'],
+          'category_id': data['category_id'],
+          'number': data['invoice_number'],
+          'notes': data['notes'],
+          'title': data['title'],
+          'vat_code': data['vat_code'],
+          'attachments': data['attachments'] is List ? (data['attachments'] as List).join(',') : data['attachments'],
+        };
+        await _dbHelper.updateInvoice(invoiceData);
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
 
-    if (widget.initialMemo != null) {
-      data['id'] = widget.initialMemo!['id'];
-      await _dbHelper.updateMemoEvent(data);
-    } else {
-      await _dbHelper.insertMemoEvent(data);
+      if (_memoStatus == 'PAGATO') {
+        // TRASFERIMENTO AUTOMATICO
+        if (_memoType == 'MOVIMENTO') {
+          // Prepara pagamento
+          final paymentData = <String, dynamic>{
+            'type': _transactionType == 'ENTRATA' ? 'IN' : 'OUT',
+            'amount': data['amount'],
+            'date': _dateType == 'SINGOLA' ? data['date'] : data['date_from'], // usa date_from se range
+            'customer_id': data['customer_id'],
+            'category_id': data['category_id'],
+            'service_id': data['service_id'],
+            'payment_method': data['payment_method'],
+            'notes': data['notes'],
+            'title': data['title'],
+            'attachments': data['attachments'],
+          };
+          await _dbHelper.insertPayment(paymentData);
+        } else {
+          // Prepara fattura
+          final invoiceData = <String, dynamic>{
+            'id': data['invoice_number'].toString().isNotEmpty ? data['invoice_number'] : DateTime.now().millisecondsSinceEpoch.toString(),
+            'amount': data['amount'],
+            'date': data['invoice_date'].toString().isNotEmpty ? data['invoice_date'] : DateUtilsApp.toDbDate(DateTime.now().toIso8601String(), theme.dateFormat),
+            'status': 'PAID', // Invoices uses PAID
+            'customer_id': data['customer_id'],
+            'category_id': data['category_id'],
+            'service_id': data['service_id'],
+            'notes': data['notes'],
+            'title': data['title'],
+            'attachments': data['attachments'],
+          };
+          // Le fatture sono attualmente sempre trattate come ENTRATE dal calculation engine.
+          // In futuro si puo' aggiungere type: OUT alle fatture passive, per ora lo inseriamo:
+          invoiceData['type'] = _transactionType == 'ENTRATA' ? 'IN' : 'OUT';
+          
+          await _dbHelper.insertInvoice(invoiceData);
+        }
+        
+        // Elimina il memo se esisteva (aggiornamento di uno esistente e segnato come pagato)
+        if (widget.initialMemo != null) {
+          await _dbHelper.deleteMemoEvent(widget.initialMemo!['id']);
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Memo PAGATO e trasferito in ${_memoType == 'MOVIMENTO' ? 'Movimenti' : 'Fatture'}!')),
+          );
+          Navigator.pop(context, true);
+        }
+      } else {
+        // SALVATAGGIO NORMALE
+        if (widget.initialMemo != null) {
+          data['id'] = widget.initialMemo!['id'];
+          await _dbHelper.updateMemoEvent(data);
+        } else {
+          await _dbHelper.insertMemoEvent(data);
+        }
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore durante il salvataggio: $e')),
+        );
+      }
     }
-    
-    if (mounted) {
-      Navigator.pop(context, true);
-    }
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _dateCtrl.dispose();
+    _fromDateCtrl.dispose();
+    _toDateCtrl.dispose();
+    _invoiceNumberCtrl.dispose();
+    _invoiceDateCtrl.dispose();
+    _clientPhoneCtrl.dispose();
+    _clientEmailCtrl.dispose();
+    _clientVatCtrl.dispose();
+    _clientAddressCtrl.dispose();
+    _clientSdiCtrl.dispose();
+    _amountCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget _buildToggleRow({
+    required String option1,
+    required String option2,
+    required String selected,
+    required Function(String) onChanged,
+    required Color activeColor,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(option1),
+              child: Container(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected == option1 ? activeColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  option1,
+                  style: TextStyle(
+                    color: selected == option1 ? Colors.white : Colors.white54,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(option2),
+              child: Container(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected == option2 ? activeColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  option2,
+                  style: TextStyle(
+                    color: selected == option2 ? Colors.white : Colors.white54,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -226,380 +456,433 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(widget.initialMemo == null ? 'Nuovo Memo' : 'Modifica Memo', style: TextStyle(color: Colors.white)),
+        title: Text(
+          widget.initialMemo != null ? 'Modifica Programmazione' : 'Nuova Programmazione',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.check, color: Colors.blueAccent),
-            onPressed: _isUploading ? null : _saveMemo,
-          )
-        ],
+        iconTheme: IconThemeData(color: Colors.white),
       ),
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Card(
-            elevation: 4,
-            color: theme.cardColor,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // --- Toggle Tipo Memo ---
-                  if (widget.initialMemo == null)
-                    Center(
-                      child: SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: 'MOVIMENTO', label: Text('Movimento')),
-                          ButtonSegment(value: 'FATTURA', label: Text('Fattura')),
-                        ],
-                        selected: {_memoType},
-                        onSelectionChanged: (Set<String> newSelection) {
-                          setState(() {
-                            _memoType = newSelection.first;
-                          });
-                        },
-                        style: ButtonStyle(
-                          backgroundColor: WidgetStateProperty.resolveWith<Color>(
-                            (Set<WidgetState> states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return Colors.blueAccent.withValues(alpha: 0.3);
-                              }
-                              return Colors.transparent;
-                            },
-                          ),
-                          foregroundColor: WidgetStateProperty.resolveWith<Color>(
-                            (Set<WidgetState> states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return Colors.blueAccent;
-                              }
-                              return Colors.white54;
-                            },
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Text(
-                        'MEMO $_memoType',
-                        style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                    ),
-                    
-                  SizedBox(height: 24),
-
-                  // --- Campi Comuni ---
-                  TextField(
-                    controller: _titleCtrl,
-                    style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Titolo Memo (opzionale)',
-                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  
-                  InkWell(
-                    onTap: () => _selectDate(_dateCtrl),
-                    child: IgnorePointer(
-                      child: TextField(
-                        controller: _dateCtrl,
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: _memoType == 'MOVIMENTO' ? 'Data Pagamento' : 'Data Fattura',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  
-                  DropdownSearch<Map<String, dynamic>>(
-                    compareFn: (Map<String, dynamic> a, Map<String, dynamic> b) => a['id'] == b['id'],
-                    selectedItem: _customerId != null 
-                      ? _customers.firstWhere((c) => c['id'].toString() == _customerId, orElse: () => {'id': '', 'name': 'Sconosciuto'})
-                      : null,
-                    items: (filter, _) => _customers,
-                    itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                    popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), 
-                      showSearchBox: true,
-                      searchFieldProps: TextFieldProps(
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Cerca cliente...',
-                          hintStyle: TextStyle(color: Colors.white54),
-                        ),
-                      ),
-                    ),
-                    decoratorProps: DropDownDecoratorProps(
-                      baseStyle: TextStyle(color: Colors.black),
-                      decoration: InputDecoration(
-                        labelText: 'Cliente',
-                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                      ),
-                    ),
-                    onSelected: (Map<String, dynamic>? val) {
-                      setState(() {
-                        _customerId = val?['id']?.toString();
-                        if (val != null) {
-                          if (val['phone'] != null && val['phone'].toString().isNotEmpty) {
-                            _clientPhoneCtrl.text = val['phone'].toString();
-                          }
-                          if (val['email'] != null && val['email'].toString().isNotEmpty) {
-                            _clientEmailCtrl.text = val['email'].toString();
-                          }
-                        }
-                      });
-                    },
-                  ),
-                  SizedBox(height: 16),
-                  
-                  TextField(
-                    controller: _clientPhoneCtrl,
-                    style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Cellulare Cliente',
-                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  
-                  TextField(
-                    controller: _clientEmailCtrl,
-                    style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Email Cliente',
-                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  
-                  DropdownSearch<Map<String, dynamic>>(
-                    compareFn: (Map<String, dynamic> a, Map<String, dynamic> b) => a['id'] == b['id'],
-                    selectedItem: _categoryId != null 
-                      ? _categories.firstWhere((c) => c['id'].toString() == _categoryId, orElse: () => {'id': '', 'name': 'Sconosciuto'})
-                      : null,
-                    items: (filter, _) => _categories,
-                    itemAsString: (Map<String, dynamic> c) => c['name'] ?? '',
-                    popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), showSearchBox: true),
-                    decoratorProps: DropDownDecoratorProps(
-                      baseStyle: TextStyle(color: Colors.black),
-                      decoration: InputDecoration(
-                        labelText: 'Categoria',
-                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                      ),
-                    ),
-                    onSelected: (Map<String, dynamic>? val) {
-                      setState(() => _categoryId = val?['id']?.toString());
-                    },
-                  ),
-                  SizedBox(height: 16),
-                  
-                  DropdownSearch<Map<String, dynamic>>(
-                    compareFn: (Map<String, dynamic> a, Map<String, dynamic> b) => a['id'] == b['id'],
-                    selectedItem: _serviceId != null 
-                      ? _services.firstWhere((s) => s['id'].toString() == _serviceId, orElse: () => {'id': '', 'name': 'Sconosciuto'})
-                      : null,
-                    items: (filter, _) => _services,
-                    itemAsString: (Map<String, dynamic> s) => s['name'] ?? '',
-                    popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), showSearchBox: true),
-                    decoratorProps: DropDownDecoratorProps(
-                      baseStyle: TextStyle(color: Colors.black),
-                      decoration: InputDecoration(
-                        labelText: 'Tipo Servizio',
-                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                      ),
-                    ),
-                    onSelected: (Map<String, dynamic>? val) {
-                      setState(() => _serviceId = val?['id']?.toString());
-                    },
-                  ),
-                  SizedBox(height: 16),
-                  
-                  TextField(
-                    controller: _amountCtrl,
-                    style: TextStyle(color: Colors.white),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: 'Importo',
-                      prefixText: '€ ',
-                      prefixStyle: TextStyle(color: Colors.white),
-                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  
-                  // --- Campi Specifici Movimento ---
-                  if (_memoType == 'MOVIMENTO') ...[
-                    DropdownSearch<String>(
-                        compareFn: (a, b) => a == b,
-                      selectedItem: _paymentMethod,
-                      items: (filter, _) => ['Bonifico', 'Contanti', 'Assegno', 'POS', 'Altro'],
-                      decoratorProps: DropDownDecoratorProps(
-                        baseStyle: TextStyle(color: Colors.black),
-                        decoration: InputDecoration(
-                          labelText: 'Metodo di Pagamento',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                        ),
-                      ),
-                      onSelected: (val) => setState(() => _paymentMethod = val ?? 'Bonifico'),
+      body: Container(
+        color: theme.backgroundMain,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              color: theme.cardColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Tipo Documento
+                    Text('TIPO DOCUMENTO', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    _buildToggleRow(
+                      option1: 'MOVIMENTO',
+                      option2: 'FATTURA',
+                      selected: _memoType,
+                      activeColor: Colors.blueAccent,
+                      onChanged: (val) => setState(() => _memoType = val),
                     ),
                     SizedBox(height: 16),
-                    InkWell(
-                      onTap: () => _selectDate(_invoiceDateCtrl),
-                      child: IgnorePointer(
-                        child: TextField(
-                          controller: _invoiceDateCtrl,
-                          style: TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            labelText: 'Data Fattura Relativa (Opzionale)',
-                            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                          ),
-                        ),
-                      ),
+                    
+                    // Direzione
+                    Text('DIREZIONE TRANSAZIONE', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    _buildToggleRow(
+                      option1: 'ENTRATA',
+                      option2: 'USCITA',
+                      selected: _transactionType,
+                      activeColor: _transactionType == 'ENTRATA' ? Colors.teal : Colors.deepOrangeAccent,
+                      onChanged: (val) => setState(() => _transactionType = val),
                     ),
-                  ],
+                    SizedBox(height: 16),
 
-                  // --- Campi Specifici Fattura ---
-                  if (_memoType == 'FATTURA') ...[
-                    TextField(
-                      controller: _invoiceNumberCtrl,
+                    // Stato
+                    Text('STATO', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _memoStatus,
+                      dropdownColor: theme.cardColor,
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        labelText: 'Numero Fattura (es. FPA 2/26)',
-                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+                        filled: true,
+                        fillColor: Colors.white10,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
+                      items: ['IN ATTESA', 'PAGATO', 'DA SOLLECITARE'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      onChanged: (val) => setState(() => _memoStatus = val!),
                     ),
-                    SizedBox(height: 16),
-                    DropdownSearch<String>(
-                        compareFn: (a, b) => a == b,
-                      selectedItem: _vatCode,
-                      items: (filter, _) => _vatCodes,
-                      popupProps: PopupProps.menu(menuProps: MenuProps(backgroundColor: Theme.of(context).canvasColor), showSearchBox: true),
-                      decoratorProps: DropDownDecoratorProps(
-                        baseStyle: TextStyle(color: Colors.black),
-                        decoration: InputDecoration(
-                          labelText: 'Codice IVA',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                        ),
-                      ),
-                      onSelected: (val) => setState(() => _vatCode = val),
-                    ),
-                    SizedBox(height: 16),
-                    InkWell(
-                      onTap: () => _selectDate(_eventDateCtrl),
-                      child: IgnorePointer(
-                        child: TextField(
-                          controller: _eventDateCtrl,
-                          style: TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            labelText: 'Data Evento (opzionale)',
-                            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                    SizedBox(height: 24),
 
-                  SizedBox(height: 16),
-                  TextField(
-                    controller: _notesCtrl,
-                    style: TextStyle(color: Colors.white),
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      labelText: 'Note Evento',
-                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+                    // Titolo
+                    TextField(
+                      controller: _titleCtrl,
+                      style: TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Titolo (visualizzato all\'esterno)',
+                        labelStyle: TextStyle(color: Colors.white54),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 24),
-                  
-                  // --- Allegati ---
-                  Text('Allegati (Foto/File)',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontWeight: FontWeight.bold, fontSize: 14)),
-                  SizedBox(height: 8),
-                  if (_attachments.isNotEmpty)
-                    ..._attachments.asMap().entries.map((entry) {
-                      int idx = entry.key;
-                      String url = entry.value;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white10,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
+                    SizedBox(height: 16),
+
+                    // Data Section
+                    if (_memoType == 'MOVIMENTO') ...[
+                      Text('TIPO DATA PAGAMENTO', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 8),
+                      _buildToggleRow(
+                        option1: 'SINGOLA',
+                        option2: 'RANGE',
+                        selected: _dateType,
+                        activeColor: Colors.purpleAccent,
+                        onChanged: (val) => setState(() => _dateType = val),
+                      ),
+                      SizedBox(height: 16),
+                      if (_dateType == 'SINGOLA')
+                        InkWell(
+                          onTap: () => _selectDate(_dateCtrl),
+                          child: IgnorePointer(
+                            child: TextField(
+                              controller: _dateCtrl,
+                              style: TextStyle(color: Colors.white),
+                              decoration: InputDecoration(
+                                labelText: 'Data Pagamento',
+                                labelStyle: TextStyle(color: Colors.white54),
+                                icon: Icon(Icons.calendar_today, color: Colors.white54),
+                              ),
+                            ),
+                          ),
+                        )
+                      else ...[
+                        Row(
                           children: [
-                            Icon(Icons.attachment, color: Colors.blueAccent, size: 20),
-                            SizedBox(width: 8),
                             Expanded(
                               child: InkWell(
-                                onTap: () => _launchUrl(url),
-                                child: Text(
-                                  'Apri Allegato ${idx + 1}',
-                                  style: TextStyle(
-                                      color: Colors.blueAccent,
-                                      decoration: TextDecoration.underline),
+                                onTap: () => _selectDate(_fromDateCtrl),
+                                child: IgnorePointer(
+                                  child: TextField(
+                                    controller: _fromDateCtrl,
+                                    style: TextStyle(color: Colors.white),
+                                    decoration: InputDecoration(
+                                      labelText: 'Da data',
+                                      labelStyle: TextStyle(color: Colors.white54),
+                                      icon: Icon(Icons.calendar_today, color: Colors.white54),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                            IconButton(
-                              icon: Icon(Icons.download, color: Colors.greenAccent, size: 20),
-                              tooltip: 'Scarica in locale',
-                              onPressed: () => _attachmentService.downloadAttachment(context, url),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => _selectDate(_toDateCtrl),
+                                child: IgnorePointer(
+                                  child: TextField(
+                                    controller: _toDateCtrl,
+                                    style: TextStyle(color: Colors.white),
+                                    decoration: InputDecoration(
+                                      labelText: 'A data',
+                                      labelStyle: TextStyle(color: Colors.white54),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                            IconButton(
-                              icon: Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                              onPressed: () {
-                                setState(() {
-                                  _attachments.removeAt(idx);
-                                });
-                              },
-                            )
                           ],
                         ),
-                      );
-                    }),
-                  if (_isUploading)
-                    Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
-                    ),
-                  SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      if (Platform.isAndroid || Platform.isIOS)
-                        IconButton(
-                          icon: Icon(Icons.camera_alt, color: Colors.white.withValues(alpha: 0.54)),
-                          onPressed: () => _pickAttachment(true),
+                      ],
+                    ] else ...[
+                      // Se FATTURA
+                      TextField(
+                        controller: _invoiceNumberCtrl,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Numero Fattura',
+                          labelStyle: TextStyle(color: Colors.white54),
+                          icon: Icon(Icons.receipt, color: Colors.white54),
                         ),
-                      IconButton(
-                        icon: Icon(Icons.image, color: Colors.white.withValues(alpha: 0.54)),
-                        onPressed: () => _pickAttachment(false),
+                      ),
+                      SizedBox(height: 16),
+                      InkWell(
+                        onTap: () => _selectDate(_invoiceDateCtrl),
+                        child: IgnorePointer(
+                          child: TextField(
+                            controller: _invoiceDateCtrl,
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Data di compilazione',
+                              labelStyle: TextStyle(color: Colors.white54),
+                              icon: Icon(Icons.calendar_today, color: Colors.white54),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
-                  ),
-                  
-                  SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isUploading ? null : _saveMemo,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    SizedBox(height: 24),
+
+                    // Cliente e Dati
+                    Text('DATI CLIENTE / CONTROPARTE', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    DropdownSearch<String>(
+                      compareFn: (a, b) => a == b,
+                      selectedItem: _customerId != null
+                          ? _customers.firstWhere((c) => c['id'].toString() == _customerId, orElse: () => {'id': '', 'name': 'Sconosciuto'})['name']?.toString()
+                          : null,
+                      items: (filter, _) => _customers.map((c) => c['name']?.toString() ?? '').toList(),
+                      popupProps: PopupProps.menu(
+                          menuProps: MenuProps(backgroundColor: Color(0xFF13132B)),
+                          showSearchBox: true,
+                          searchFieldProps: TextFieldProps(
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Cerca...',
+                              hintStyle: TextStyle(color: Colors.white54),
+                            ),
+                          ),
+                        ),
+                        decoratorProps: DropDownDecoratorProps(
+                        baseStyle: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Seleziona Cliente Esistente (Opzionale)',
+                          labelStyle: TextStyle(color: Colors.white54),
+                          filled: true,
+                          fillColor: Colors.white10,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        ),
                       ),
-                      child: Text('Salva Memo', style: TextStyle(color: Colors.white, fontSize: 16)),
+                      onSelected: (String? name) {
+                        if (name != null) {
+                          final c = _customers.firstWhere((cust) => cust['name'] == name);
+                          setState(() {
+                            _customerId = c['id']?.toString();
+                            _clientPhoneCtrl.text = c['phone']?.toString() ?? _clientPhoneCtrl.text;
+                            _clientEmailCtrl.text = c['email']?.toString() ?? _clientEmailCtrl.text;
+                            _clientVatCtrl.text = c['vat_number']?.toString() ?? _clientVatCtrl.text;
+                            _clientAddressCtrl.text = c['address']?.toString() ?? _clientAddressCtrl.text;
+                            _clientSdiCtrl.text = c['sdi_code']?.toString() ?? _clientSdiCtrl.text;
+                          });
+                        }
+                      },
                     ),
-                  ),
-                ],
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _clientPhoneCtrl,
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(labelText: 'Cellulare', labelStyle: TextStyle(color: Colors.white54)),
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: _clientEmailCtrl,
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: Colors.white54)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_memoType == 'FATTURA') ...[
+                      SizedBox(height: 16),
+                      TextField(
+                        controller: _clientVatCtrl,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(labelText: 'Partita IVA / CF', labelStyle: TextStyle(color: Colors.white54)),
+                      ),
+                      SizedBox(height: 16),
+                      TextField(
+                        controller: _clientAddressCtrl,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(labelText: 'Indirizzo Completo', labelStyle: TextStyle(color: Colors.white54)),
+                      ),
+                      SizedBox(height: 16),
+                      TextField(
+                        controller: _clientSdiCtrl,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(labelText: 'Codice SDI / PEC', labelStyle: TextStyle(color: Colors.white54)),
+                      ),
+                    ],
+                    SizedBox(height: 24),
+
+                    // Metodo, Categoria, Servizio
+                    DropdownSearch<String>(
+                      compareFn: (a, b) => a == b,
+                      selectedItem: _paymentMethod,
+                      items: (filter, _) => ['Bonifico', 'Contanti', 'Carta di Credito', 'Assegno', 'Altro'],
+                      popupProps: PopupProps.menu(
+                          menuProps: MenuProps(backgroundColor: Color(0xFF13132B)),
+                          showSearchBox: true,
+                          searchFieldProps: TextFieldProps(
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Cerca...',
+                              hintStyle: TextStyle(color: Colors.white54),
+                            ),
+                          ),
+                        ),
+                        decoratorProps: DropDownDecoratorProps(
+                        baseStyle: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Metodo di Pagamento',
+                          labelStyle: TextStyle(color: Colors.white54),
+                          filled: true,
+                          fillColor: Colors.white10,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      onSelected: (val) => setState(() => _paymentMethod = val),
+                    ),
+                    SizedBox(height: 16),
+                    DropdownSearch<String>(
+                      compareFn: (a, b) => a == b,
+                      selectedItem: _categoryId != null
+                          ? _categories.firstWhere((c) => c['id'].toString() == _categoryId, orElse: () => {'name': ''})['name']?.toString()
+                          : null,
+                      items: (filter, _) => _categories.map((c) => c['name']?.toString() ?? '').toList(),
+                      popupProps: PopupProps.menu(
+                          menuProps: MenuProps(backgroundColor: Color(0xFF13132B)),
+                          showSearchBox: true,
+                          searchFieldProps: TextFieldProps(
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Cerca...',
+                              hintStyle: TextStyle(color: Colors.white54),
+                            ),
+                          ),
+                        ),
+                        decoratorProps: DropDownDecoratorProps(
+                        baseStyle: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Categoria',
+                          labelStyle: TextStyle(color: Colors.white54),
+                          filled: true,
+                          fillColor: Colors.white10,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      onSelected: (name) {
+                        final c = _categories.firstWhere((cat) => cat['name'] == name);
+                        setState(() => _categoryId = c['id']?.toString());
+                      },
+                    ),
+                    SizedBox(height: 16),
+                    DropdownSearch<String>(
+                      compareFn: (a, b) => a == b,
+                      selectedItem: _serviceId != null
+                          ? _services.firstWhere((s) => s['id'].toString() == _serviceId, orElse: () => {'name': ''})['name']?.toString()
+                          : null,
+                      items: (filter, _) => _services.map((s) => s['name']?.toString() ?? '').toList(),
+                      popupProps: PopupProps.menu(
+                          menuProps: MenuProps(backgroundColor: Color(0xFF13132B)),
+                          showSearchBox: true,
+                          searchFieldProps: TextFieldProps(
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Cerca...',
+                              hintStyle: TextStyle(color: Colors.white54),
+                            ),
+                          ),
+                        ),
+                        decoratorProps: DropDownDecoratorProps(
+                        baseStyle: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Tipo Servizio',
+                          labelStyle: TextStyle(color: Colors.white54),
+                          filled: true,
+                          fillColor: Colors.white10,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      onSelected: (name) {
+                        final s = _services.firstWhere((srv) => srv['name'] == name);
+                        setState(() => _serviceId = s['id']?.toString());
+                      },
+                    ),
+                    SizedBox(height: 24),
+
+                    // Importo e Note
+                    TextField(
+                      controller: _amountCtrl,
+                      style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Importo',
+                        prefixText: '€ ',
+                        prefixStyle: TextStyle(color: Colors.white, fontSize: 24),
+                        labelStyle: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: _notesCtrl,
+                      style: TextStyle(color: Colors.white),
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'Note',
+                        labelStyle: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+
+                    // Allegati
+                    Text('ALLEGATI', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    if (_attachments.isNotEmpty)
+                      ..._attachments.asMap().entries.map((entry) {
+                        int idx = entry.key;
+                        String url = entry.value;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
+                          child: Row(
+                            children: [
+                              Icon(Icons.attachment, color: Colors.blueAccent, size: 20),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _launchUrl(url),
+                                  child: Text('Allegato ${idx + 1}', style: TextStyle(color: Colors.blueAccent, decoration: TextDecoration.underline)),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                onPressed: () => setState(() => _attachments.removeAt(idx)),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    if (_isUploading) Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator())),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        if (Platform.isAndroid || Platform.isIOS)
+                          IconButton(icon: Icon(Icons.camera_alt, color: Colors.white54), onPressed: () => _pickAttachment(true)),
+                        IconButton(icon: Icon(Icons.image, color: Colors.white54), onPressed: () => _pickAttachment(false)),
+                      ],
+                    ),
+
+                    SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _isUploading ? null : _saveMemo,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text('Salva', style: TextStyle(color: Colors.white, fontSize: 16)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -608,6 +891,4 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
     );
   }
 }
-
-
 

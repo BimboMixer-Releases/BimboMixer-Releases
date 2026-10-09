@@ -9,10 +9,11 @@ class SecurityCenterScreen extends StatefulWidget {
   State<SecurityCenterScreen> createState() => _SecurityCenterScreenState();
 }
 
-class _SecurityCenterScreenState extends State<SecurityCenterScreen> with SingleTickerProviderStateMixin {
+class _SecurityCenterScreenState extends State<SecurityCenterScreen>
+    with SingleTickerProviderStateMixin {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   late TabController _tabController;
-  
+
   List<Map<String, dynamic>> _accessLogs = [];
   List<Map<String, dynamic>> _auditLogs = [];
   bool _isLoading = true;
@@ -37,11 +38,16 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen> with Single
 
   Color _getSeverityColor(String severity) {
     switch (severity.toUpperCase()) {
-      case 'CRITICAL': return Colors.red;
-      case 'HIGH': return Colors.orange;
-      case 'WARNING': return Colors.amber;
-      case 'INFO': return Colors.blue;
-      default: return Colors.grey;
+      case 'CRITICAL':
+        return Colors.red;
+      case 'HIGH':
+        return Colors.orange;
+      case 'WARNING':
+        return Colors.amber;
+      case 'INFO':
+        return Colors.blue;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -69,21 +75,13 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen> with Single
             Tab(icon: Icon(Icons.login), text: 'Accessi Recenti'),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: _loadData,
-          )
-        ],
+        actions: [IconButton(icon: Icon(Icons.refresh), onPressed: _loadData)],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabController,
-              children: [
-                _buildAuditLogList(),
-                _buildAccessLogList(),
-              ],
+              children: [_buildAuditLogList(), _buildAccessLogList()],
             ),
     );
   }
@@ -114,7 +112,9 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen> with Single
           elevation: 2,
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: _getSeverityColor(severity).withValues(alpha: 0.2),
+              backgroundColor: _getSeverityColor(
+                severity,
+              ).withValues(alpha: 0.2),
               child: Icon(
                 severity == 'CRITICAL' ? Icons.warning : Icons.info,
                 color: _getSeverityColor(severity),
@@ -174,7 +174,9 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen> with Single
         return Card(
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: isSuccess ? Colors.green[100] : Colors.red[100],
@@ -197,6 +199,3 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen> with Single
     );
   }
 }
-
-
-

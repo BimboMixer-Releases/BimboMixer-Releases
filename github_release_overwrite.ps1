@@ -45,8 +45,8 @@ $releaseId = $releaseResponse.id
 Write-Host "Created release with ID: $releaseId"
 
 # Local paths
-$apkDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v$($version)_update.apk"
-$zipDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\BimboMixer_v$($version)_update.zip"
+$apkDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v$($version)_update.apk"
+$zipDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\BimboMixer_v$($version)_update.zip"
 
 # Upload Assets
 function Upload-Asset {

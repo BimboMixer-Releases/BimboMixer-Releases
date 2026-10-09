@@ -1,5 +1,5 @@
 $version = "1.8.47"
-$desktop = "$env:USERPROFILE\Desktop\CONTABILE APP Bimbomixer"
+$desktop = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer"
 $apkName = "Contabile_Bimbomixer_v$version.apk"
 $zipName = "Contabile_Bimbomixer_Windows_v$version.zip"
 

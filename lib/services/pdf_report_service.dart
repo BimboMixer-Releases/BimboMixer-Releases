@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:open_filex/open_filex.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -16,15 +19,16 @@ class PDFReportService {
     Map<String, String>? legend,
     Map<int, pw.TableColumnWidth>? columnWidths,
   }) async {
-    final font = await PdfGoogleFonts.robotoRegular();
-    final boldFont = await PdfGoogleFonts.robotoBold();
+    pw.ThemeData? pdfTheme;
+    try {
+      final font = await PdfGoogleFonts.robotoRegular();
+      final boldFont = await PdfGoogleFonts.robotoBold();
+      pdfTheme = pw.ThemeData.withFont(base: font, bold: boldFont);
+    } catch (_) {
+      // Offline: usa i font PDF di default
+    }
 
-    final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: font,
-        bold: boldFont,
-      ),
-    );
+    final pdf = pw.Document(theme: pdfTheme);
     
     final dateFormat = DateFormat('$dateFormatString HH:mm');
     final String currentDateTime = dateFormat.format(DateTime.now());
@@ -109,9 +113,16 @@ class PDFReportService {
     final String safeTitle = title.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     final String filename = 'Report_$safeTitle.pdf';
 
-    await Printing.sharePdf(
-      bytes: await pdf.save(),
-      filename: filename,
-    );
+    final bytes = await pdf.save();
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '.';
+      final dir = Directory('$home/Downloads');
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(bytes, flush: true);
+      await OpenFilex.open(file.path);
+    } else {
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+    }
   }
 }

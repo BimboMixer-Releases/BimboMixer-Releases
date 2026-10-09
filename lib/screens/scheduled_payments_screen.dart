@@ -1,3 +1,4 @@
+import 'package:contabile_app/utils/currency_utils.dart';
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import 'package:provider/provider.dart';
@@ -61,10 +62,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
               await _dbHelper.deleteScheduledPayment(id);
               _loadScheduledPayments();
             },
-            child: Text(
-              'Elimina',
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            child: Text('Elimina', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -76,7 +74,10 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E24),
-        title: Text('Conferma Pagamento', style: TextStyle(color: Colors.white)),
+        title: Text(
+          'Conferma Pagamento',
+          style: TextStyle(color: Colors.white),
+        ),
         content: Text(
           'Vuoi registrare questo pagamento programmato come pagato?',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
@@ -97,18 +98,24 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                 final updatedPayment = Map<String, dynamic>.from(payment);
                 updatedPayment['status'] = 'Pagato';
                 await _dbHelper.updateScheduledPayment(updatedPayment);
-                
+
                 // Show success
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Pagamento registrato con successo!'), backgroundColor: Colors.green),
+                    const SnackBar(
+                      content: Text('Pagamento registrato con successo!'),
+                      backgroundColor: Colors.green,
+                    ),
                   );
                 }
                 _loadScheduledPayments();
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Errore: $e'), backgroundColor: Colors.red),
+                    SnackBar(
+                      content: Text('Errore: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               }
@@ -189,7 +196,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                   metodo = 'POS';
 
                 final importo =
-                    '${double.tryParse(p['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'} €';
+                    '${CurrencyUtils.formatEuro(double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0)}';
 
                 final hasAtt =
                     p['attachments'] != null && p['attachments'] != '[]';
@@ -258,9 +265,7 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
         ],
       ),
       body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: Colors.blueAccent),
-            )
+          ? Center(child: CircularProgressIndicator(color: Colors.blueAccent))
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: _payments.length,
@@ -299,8 +304,10 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                PaymentFormScreen(paymentId: p['id'], isScheduled: true),
+                            builder: (_) => PaymentFormScreen(
+                              paymentId: p['id'],
+                              isScheduled: true,
+                            ),
                           ),
                         );
                         _loadScheduledPayments();
@@ -314,7 +321,10 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                           children: [
                             GestureDetector(
                               onTap: () async {
-                                final auth = await SecurityUtils.requireAdminAuth(context);
+                                final auth =
+                                    await SecurityUtils.requireAdminAuth(
+                                      context,
+                                    );
                                 if (auth && mounted) {
                                   _markAsPaid(p);
                                 }
@@ -322,15 +332,28 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: (p['status'] == 'Pagato' || p['status'] == 'PAID') 
-                                      ? Colors.greenAccent.withValues(alpha: 0.1) 
-                                      : Colors.orangeAccent.withValues(alpha: 0.1),
+                                  color:
+                                      (p['status'] == 'Pagato' ||
+                                          p['status'] == 'PAID')
+                                      ? Colors.greenAccent.withValues(
+                                          alpha: 0.1,
+                                        )
+                                      : Colors.orangeAccent.withValues(
+                                          alpha: 0.1,
+                                        ),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Icons.check_circle : Icons.schedule, 
-                                  color: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Colors.greenAccent : Colors.orangeAccent, 
-                                  size: 20
+                                  (p['status'] == 'Pagato' ||
+                                          p['status'] == 'PAID')
+                                      ? Icons.check_circle
+                                      : Icons.schedule,
+                                  color:
+                                      (p['status'] == 'Pagato' ||
+                                          p['status'] == 'PAID')
+                                      ? Colors.greenAccent
+                                      : Colors.orangeAccent,
+                                  size: 20,
                                 ),
                               ),
                             ),
@@ -342,10 +365,18 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                                   Text(
                                     '${p['payment_method'] ?? 'Movimento'}',
                                     style: TextStyle(
-                                      color: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Colors.white54 : Colors.white,
+                                      color:
+                                          (p['status'] == 'Pagato' ||
+                                              p['status'] == 'PAID')
+                                          ? Colors.white54
+                                          : Colors.white,
                                       fontSize: 15,
                                       fontWeight: FontWeight.bold,
-                                      decoration: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? TextDecoration.lineThrough : null,
+                                      decoration:
+                                          (p['status'] == 'Pagato' ||
+                                              p['status'] == 'PAID')
+                                          ? TextDecoration.lineThrough
+                                          : null,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -353,19 +384,34 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                                   SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      Icon(Icons.calendar_today, color: Colors.white38, size: 12),
+                                      Icon(
+                                        Icons.calendar_today,
+                                        color: Colors.white38,
+                                        size: 12,
+                                      ),
                                       SizedBox(width: 4),
                                       Text(
                                         () {
-                                          final dateStr = DateUtilsApp.formatDbDate(p['date']?.toString(), theme.dateFormat);
-                                          final dateTo = DateUtilsApp.formatDbDate(p['date_to']?.toString(), theme.dateFormat);
-                                          if (dateTo.isNotEmpty && dateTo != dateStr) {
+                                          final dateStr =
+                                              DateUtilsApp.formatDbDate(
+                                                p['date']?.toString(),
+                                                theme.dateFormat,
+                                              );
+                                          final dateTo =
+                                              DateUtilsApp.formatDbDate(
+                                                p['date_to']?.toString(),
+                                                theme.dateFormat,
+                                              );
+                                          if (dateTo.isNotEmpty &&
+                                              dateTo != dateStr) {
                                             return '$dateStr → $dateTo';
                                           }
                                           return dateStr;
                                         }(),
                                         style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.54),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.54,
+                                          ),
                                           fontSize: 12,
                                         ),
                                       ),
@@ -375,7 +421,10 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                                     SizedBox(height: 4),
                                     Text(
                                       subtitleText,
-                                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                                      style: TextStyle(
+                                        color: Colors.white38,
+                                        fontSize: 11,
+                                      ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -387,21 +436,42 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  '€ ${double.tryParse(p['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'}',
+                                  '${CurrencyUtils.formatEuro(double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0)}',
                                   style: TextStyle(
-                                    color: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? Colors.greenAccent : (isIN ? Colors.greenAccent : Colors.redAccent),
+                                    color:
+                                        (p['status'] == 'Pagato' ||
+                                            p['status'] == 'PAID')
+                                        ? Colors.greenAccent
+                                        : (isIN
+                                              ? Colors.greenAccent
+                                              : Colors.redAccent),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
-                                    decoration: (p['status'] == 'Pagato' || p['status'] == 'PAID') ? TextDecoration.lineThrough : null,
+                                    decoration:
+                                        (p['status'] == 'Pagato' ||
+                                            p['status'] == 'PAID')
+                                        ? TextDecoration.lineThrough
+                                        : null,
                                   ),
                                 ),
-                                if (p['attachments'] != null && p['attachments'] != '[]') ...[
+                                if (p['attachments'] != null &&
+                                    p['attachments'] != '[]') ...[
                                   SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      Icon(Icons.attachment, color: Colors.blueAccent, size: 12),
+                                      Icon(
+                                        Icons.attachment,
+                                        color: Colors.blueAccent,
+                                        size: 12,
+                                      ),
                                       SizedBox(width: 4),
-                                      Text('Allegato', style: TextStyle(color: Colors.blueAccent, fontSize: 11)),
+                                      Text(
+                                        'Allegato',
+                                        style: TextStyle(
+                                          color: Colors.blueAccent,
+                                          fontSize: 11,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -429,9 +499,3 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
     );
   }
 }
-
-
-
-
-
-

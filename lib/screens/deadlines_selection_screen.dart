@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
 import 'deadlines_screen.dart';
-import 'scheduled_payments_screen.dart';
 import 'memo_events_screen.dart';
 
 class DeadlinesSelectionScreen extends StatelessWidget {
@@ -12,13 +11,16 @@ class DeadlinesSelectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.watch<AppThemeProvider>();
     final isDesktop = MediaQuery.of(context).size.width >= 800;
-    
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
+        
+        leading: Builder(builder: (context) => IconButton(icon: Icon(Icons.menu, color: Colors.white), onPressed: () { context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer(); })),
         title: Text('Gestione Scadenze', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme: IconThemeData(color: Colors.white),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -44,23 +46,9 @@ class DeadlinesSelectionScreen extends StatelessWidget {
               ),
               _buildSelectionCard(
                 context: context,
-                title: 'Pagamenti Programmati',
+                title: 'Pagamenti programmati',
                 icon: Icons.schedule,
-                description: 'Scadenziario dei pagamenti in dare o in avere',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ScheduledPaymentsScreen()),
-                  );
-                },
-                theme: theme,
-                isDesktop: isDesktop,
-              ),
-              _buildSelectionCard(
-                context: context,
-                title: 'Memo pagamenti eventi',
-                icon: Icons.note_alt,
-                description: 'Pre-compila e traccia i memo per pagamenti e fatture',
+                description: 'Pre-compila e traccia movimenti o fatture programmate',
                 onTap: () {
                   Navigator.push(
                     context,
@@ -129,6 +117,3 @@ class DeadlinesSelectionScreen extends StatelessWidget {
     );
   }
 }
-
-
-

@@ -49,5 +49,5 @@ class AppThemeProvider extends ChangeNotifier {
   String? get backgroundImagePath => null;
   String? get logoImagePath => null;
   bool get hasValidLogo => false;
-  String get dateFormat => 'yyyy-MM-dd'; // Temporarily fixed format
+  String get dateFormat => 'dd/MM/yyyy'; // Temporarily fixed format
 }

@@ -38,20 +38,22 @@ if (-not $msixExists) {
 }
 
 # ————————————————————————————————————————————————————————————————————————————————
-Write-Host "`n[3/4] Copia locale su Desktop..." -ForegroundColor Yellow
+Write-Host "`n[3/4] Copia locale..." -ForegroundColor Yellow
 
-# Directory di esportazione finali (senza sottocartelle Android e PC, tutto nella stessa cartella Bimbomixer come richiesto)
-$destDir = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer"
-if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+$apkDir = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\Aggiornamenti App\Aggiornamenti Apk Android"
+$pcDir = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\Aggiornamenti App\Aggiornamenti App PC"
+
+if (-not (Test-Path $apkDir)) { New-Item -ItemType Directory -Force -Path $apkDir | Out-Null }
+if (-not (Test-Path $pcDir)) { New-Item -ItemType Directory -Force -Path $pcDir | Out-Null }
 
 # APK
 $apkSrcPath = "build\app\outputs\flutter-apk\app-release.apk"
-$apkDestPath = "$destDir\BimboMixer_v$($version)_update.apk"
+$apkDestPath = "$apkDir\BimboMixer_v$($version)_update.apk"
+Remove-Item "$apkDir\*" -Force -ErrorAction SilentlyContinue
 Copy-Item $apkSrcPath $apkDestPath -Force
 Write-Host "APK copiato: $apkDestPath"
 
 # MSIX o Portable ZIP
-
 $msixSrcPath = "build\windows\x64\runner\Release\contabile_app.msix"
 $winReleasePath = "build\windows\x64\runner\Release"
 $pcAssetPath = $null
@@ -59,18 +61,21 @@ $pcAssetName = $null
 $pcContentType = $null
 
 if (Test-Path $msixSrcPath) {
-    $pcAssetPath = "$destDir\BimboMixer_v$($version)_update.msix"
+    $pcAssetPath = "$pcDir\BimboMixer_v$($version)_update.msix"
+    Remove-Item "$pcDir\*" -Force -ErrorAction SilentlyContinue
     Copy-Item $msixSrcPath $pcAssetPath -Force
     Write-Host "MSIX copiato: $pcAssetPath"
     $pcAssetName = "BimboMixer_v$($version)_update.msix"
     $pcContentType = "application/msix"
 } else {
     # Fallback: crea un portable ZIP
-    $zipPath = "$destDir\BimboMixer_v$($version)_portable.zip"
+    $zipPath = "$pcDir\BimboMixer_v$($version)_PC_Portable.zip"
     Write-Host "  Creo portable ZIP da $winReleasePath..." -ForegroundColor DarkCyan
-    Compress-Archive -Path "$winReleasePath\*" -DestinationPath $zipPath -Force
+    Remove-Item "$pcDir\*" -Force -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($winReleasePath, $zipPath)
     $pcAssetPath = $zipPath
-    $pcAssetName = "BimboMixer_v$($version)_portable.zip"
+    $pcAssetName = "BimboMixer_v$($version)_PC_Portable.zip"
     $pcContentType = "application/zip"
     Write-Host "Portable ZIP creato: $zipPath"
 }

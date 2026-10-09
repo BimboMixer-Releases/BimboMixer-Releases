@@ -7,19 +7,20 @@ import 'settings_screen.dart';
 import 'security_center_screen.dart';
 import 'changelog_screen.dart';
 import 'reports_screen.dart';
+import 'bilancio_fisco_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
 import '../widgets/hover_glow_text.dart';
 
 class MenuScreen extends StatelessWidget {
   final String role;
-  
+
   const MenuScreen({super.key, required this.role});
 
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<AppThemeProvider>();
-    
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -33,23 +34,80 @@ class MenuScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildSectionHeader('Utenti e Clienti', theme),
-            _buildMenuItem(context, theme, Icons.people, 'Clienti/Fornitori', const CustomersScreen()),
+            _buildMenuItem(
+              context,
+              theme,
+              Icons.people,
+              'Clienti/Fornitori',
+              const CustomersScreen(),
+            ),
             if (role.toLowerCase() == 'admin')
-              _buildMenuItem(context, theme, Icons.security, 'Gestione Utenti', const UsersScreen()),
+              _buildMenuItem(
+                context,
+                theme,
+                Icons.security,
+                'Gestione Utenti',
+                const UsersScreen(),
+              ),
 
             _buildSectionHeader('Inserimento Voci', theme),
-            _buildMenuItem(context, theme, Icons.category, 'Categorie', const CategoriesScreen()),
-            _buildMenuItem(context, theme, Icons.miscellaneous_services, 'Tipi Prestazione', const ServicesScreen()),
+            _buildMenuItem(
+              context,
+              theme,
+              Icons.category,
+              'Categorie',
+              const CategoriesScreen(),
+            ),
+            _buildMenuItem(
+              context,
+              theme,
+              Icons.miscellaneous_services,
+              'Tipi Prestazione',
+              const ServicesScreen(),
+            ),
 
             if (role.toLowerCase() == 'admin') ...[
               _buildSectionHeader('Amministrazione', theme),
-              _buildMenuItem(context, theme, Icons.admin_panel_settings, 'Security Center', const SecurityCenterScreen()),
-              _buildMenuItem(context, theme, Icons.settings, 'Impostazioni', const SettingsScreen()),
-              _buildMenuItem(context, theme, Icons.bug_report, 'Report Bug e Consigli', const ReportsScreen()),
+              _buildMenuItem(
+                context,
+                theme,
+                Icons.admin_panel_settings,
+                'Security Center',
+                const SecurityCenterScreen(),
+              ),
+              _buildMenuItem(
+                context,
+                theme,
+                Icons.settings,
+                'Impostazioni',
+                const SettingsScreen(),
+              ),
+              _buildMenuItem(
+                context,
+                theme,
+                Icons.bug_report,
+                'Report Bug e Consigli',
+                const ReportsScreen(),
+              ),
             ],
 
+                        _buildSectionHeader('Fisco', theme),
+            _buildMenuItem(
+              context,
+              theme,
+              Icons.account_balance,
+              'Bilancio Fisco',
+              const BilancioFiscoScreen(),
+            ),
+            
             _buildSectionHeader('Informazioni', theme),
-            _buildMenuItem(context, theme, Icons.info_outline, 'Versione & Changelog', const ChangelogScreen()),
+            _buildMenuItem(
+              context,
+              theme,
+              Icons.info_outline,
+              'Versione & Changelog',
+              const ChangelogScreen(),
+            ),
           ],
         ),
       ),
@@ -71,7 +129,13 @@ class MenuScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItem(BuildContext context, AppThemeProvider theme, IconData icon, String title, Widget screen) {
+  Widget _buildMenuItem(
+    BuildContext context,
+    AppThemeProvider theme,
+    IconData icon,
+    String title,
+    Widget screen,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -82,19 +146,22 @@ class MenuScreen extends StatelessWidget {
       child: Material(
         type: MaterialType.transparency,
         child: ListTile(
-        leading: Icon(icon, color: theme.primaryColor),
-        title: HoverGlowText(
-          title, 
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          glowColor: theme.primaryColor,
+          leading: Icon(icon, color: theme.primaryColor),
+          title: HoverGlowText(
+            title,
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            glowColor: theme.primaryColor,
+          ),
+          trailing: Icon(
+            Icons.arrow_forward_ios,
+            color: Colors.white.withValues(alpha: 0.54),
+            size: 16,
+          ),
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+          },
         ),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.white.withValues(alpha: 0.54), size: 16),
-        onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
-        },
-      )),
+      ),
     );
   }
 }
-
-

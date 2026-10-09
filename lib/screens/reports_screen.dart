@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:contabile_app/database/database_helper.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -31,7 +32,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
 
     final categories = collection == 'bug_reports'
         ? ['Interfaccia Utente', 'Errore di Calcolo', 'Crash/Blocco', 'Altro']
-        : ['Nuova Funzionalità', 'Miglioramento UI', 'Integrazione', 'Altro'];
+        : ['Nuova FunzionalitÃ ', 'Miglioramento UI', 'Integrazione', 'Altro'];
 
     showModalBottomSheet(
       context: context,
@@ -205,7 +206,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                         }
                         
                         try {
-                          await FirebaseFirestore.instance.collection(collection).add({
+                          await DatabaseHelper().db.collection(collection).add({
                             'category': selectedCategory,
                             'text': textCtrl.text.trim(),
                             'user_email': emailCtrl.text.trim().isEmpty ? 'Utente Anonimo' : emailCtrl.text.trim(),
@@ -276,6 +277,14 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               ),
               child: Row(
                 children: [
+                  if (Navigator.canPop(context))
+                    Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -439,7 +448,7 @@ class _ReportsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: DatabaseHelper().db
           .collection(collection)
           .orderBy('timestamp', descending: true)
           .snapshots(),
@@ -669,3 +678,4 @@ class _ReportsList extends StatelessWidget {
     );
   }
 }
+

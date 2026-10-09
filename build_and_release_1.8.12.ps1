@@ -8,7 +8,7 @@ $apkPath = "build\app\outputs\flutter-apk\app-release.apk"
 $windowsBuildDir = "build\windows\x64\runner\Release"
 $zipPath = "build\windows\x64\runner\BimboMixer_PC_Portable.zip"
 
-$desktopDir = "C:\Users\Hp\Desktop\Aggiornamenti App"
+$desktopDir = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\Aggiornamenti App"
 $apkDestDir = "$desktopDir\Aggiornamenti Apk Android"
 $zipDestDir = "$desktopDir\Aggiornamenti App PC"
 New-Item -ItemType Directory -Force -Path $apkDestDir | Out-Null

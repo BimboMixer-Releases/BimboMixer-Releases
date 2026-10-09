@@ -1,6 +1,6 @@
 $version = "v1.8.32"
 $apkName = "BimboMixer_${version}_update.apk"
-$apkDest = "C:\Users\Hp\Desktop\Contabile APP Bimbomixer\$apkName"
+$apkDest = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer\$apkName"
 
 $token = Get-Content -Path "C:\Users\Hp\Documents\Sviluppo\Token di accesso\token.txt" -Raw
 $token = $token.Trim()

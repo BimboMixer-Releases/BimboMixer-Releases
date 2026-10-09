@@ -8,10 +8,12 @@ import '../database/database_helper.dart';
 import '../providers/app_theme_provider.dart';
 import 'payment_form_screen.dart';
 import 'payment_summary_screen.dart';
+import 'memo_form_screen.dart';
 import '../services/pdf_report_service.dart';
 import '../utils/report_utils.dart';
 import '../utils/security_utils.dart';
 import '../utils/date_utils_app.dart';
+import '../utils/currency_utils.dart';
 import '../widgets/gradient_scaffold.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -27,7 +29,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   List<Map<String, dynamic>> _payments = [];
   bool _isLoading = true;
   String _searchQuery = '';
-  String _statusFilter = 'Tutti'; // Tutti, Saldato, In Attesa, Entrate, Uscite
+  String _statusFilter = 'Tutti';
+  DateTimeRange? _dateRange; // Tutti, Saldato, In Attesa, Entrate, Uscite
 
   final TextEditingController _searchCtrl = TextEditingController();
 
@@ -45,10 +48,32 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   Future<void> _loadPayments() async {
     setState(() => _isLoading = true);
-    final payments = await _dbHelper.getPayments();
+    final paymentsRaw = await _dbHelper.getPayments();
+    
+    // Create modifiable copies
+    final ascendingList = paymentsRaw.map((e) => Map<String, dynamic>.from(e)).toList();
+    
+    // Sort oldest to newest to assign sequential IDs
+    ascendingList.sort((a, b) {
+      final da = DateTime.tryParse(a['date']?.toString() ?? '') ?? DateTime(2000);
+      final db = DateTime.tryParse(b['date']?.toString() ?? '') ?? DateTime(2000);
+      return da.compareTo(db);
+    });
+    
+    for (int i = 0; i < ascendingList.length; i++) {
+      ascendingList[i]['_generated_seq'] = 'A' + (i + 1).toString().padLeft(3, '0');
+    }
+    
+    // Then sort newest to oldest for display
+    ascendingList.sort((a, b) {
+      final da = DateTime.tryParse(a['date']?.toString() ?? '') ?? DateTime(2000);
+      final db = DateTime.tryParse(b['date']?.toString() ?? '') ?? DateTime(2000);
+      return db.compareTo(da);
+    });
+
     if (mounted) {
       setState(() {
-        _payments = payments;
+        _payments = ascendingList;
         _isLoading = false;
       });
     }
@@ -57,7 +82,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   List<Map<String, dynamic>> get _filteredPayments {
     return _payments.where((p) {
       final isIN = p['type'] == 'IN';
-      final isPaid = p['status'] == 'PAID' ||
+      final isPaid =
+          p['status'] == 'PAID' ||
           p['status'] == 'Saldato' ||
           p['status'] == 'Pagato' ||
           (p['status'] == null && isIN);
@@ -66,6 +92,16 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       if (_statusFilter == 'In Attesa' && isPaid) return false;
       if (_statusFilter == 'Entrate' && !isIN) return false;
       if (_statusFilter == 'Uscite' && isIN) return false;
+
+      if (_dateRange != null) {
+        final d = DateTime.tryParse(p['date']?.toString() ?? '');
+        if (d != null) {
+          final dateOnly = DateTime(d.year, d.month, d.day);
+          final start = DateTime(_dateRange!.start.year, _dateRange!.start.month, _dateRange!.start.day);
+          final end = DateTime(_dateRange!.end.year, _dateRange!.end.month, _dateRange!.end.day);
+          if (dateOnly.isBefore(start) || dateOnly.isAfter(end)) return false;
+        }
+      }
 
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
@@ -94,24 +130,23 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Future<void> _editPayment(Map<String, dynamic> p) async {
     final auth = await SecurityUtils.requireAdminAuth(context);
     if (!auth || !mounted) return;
-    
+
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => PaymentFormScreen(paymentId: p['id']),
-      ),
+      MaterialPageRoute(builder: (_) => PaymentFormScreen(paymentId: p['id'])),
     );
     _loadPayments();
   }
 
   Future<void> _toggleStatus(Map<String, dynamic> p) async {
-    final auth = await SecurityUtils.requireAdminAuth(context);
-    if (!auth || !mounted) return;
-
     final isIN = p['type'] == 'IN';
-    final isPaid = p['status'] == 'PAID' || p['status'] == 'Saldato' || p['status'] == 'Pagato' || (p['status'] == null && isIN);
+    final isPaid =
+        p['status'] == 'PAID' ||
+        p['status'] == 'Saldato' ||
+        p['status'] == 'Pagato' ||
+        (p['status'] == null && isIN);
     final newStatus = isPaid ? 'PENDING' : 'PAID';
-    
+
     try {
       final updatedData = Map<String, dynamic>.from(p);
       updatedData['status'] = newStatus;
@@ -119,7 +154,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       _loadPayments();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Errore: $e')));
       }
     }
   }
@@ -147,15 +184,26 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),
-        title: const Text('Elimina Transazione', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text('Sei sicuro di voler eliminare questo movimento?', style: TextStyle(color: Colors.white70)),
+        title: const Text(
+          'Elimina Transazione',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Sei sicuro di voler eliminare questo movimento?',
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annulla', style: TextStyle(color: Colors.white54)),
+            child: const Text(
+              'Annulla',
+              style: TextStyle(color: Colors.white54),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEC4899),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Elimina', style: TextStyle(color: Colors.white)),
           ),
@@ -178,13 +226,17 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   }
 
   Future<void> _downloadSinglePayment(Map<String, dynamic> p) async {
-    final dt = p['date'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(p['date'])) : '';
-    final imp = p['amount'] != null ? '€ ${p['amount'].toStringAsFixed(2)}' : '';
+    final dt = p['date'] != null
+        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(p['date']))
+        : '';
+    final imp = p['amount'] != null
+        ? '€ ${p['amount'].toStringAsFixed(2)}'
+        : '';
     final cliente = p['customer_name'] ?? 'N/D';
     final descr = p['description'] ?? 'N/D';
     final tipo = p['type'] ?? 'N/D';
     final metodo = p['payment_method'] ?? 'N/D';
-    
+
     await PDFReportService.generateAndDownloadReport(
       title: 'Dettaglio Movimento',
       headers: ['Campo', 'Valore'],
@@ -215,7 +267,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     try {
       String pathOrUrl = att.toString();
       if (pathOrUrl.startsWith('[') && pathOrUrl.endsWith(']')) {
-        pathOrUrl = pathOrUrl.substring(1, pathOrUrl.length - 1).replaceAll('"', '').trim();
+        pathOrUrl = pathOrUrl
+            .substring(1, pathOrUrl.length - 1)
+            .replaceAll('"', '')
+            .trim();
       }
 
       final file = File(pathOrUrl);
@@ -233,7 +288,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Impossibile aprire l\'allegato: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Impossibile aprire l\'allegato: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -254,7 +312,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     if (filteredPayments.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nessun movimento nel periodo selezionato.')),
+          const SnackBar(
+            content: Text('Nessun movimento nel periodo selezionato.'),
+          ),
         );
       }
       return;
@@ -269,7 +329,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       final descrizione = descParts.isNotEmpty ? descParts.join(' - ') : 'N/D';
 
       final cliente = p['customer_name']?.toString() ?? 'N/D';
-      final dataStr = DateUtilsApp.formatDbDate(p['date']?.toString(), theme.dateFormat);
+      final dataStr = DateUtilsApp.formatDbDate(
+        p['date']?.toString(),
+        theme.dateFormat,
+      );
       final tipo = p['type'] == 'IN' ? 'E' : 'U';
 
       String metodo = p['payment_method']?.toString() ?? '';
@@ -283,7 +346,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         metodo = 'POS';
       }
 
-      final importo = '€ ${double.tryParse(p['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'}';
+      final importo =
+          '€ ${double.tryParse(p['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'}';
       final hasAtt = p['attachments'] != null && p['attachments'] != '[]';
       final allegati = hasAtt ? 'S' : 'N';
 
@@ -318,550 +382,249 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.watch<AppThemeProvider>();
     final filtered = _filteredPayments;
+    final total = filtered.fold<double>(0.0, (sum, p) {
+      final isIN = p['type'] == 'IN';
+      final amount = double.tryParse(p['amount']?.toString() ?? '0') ?? 0;
+      return isIN ? sum + amount : sum - amount;
+    });
 
     return GradientScaffold(
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF22D3EE)))
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+          : CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+                  floating: true,
+                  snap: true,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  title: const Text(
+                    'Movimenti',
+                    style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                  ),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.print_outlined, color: Color(0xFF38BDF8), size: 22),
+                      tooltip: 'Esporta Report PDF',
+                      onPressed: _exportPdfReport,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: ['Tutti', 'Saldato', 'In Attesa', 'Entrate', 'Uscite'].map((f) {
+                                  final sel = _statusFilter == f;
+                                  return ChoiceChip(
+                                    label: Text(f),
+                                    selected: sel,
+                                    onSelected: (_) {
+                                      setState(() {
+                                        _statusFilter = f;
+                                      });
+                                    },
+                                    selectedColor: const Color(0xFF38BDF8).withValues(alpha: 0.25),
+                                    backgroundColor: const Color(0xFF16192B),
+                                    labelStyle: TextStyle(color: sel ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: FontWeight.bold),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.search, color: _searchQuery.isEmpty ? const Color(0xFF38BDF8) : const Color(0xFFEC4899), size: 22),
+                                  tooltip: 'Cerca',
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) {
+                                        String tempQ = _searchQuery;
+                                        return AlertDialog(
+                                          backgroundColor: const Color(0xFF1E1E2C),
+                                          title: const Text('Cerca', style: TextStyle(color: Colors.white)),
+                                          content: TextField(
+                                            autofocus: true,
+                                            style: const TextStyle(color: Colors.white),
+                                            decoration: InputDecoration(
+                                              hintText: 'Cliente, importo, desc...',
+                                              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                                            ),
+                                            onChanged: (v) => tempQ = v,
+                                            controller: TextEditingController(text: _searchQuery),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () {
+                                                setState(() => _searchQuery = '');
+                                                Navigator.pop(ctx);
+                                              },
+                                              child: const Text('Azzera', style: TextStyle(color: Colors.redAccent)),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () {
+                                                setState(() => _searchQuery = tempQ);
+                                                Navigator.pop(ctx);
+                                              },
+                                              child: const Text('Cerca'),
+                                            ),
+                                          ],
+                                        );
+                                      }
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.date_range, color: _dateRange == null ? const Color(0xFF38BDF8) : const Color(0xFFEC4899), size: 22),
+                                  tooltip: 'Filtra Data',
+                                  onPressed: () async {
+                                    final picked = await ReportUtils.showDateRangeFilterDialog(context);
+                                    if (picked != null) setState(() => _dateRange = picked);
+                                  },
+                                ),
+                                if (_dateRange != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, color: Colors.white54, size: 20),
+                                    tooltip: 'Rimuovi filtro data',
+                                    onPressed: () => setState(() => _dateRange = null),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B).withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.15)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(' movimenti', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+                              Text(CurrencyUtils.formatEuro(total), style: TextStyle(color: total >= 0 ? const Color(0xFF10B981) : const Color(0xFFEC4899), fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (filtered.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(40),
+                            child: Center(child: Text('Nessun movimento trovato', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 16))),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) => _buildPaymentRow(filtered[index], theme.dateFormat),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildPaymentRow(Map<String, dynamic> p, String dateFormat) {
+    final isIN = p['type'] == 'IN';
+    final isPaid = p['status'] == 'PAID' || p['status'] == 'Saldato' || p['status'] == 'Pagato' || (p['status'] == null && isIN);
+    final color = isPaid ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final amountVal = double.tryParse(p['amount']?.toString() ?? '0') ?? 0;
+    
+    final invoiceId = p['_generated_seq'] ?? 'A000';
+    final clientName = p['customer_name']?.toString().isNotEmpty == true ? p['customer_name'].toString() : 'Cliente Generico';
+    final desc = p['service_name']?.toString().isNotEmpty == true ? p['service_name'].toString() : (p['notes']?.toString().isNotEmpty == true ? p['notes'].toString() : (p['payment_method'] ?? 'Prestazione'));
+    
+    return Material(
+      color: const Color(0xFF13141F).withValues(alpha: 0.7),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => PaymentSummaryScreen(paymentId: p['id'])),
+          ).then((_) => _loadPayments());
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. TOP HEADER BAR: Welcome, User | Search | Notifications | AXION Logo
-                    _buildTopHeaderBar(),
-
-                    const SizedBox(height: 28),
-
-                    // 2. PAGE TITLE
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text(
-                          'Invoices & Transactions',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        // Quick Action Buttons
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.print_outlined, color: Color(0xFF38BDF8), size: 22),
-                              tooltip: 'Esporta Report PDF',
-                              onPressed: _exportPdfReport,
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const PaymentFormScreen()),
-                                );
-                                _loadPayments();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFEC4899),
-                                foregroundColor: Colors.white,
-                                elevation: 8,
-                                shadowColor: const Color(0xFFEC4899).withValues(alpha: 0.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                              ),
-                              icon: const Icon(Icons.add, size: 18, color: Colors.white),
-                              label: const Text('Nuova Fattura', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 22),
-
-                    // 3. MAIN GLASS CONTAINER: "Transactions Overview"
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF131728).withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.12),
-                            width: 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFEC4899).withValues(alpha: 0.05),
-                              blurRadius: 30,
-                              spreadRadius: 2,
-                              offset: const Offset(0, 10),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              blurRadius: 20,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            // Card Header: Title + Filter Chips + Options
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Wrap(
-                                      crossAxisAlignment: WrapCrossAlignment.center,
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        const Text(
-                                          'Transactions Overview',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.2,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        _buildStatusFilterChip('Tutti'),
-                                        _buildStatusFilterChip('Saldato'),
-                                        _buildStatusFilterChip('In Attesa'),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // Three Dots Menu
-                                  PopupMenuButton<String>(
-                                    icon: const Icon(Icons.more_horiz, color: Colors.white54, size: 22),
-                                    color: const Color(0xFF16192B),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-                                    ),
-                                    onSelected: (action) {
-                                      if (action == 'export_pdf') {
-                                        _exportPdfReport();
-                                      } else if (action == 'new') {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (_) => const PaymentFormScreen()),
-                                        ).then((_) => _loadPayments());
-                                      }
-                                    },
-                                    itemBuilder: (ctx) => [
-                                      const PopupMenuItem(
-                                        value: 'export_pdf',
-                                        child: Text('Esporta Report PDF', style: TextStyle(color: Colors.white)),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'new',
-                                        child: Text('Nuovo Movimento', style: TextStyle(color: Colors.white)),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Table Area with Horizontal Scroll for Mobile
-                            Expanded(
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final double minTableWidth = 900.0;
-                                  final double actualWidth = constraints.maxWidth > minTableWidth 
-                                      ? constraints.maxWidth 
-                                      : minTableWidth;
-
-                                  return SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: SizedBox(
-                                      width: actualWidth,
-                                      child: Column(
-                                        children: [
-                                          // Table Header Capsule Strip
-                                          Container(
-                                            margin: const EdgeInsets.symmetric(horizontal: 20),
-                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-
-                                  const Expanded(
-                                    flex: 3,
-                                    child: Text('Invoice ID', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
-                                  ),
-                                  const Expanded(
-                                    flex: 4,
-                                    child: Text('Client Name', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
-                                  ),
-                                  const Expanded(
-                                    flex: 3,
-                                    child: Text('Date', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
-                                  ),
-                                  const Expanded(
-                                    flex: 4,
-                                    child: Text('Description', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
-                                  ),
-                                  const Expanded(
-                                    flex: 3,
-                                    child: Text('Amount', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
-                                  ),
-                                  const Expanded(
-                                    flex: 3,
-                                    child: Center(child: Text('Status', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500))),
-                                  ),
-                                  const SizedBox(
-                                    width: 100,
-                                    child: Center(child: Text('Action', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500))),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 6),
-
-                            // Table Rows List
-                            Expanded(
-                              child: filtered.isEmpty
-                                  ? const Center(
-                                      child: Text('Nessun movimento trovato.', style: TextStyle(color: Colors.white38, fontSize: 14)),
-                                    )
-                                  : ListView.separated(
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                      itemCount: filtered.length,
-                                      separatorBuilder: (ctx, i) => Divider(
-                                        color: Colors.white.withValues(alpha: 0.05),
-                                        height: 1,
-                                      ),
-                                      itemBuilder: (context, index) {
-                                        final p = filtered[index];
-                                        final id = p['id']?.toString() ?? '';
-
-                                        final invoiceId = _formatInvoiceId(index);
-                                        final clientName = p['customer_name']?.toString().isNotEmpty == true
-                                            ? p['customer_name'].toString()
-                                            : 'Cliente Generico';
-                                        final dateStr = _formatDate(p['date']);
-                                        final desc = p['service_name']?.toString().isNotEmpty == true
-                                            ? p['service_name'].toString()
-                                            : (p['notes']?.toString().isNotEmpty == true ? p['notes'].toString() : (p['payment_method'] ?? 'Prestazione'));
-                                        final amountVal = double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0;
-                                        final isIN = p['type'] == 'IN';
-                                        final isPaid = p['status'] == 'PAID' ||
-                                            p['status'] == 'Saldato' ||
-                                            p['status'] == 'Pagato' ||
-                                            (p['status'] == null && isIN);
-
-                                        return InkWell(
-                                          onTap: () async {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => PaymentSummaryScreen(paymentId: p['id']),
-                                              ),
-                                            );
-                                            _loadPayments();
-                                          },
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.transparent,
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                                            child: Row(
-                                              children: [
-                                                // Invoice ID
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Text(
-                                                    invoiceId,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.w600,
-                                                      letterSpacing: 0.2,
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                // Client Name
-                                                Expanded(
-                                                  flex: 4,
-                                                  child: Text(
-                                                    clientName,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-
-                                                // Date
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Text(
-                                                    dateStr,
-                                                    style: const TextStyle(
-                                                      color: Colors.white70,
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                // Description
-                                                Expanded(
-                                                  flex: 4,
-                                                  child: Text(
-                                                    desc,
-                                                    style: const TextStyle(
-                                                      color: Colors.white70,
-                                                      fontSize: 13,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-
-                                                // Amount
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Text(
-                                                    '€ ${amountVal.toStringAsFixed(2)}',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.bold,
-                                                      letterSpacing: 0.2,
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                // Status Neon Badge: Cyan PAID / Magenta PENDING
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Center(
-                                                    child: InkWell(
-                                                      onTap: () => _toggleStatus(p),
-                                                      borderRadius: BorderRadius.circular(20),
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                                                        decoration: BoxDecoration(
-                                                          color: isPaid
-                                                              ? const Color(0xFF22D3EE).withValues(alpha: 0.12)
-                                                              : const Color(0xFFEC4899).withValues(alpha: 0.12),
-                                                          borderRadius: BorderRadius.circular(20),
-                                                          border: Border.all(
-                                                            color: isPaid
-                                                                ? const Color(0xFF22D3EE)
-                                                                : const Color(0xFFEC4899),
-                                                            width: 1.4,
-                                                          ),
-                                                          boxShadow: [
-                                                            BoxShadow(
-                                                              color: (isPaid ? const Color(0xFF22D3EE) : const Color(0xFFEC4899))
-                                                                  .withValues(alpha: 0.45),
-                                                              blurRadius: 10,
-                                                              spreadRadius: 0.5,
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        child: Text(
-                                                          isPaid ? 'Saldato' : 'In Attesa',
-                                                          style: TextStyle(
-                                                            color: isPaid ? const Color(0xFF22D3EE) : const Color(0xFFEC4899),
-                                                            fontSize: 11,
-                                                            fontWeight: FontWeight.bold,
-                                                            letterSpacing: 1.0,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                // Action Column: Download Icon & Button
-                                                SizedBox(
-                                                  width: 100,
-                                                  child: Row(
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    children: [
-                                                      InkWell(
-                                                        onTap: () => _downloadSinglePayment(p),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        child: Padding(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                                                          child: Column(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            children: const [
-                                                              Icon(Icons.download_rounded, color: Color(0xFF22D3EE), size: 18),
-                                                              SizedBox(height: 2),
-                                                              Text(
-                                                                'PDF',
-                                                                style: TextStyle(
-                                                                  color: Color(0xFF22D3EE),
-                                                                  fontSize: 9,
-                                                                  fontWeight: FontWeight.w500,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      IconButton(
-                                                        icon: const Icon(Icons.edit_outlined, color: Colors.white70, size: 18),
-                                                        tooltip: 'Modifica',
-                                                        padding: EdgeInsets.zero,
-                                                        constraints: const BoxConstraints(),
-                                                        onPressed: () => _editPayment(p),
-                                                      ),
-                                                      IconButton(
-                                                        icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 18),
-                                                        hoverColor: Colors.red.withValues(alpha: 0.2),
-                                                        tooltip: 'Elimina',
-                                                        padding: EdgeInsets.zero,
-                                                        constraints: const BoxConstraints(),
-                                                        onPressed: () => _deletePayment(id),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                    Text('Movimento ', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(clientName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    Text(desc, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text(DateUtilsApp.formatDbDate(p['date']?.toString(), dateFormat), maxLines: 1,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
                   ],
                 ),
               ),
-            ),
-                  ],
-                ),
-              ),
-            ),
-    );
-  }
-
-  // Top Header Bar: Welcome text, Search input, notification bell, AXION logo
-  Widget _buildTopHeaderBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Welcome Text removed
-        const SizedBox(),
-
-        // Right side: Search Box + Bell + AXION Brand
-        Row(
-          children: [
-            // Search Box Capsule
-            Container(
-              width: 240,
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16192B).withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              child: Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Icon(Icons.search, color: Colors.white38, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchCtrl,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(
-                        hintText: 'Search',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
+                  Text(CurrencyUtils.formatEuro(isIN ? amountVal : -amountVal),
+                      style: TextStyle(color: isIN ? const Color(0xFF10B981) : const Color(0xFFEC4899), fontSize: 15, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () => _toggleStatus(p),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: color, width: 1.2),
                       ),
-                      onChanged: (v) => setState(() => _searchQuery = v),
+                      child: Text(isPaid ? 'Saldato' : 'In Attesa',
+                          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  if (_searchQuery.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.white38, size: 14),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
                 ],
               ),
-            ),
-
-            const SizedBox(width: 16),
-
-
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusFilterChip(String label) {
-    final isSelected = _statusFilter == label;
-    Color color = const Color(0xFF38BDF8);
-    if (label == 'Saldato') color = const Color(0xFF22D3EE);
-    if (label == 'In Attesa') color = const Color(0xFFEC4899);
-
-    return InkWell(
-      onTap: () => setState(() => _statusFilter = label),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? color : Colors.white.withValues(alpha: 0.1), width: 1.2),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? color : Colors.white60,
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            letterSpacing: 0.3,
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 20),
+                onPressed: () async {
+                  final auth = await SecurityUtils.requireAdminAuth(context);
+                  if (!auth || !mounted) return;
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => MemoFormScreen(initialMemo: p, sourceTable: 'payments')),
+                  );
+                  if (mounted) _loadPayments();
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Color(0xFFEC4899), size: 20),
+                onPressed: () => _deletePayment(p['id']),
+              ),
+            ],
           ),
         ),
       ),

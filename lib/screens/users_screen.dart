@@ -31,10 +31,17 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   void _showUserDialog({Map<String, dynamic>? user}) {
-    final TextEditingController usernameController = TextEditingController(text: user?['username']);
-    final TextEditingController passwordController = TextEditingController(); // For security, don't show old hash
-    final TextEditingController emailController = TextEditingController(text: user?['email']);
-    final TextEditingController phoneController = TextEditingController(text: user?['phone']);
+    final TextEditingController usernameController = TextEditingController(
+      text: user?['username'],
+    );
+    final TextEditingController passwordController =
+        TextEditingController(); // For security, don't show old hash
+    final TextEditingController emailController = TextEditingController(
+      text: user?['email'],
+    );
+    final TextEditingController phoneController = TextEditingController(
+      text: user?['phone'],
+    );
     String role = user?['role'] ?? 'User';
 
     showDialog(
@@ -52,7 +59,11 @@ class _UsersScreenState extends State<UsersScreen> {
                     children: [
                       Text(
                         user == null ? 'Nuovo Utente' : 'Modifica Utente',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       SizedBox(height: 16),
                       TextField(
@@ -60,8 +71,14 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Username',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                          labelStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
                         ),
                       ),
                       SizedBox(height: 8),
@@ -70,9 +87,17 @@ class _UsersScreenState extends State<UsersScreen> {
                         obscureText: true,
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
-                          labelText: user == null ? 'Password' : 'Password (lascia vuoto per non modificare)',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                          labelText: user == null
+                              ? 'Password'
+                              : 'Password (lascia vuoto per non modificare)',
+                          labelStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
                         ),
                       ),
                       SizedBox(height: 8),
@@ -82,8 +107,14 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Email (per recupero password)',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                          labelStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
                         ),
                       ),
                       SizedBox(height: 8),
@@ -93,8 +124,14 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Cellulare (per recupero password)',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                          labelStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
                         ),
                       ),
                       SizedBox(height: 16),
@@ -104,8 +141,14 @@ class _UsersScreenState extends State<UsersScreen> {
                         style: TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Ruolo',
-                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                          labelStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
                         ),
                         items: ['Admin', 'User'].map((String r) {
                           return DropdownMenuItem<String>(
@@ -125,7 +168,12 @@ class _UsersScreenState extends State<UsersScreen> {
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(dialogContext),
-                            child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                            child: Text(
+                              'ANNULLA',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
+                            ),
                           ),
                           SizedBox(width: 8),
                           ElevatedButton(
@@ -136,12 +184,14 @@ class _UsersScreenState extends State<UsersScreen> {
                               final phone = phoneController.text.trim();
 
                               if (username.isEmpty) return;
-                              if (user == null && password.isEmpty) return; // Password obbligatoria solo in creazione
+                              if (user == null && password.isEmpty)
+                                return; // Password obbligatoria solo in creazione
 
                               if (user == null) {
                                 await _dbHelper.insertUser({
                                   'username': username,
-                                  'password_hash': password, // Ideally hash this
+                                  'password_hash':
+                                      password, // Ideally hash this
                                   'role': role,
                                   'email': email.isNotEmpty ? email : null,
                                   'phone': phone.isNotEmpty ? phone : null,
@@ -153,24 +203,27 @@ class _UsersScreenState extends State<UsersScreen> {
                                   'role': role,
                                   'email': email.isNotEmpty ? email : null,
                                   'phone': phone.isNotEmpty ? phone : null,
-                                  'password_hash': password.isNotEmpty ? password : user['password_hash'],
+                                  'password_hash': password.isNotEmpty
+                                      ? password
+                                      : user['password_hash'],
                                 };
                                 await _dbHelper.updateUser(updatedUser);
                               }
 
-                              if (dialogContext.mounted) Navigator.pop(dialogContext);
+                              if (dialogContext.mounted)
+                                Navigator.pop(dialogContext);
                               _loadUsers();
                             },
                             child: Text('SALVA'),
                           ),
                         ],
-                      )
+                      ),
                     ],
                   ),
                 ),
               ),
             );
-          }
+          },
         );
       },
     );
@@ -186,25 +239,42 @@ class _UsersScreenState extends State<UsersScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Conferma Eliminazione', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(
+                'Conferma Eliminazione',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               SizedBox(height: 16),
-              Text('Sei sicuro di voler eliminare questo utente?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+              Text(
+                'Sei sicuro di voler eliminare questo utente?',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              ),
               SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                    child: Text(
+                      'ANNULLA',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
                     onPressed: () => Navigator.pop(context, true),
                     child: Text('ELIMINA'),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),
@@ -216,11 +286,21 @@ class _UsersScreenState extends State<UsersScreen> {
         await _dbHelper.deleteUser(id);
         _loadUsers();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Utente eliminato.'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Utente eliminato.'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore eliminazione: $e'), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Errore eliminazione: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       }
     }
@@ -229,10 +309,16 @@ class _UsersScreenState extends State<UsersScreen> {
   void _setupBiometrics(Map<String, dynamic> user) async {
     final bioService = BiometricService();
     if (!await bioService.isBiometricAvailable()) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Biometria non disponibile sul dispositivo.'), backgroundColor: Colors.orange));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometria non disponibile sul dispositivo.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       return;
     }
-    
+
     final TextEditingController pwdController = TextEditingController();
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -243,9 +329,19 @@ class _UsersScreenState extends State<UsersScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Imposta Biometria per ${user['username']}', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(
+                'Imposta Biometria per ${user['username']}',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               SizedBox(height: 16),
-              Text('Inserisci la password dell\'utente per poterla salvare nel portachiavi sicuro del dispositivo.', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+              Text(
+                'Inserisci la password dell\'utente per poterla salvare nel portachiavi sicuro del dispositivo.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              ),
               SizedBox(height: 16),
               TextField(
                 controller: pwdController,
@@ -253,8 +349,14 @@ class _UsersScreenState extends State<UsersScreen> {
                 style: TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                  labelStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
                 ),
               ),
               SizedBox(height: 24),
@@ -263,7 +365,12 @@ class _UsersScreenState extends State<UsersScreen> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                    child: Text(
+                      'ANNULLA',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
@@ -271,7 +378,7 @@ class _UsersScreenState extends State<UsersScreen> {
                     child: Text('SALVA'),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),
@@ -279,11 +386,28 @@ class _UsersScreenState extends State<UsersScreen> {
     );
 
     if (confirm == true && pwdController.text.isNotEmpty) {
-      if (await bioService.authenticate(reason: 'Autorizza il salvataggio della password')) {
-        await bioService.saveUserCredentials(user['username'], pwdController.text);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Biometria impostata con successo.'), backgroundColor: Colors.green));
+      if (await bioService.authenticate(
+        reason: 'Autorizza il salvataggio della password',
+      )) {
+        await bioService.saveUserCredentials(
+          user['username'],
+          pwdController.text,
+        );
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometria impostata con successo.'),
+              backgroundColor: Colors.green,
+            ),
+          );
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Autenticazione biometrica fallita.'), backgroundColor: Colors.red));
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Autenticazione biometrica fallita.'),
+              backgroundColor: Colors.red,
+            ),
+          );
       }
     }
   }
@@ -311,29 +435,47 @@ class _UsersScreenState extends State<UsersScreen> {
                     child: Material(
                       type: MaterialType.transparency,
                       child: ListTile(
-                      title: Text(user['username']?.toString() ?? 'Utente', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      subtitle: Text('Ruolo: ${user['role']?.toString() ?? 'User'}', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.fingerprint, color: Colors.greenAccent),
-                            tooltip: 'Imposta Biometria / Viso',
-                            onPressed: () => _setupBiometrics(user),
+                        title: Text(
+                          user['username']?.toString() ?? 'Utente', maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
-                          IconButton(
-                            icon: Icon(Icons.edit, color: Colors.blueAccent),
-                            onPressed: () => _showUserDialog(user: user),
+                        ),
+                        subtitle: Text(
+                          'Ruolo: ${user['role']?.toString() ?? 'User'}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
                           ),
-                          // Prevent deleting the main admin to avoid lockouts
-                          if (user['username'] != 'admin')
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             IconButton(
-                              icon: Icon(Icons.delete, color: Colors.redAccent),
-                              onPressed: () => _deleteUser(user['id']),
+                              icon: Icon(
+                                Icons.fingerprint,
+                                color: Colors.greenAccent,
+                              ),
+                              tooltip: 'Imposta Biometria / Viso',
+                              onPressed: () => _setupBiometrics(user),
                             ),
-                        ],
+                            IconButton(
+                              icon: Icon(Icons.edit, color: Colors.blueAccent),
+                              onPressed: () => _showUserDialog(user: user),
+                            ),
+                            // Prevent deleting the main admin to avoid lockouts
+                            if (user['username'] != 'admin')
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: () => _deleteUser(user['id']),
+                              ),
+                          ],
+                        ),
                       ),
-                    )),
+                    ),
                   ),
                 );
               },
@@ -346,5 +488,3 @@ class _UsersScreenState extends State<UsersScreen> {
     );
   }
 }
-
-

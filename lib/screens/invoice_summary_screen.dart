@@ -1,6 +1,7 @@
-import 'package:url_launcher/url_launcher.dart';
+﻿import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:contabile_app/database/database_helper.dart';
 import 'package:contabile_app/utils/date_utils_app.dart';
 import 'package:contabile_app/utils/security_utils.dart';
@@ -21,9 +22,7 @@ class InvoiceSummaryScreen extends StatefulWidget {
 class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   Map<String, dynamic>? _data;
-  String? _customerName;
-  String? _categoryName;
-  String? _serviceName;
+  Map<String, dynamic>? _customerData;
   List<String> _attachments = [];
   bool _isLoading = true;
 
@@ -44,21 +43,7 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
       if (custId != null) {
         final custList = await _dbHelper.getCustomers();
         final c = custList.cast<Map<String,dynamic>>().firstWhere((e) => e['id'].toString() == custId.toString(), orElse: () => {});
-        _customerName = c['name'];
-      }
-
-      final catId = pData['category_id'];
-      if (catId != null) {
-        final catList = await _dbHelper.getCategories();
-        final c = catList.cast<Map<String,dynamic>>().firstWhere((e) => e['id'].toString() == catId.toString(), orElse: () => {});
-        _categoryName = c['name'];
-      }
-
-      final srvId = pData['service_id'];
-      if (srvId != null) {
-        final srvList = await _dbHelper.getServiceTypes();
-        final s = srvList.cast<Map<String,dynamic>>().firstWhere((e) => e['id'].toString() == srvId.toString(), orElse: () => {});
-        _serviceName = s['name'];
+        _customerData = c;
       }
 
       if (pData['attachments'] != null) {
@@ -103,7 +88,8 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
     final isIN = _data!['type'] == 'IN';
     final amount = double.tryParse(_data!['amount']?.toString() ?? '0') ?? 0.0;
     final regDate = DateUtilsApp.formatDbDate(_data!['date']?.toString(), 'dd MMMM yyyy');
-    final displayId = 'N. 2026/0' + _data!['id'].toString().padLeft(3, '0');
+    final invoiceNumber = _data!['number']?.toString() ?? '';
+    final displayId = invoiceNumber.isNotEmpty ? 'N. ' + invoiceNumber : 'N. ' + _data!['id'].toString();
     final String title2 = "COMMERCIALE";
 
     return Scaffold(
@@ -178,7 +164,8 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         // Header (Logo and Company Details) OVER the background
-                        Row(
+                        Flex(
+                          direction: MediaQuery.of(context).size.width > 600 ? Axis.horizontal : Axis.vertical,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             // Logo Image
@@ -200,12 +187,14 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  RichText(
+                            SizedBox(width: 24, height: 16),
+                            Builder(
+                              builder: (context) {
+                                Widget col = Column(
+                                  crossAxisAlignment: MediaQuery.of(context).size.width > 600 ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    RichText(
                                     text: const TextSpan(
                                       style: TextStyle(
                                         fontSize: 42,
@@ -224,31 +213,57 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                                     style: TextStyle(color: Colors.grey[400], fontSize: 13, letterSpacing: 2.0, fontWeight: FontWeight.bold, height: 1.4),
                                   ),
                                   const SizedBox(height: 16),
-                                  Row(
+                                  Wrap(
+                                    spacing: 16,
+                                    runSpacing: 8,
+                                    alignment: MediaQuery.of(context).size.width > 600 ? WrapAlignment.start : WrapAlignment.center,
                                     children: [
-                                      const Icon(Icons.location_on, color: Color(0xFFB142F5), size: 16),
-                                      const SizedBox(width: 8),
-                                      Text('Vetralla (VT)', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-                                      const SizedBox(width: 32),
-                                      const Icon(Icons.email, color: Color(0xFFB142F5), size: 16),
-                                      const SizedBox(width: 8),
-                                      Text('bimbomixer91@gmail.com', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                      Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            WidgetSpan(child: Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.location_on, color: Color(0xFFB142F5), size: 16))),
+                                            TextSpan(text: 'Vetralla (VT)', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                          ]
+                                        )
+                                      ),
+                                      Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            WidgetSpan(child: Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.email, color: Color(0xFFB142F5), size: 16))),
+                                            TextSpan(text: 'bimbomixer91@gmail.com', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                          ]
+                                        )
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  Row(
+                                  Wrap(
+                                    spacing: 16,
+                                    runSpacing: 8,
+                                    alignment: MediaQuery.of(context).size.width > 600 ? WrapAlignment.start : WrapAlignment.center,
                                     children: [
-                                      const Icon(Icons.person, color: Color(0xFFB142F5), size: 16),
-                                      const SizedBox(width: 8),
-                                      Text('P.IVA 02494800564', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-                                      const SizedBox(width: 32),
-                                      const Icon(Icons.phone, color: Color(0xFFB142F5), size: 16),
-                                      const SizedBox(width: 8),
-                                      Text('+39 3807483998', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                      Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            WidgetSpan(child: Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.person, color: Color(0xFFB142F5), size: 16))),
+                                            TextSpan(text: 'P.IVA 02494800564', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                          ]
+                                        )
+                                      ),
+                                      Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            WidgetSpan(child: Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.phone, color: Color(0xFFB142F5), size: 16))),
+                                            TextSpan(text: '+39 3807483998', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                                          ]
+                                        )
+                                      ),
                                     ],
                                   ),
                                 ],
-                              ),
+                              );
+                              return MediaQuery.of(context).size.width > 600 ? Flexible(child: col) : col;
+                              }
                             ),
                           ],
                         ),
@@ -276,8 +291,10 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                               // Title & Date Banner inside the container
                               Padding(
                                 padding: const EdgeInsets.all(24.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                child: Wrap(
+                                  spacing: 16,
+                                  runSpacing: 16,
+                                  alignment: WrapAlignment.spaceBetween,
                                   children: [
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,23 +319,27 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                                       ],
                                     ),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF161124),
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(color: const Color(0xFF261D42)),
                                       ),
                                       child: Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           const Icon(Icons.calendar_month, color: Color(0xFFB142F5), size: 26),
                                           const SizedBox(width: 12),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text('Data registrazione', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
-                                              const SizedBox(height: 2),
-                                              Text(regDate, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-                                            ],
+                                          Flexible(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text('Data registrazione', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                                                const SizedBox(height: 2),
+                                                Text(regDate, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -336,23 +357,32 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   padding: const EdgeInsets.all(24),
-                                  child: Row(
+                                  child: Flex(
+                                    direction: MediaQuery.of(context).size.width > 600 ? Axis.horizontal : Axis.vertical,
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       // Left Details Panel
-                                      Expanded(
-                                        flex: 7,
-                                        child: Column(
+                                      Builder(
+                                        builder: (context) {
+                                          Widget col = Column(
                                           children: [
-                                            _buildRowItem(Icons.person_outline, 'Cliente', _customerName ?? '-'),
+                                            _buildRowItem(Icons.person_outline, 'Cliente', _customerData?['name']?.toString() ?? '-'),
                                             const Divider(color: Color(0xFFE5E0F1), height: 24),
-                                            _buildRowItem(Icons.layers_outlined, 'Importo', '€ ${amount.toStringAsFixed(2)}', isAmount: true),
+                                            if (_customerData?['addressStreet']?.toString().isNotEmpty == true || _customerData?['addressCity']?.toString().isNotEmpty == true) ...[
+                                              _buildRowItem(Icons.location_on_outlined, 'Indirizzo', ',   '.replaceAll(RegExp(r'\s+'), ' ').trim()),
+                                              const Divider(color: Color(0xFFE5E0F1), height: 24),
+                                            ],
+                                            if (_customerData?['vatNumber']?.toString().isNotEmpty == true) ...[
+                                              _buildRowItem(Icons.badge_outlined, 'P.IVA/C.F.', _customerData!['vatNumber'].toString()),
+                                              const Divider(color: Color(0xFFE5E0F1), height: 24),
+                                            ],
+                                            if (_customerData?['sdiCode']?.toString().isNotEmpty == true) ...[
+                                              _buildRowItem(Icons.markunread_mailbox_outlined, 'Codice SDI', _customerData!['sdiCode'].toString()),
+                                              const Divider(color: Color(0xFFE5E0F1), height: 24),
+                                            ],
+                                            _buildRowItem(Icons.layers_outlined, 'Importo', NumberFormat.currency(locale: 'it_IT', symbol: '€ ').format(amount), isAmount: true),
                                             const Divider(color: Color(0xFFE5E0F1), height: 24),
                                             _buildRowItem(Icons.credit_card_outlined, 'Metodo di pagamento', _data!['payment_method']?.toString() ?? '-'),
-                                            const Divider(color: Color(0xFFE5E0F1), height: 24),
-                                            _buildRowItem(Icons.folder_outlined, 'Categoria', _categoryName ?? '-'),
-                                            const Divider(color: Color(0xFFE5E0F1), height: 24),
-                                            _buildRowItem(Icons.receipt_long_outlined, 'Prestazione', _serviceName ?? '-'),
                                             
                                             const SizedBox(height: 24),
                                             
@@ -437,11 +467,13 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                                               ),
                                             ]
                                           ],
-                                        ),
+                                        );
+                                        return MediaQuery.of(context).size.width > 600 ? Flexible(flex: 7, child: col) : col;
+                                        }
                                       ),
-                                      const SizedBox(width: 24),
+                                      const SizedBox(width: 24, height: 24),
                                       // Right Panel (Watermark Logo)
-                                      Expanded(
+                                      if (MediaQuery.of(context).size.width > 600) Flexible(
                                         flex: 4,
                                         child: Container(
                                           height: 380,
@@ -471,11 +503,13 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                               
                               // Dark Footer inside container
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                                child: Row(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                                child: Flex(
+                                  direction: MediaQuery.of(context).size.width > 600 ? Axis.horizontal : Axis.vertical,
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Container(
                                           padding: const EdgeInsets.all(12),
@@ -486,31 +520,36 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                                           child: const Icon(Icons.receipt_long, color: Color(0xFFB142F5), size: 28),
                                         ),
                                         const SizedBox(width: 16),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'FATTURA ' + (title2.contains("COMMERCIALE") ? title2 : title2 == "isIN ? 'INCASSO' : 'PAGAMENTO'" ? (isIN ? 'INCASSO' : 'PAGAMENTO') : title2),
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            RichText(
-                                              text: TextSpan(
-                                                text: 'Documento generato tramite ',
-                                                style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                                                children: const [
-                                                  TextSpan(
-                                                    text: 'Contabile App',
-                                                    style: TextStyle(color: Color(0xFFB142F5), fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
+                                        Flexible(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'FATTURA ' + (title2.contains("COMMERCIALE") ? title2 : title2 == "isIN ? 'INCASSO' : 'PAGAMENTO'" ? (isIN ? 'INCASSO' : 'PAGAMENTO') : title2),
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                               ),
-                                            )
-                                          ],
+                                              const SizedBox(height: 4),
+                                              RichText(
+                                                text: TextSpan(
+                                                  text: 'Documento generato tramite ',
+                                                  style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                                                  children: const [
+                                                    TextSpan(
+                                                      text: 'Contabile App',
+                                                      style: TextStyle(color: Color(0xFFB142F5), fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                            ],
+                                          ),
                                         ),
                                       ],
                                     ),
-                                    Row(
+                                    Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 16,
+                                      runSpacing: 16,
                                       children: [
                                         Text(
                                           'Grazie!',
@@ -520,11 +559,11 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
-                                        const SizedBox(width: 24),
-                                        Container(width: 1, height: 40, color: const Color(0xFF322756)),
-                                        const SizedBox(width: 24),
+                                        if (MediaQuery.of(context).size.width > 600)
+                                          Container(width: 1, height: 40, color: const Color(0xFF322756)),
                                         Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             const Text('Bimbomixer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                                             const SizedBox(height: 4),
@@ -565,27 +604,37 @@ class _InvoiceSummaryScreenState extends State<InvoiceSummaryScreen> {
         ),
         const SizedBox(width: 16),
         Expanded(
-          flex: 2,
+          flex: 4,
           child: Text(
             label,
             style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15),
           ),
         ),
         if (isAmount)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEBE6F5), // Light purple box
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              value,
-              style: const TextStyle(color: Color(0xFF7F30D8), fontWeight: FontWeight.w900, fontSize: 22),
+          Expanded(
+            flex: 5,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEBE6F5), // Light purple box
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: const TextStyle(color: Color(0xFF7F30D8), fontWeight: FontWeight.w900, fontSize: 18),
+                  ),
+                ),
+              ),
             ),
           )
         else
           Expanded(
-            flex: 3,
+            flex: 5,
             child: Text(
               value,
               textAlign: TextAlign.right,
@@ -646,3 +695,6 @@ class _HoverEditButtonState extends State<HoverEditButton> {
     );
   }
 }
+
+
+

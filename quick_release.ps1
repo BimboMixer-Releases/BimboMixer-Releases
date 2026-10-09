@@ -1,7 +1,7 @@
 $version = '1.8.19'
 $winReleasePath = 'build\windows\x64\runner\Release'
-$pcDestDir = 'C:\Users\Hp\Desktop\Contabile APP Bimbomixer'
-$apkDestDir = 'C:\Users\Hp\Desktop\Contabile APP Bimbomixer'
+$pcDestDir = 'C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer'
+$apkDestDir = 'C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\CONTABILE APP Bimbomixer'
 
 # Crea cartelle
 New-Item -ItemType Directory -Force -Path $pcDestDir | Out-Null

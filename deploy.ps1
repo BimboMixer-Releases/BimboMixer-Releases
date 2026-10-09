@@ -1,4 +1,4 @@
-$targetDir = "C:\Users\Hp\Desktop\Aggiornamenti App"
+$targetDir = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\Aggiornamenti App"
 $androidDir = "$targetDir\Android"
 $pcDir = "$targetDir\PC"
 

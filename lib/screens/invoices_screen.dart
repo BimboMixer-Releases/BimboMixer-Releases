@@ -4,10 +4,13 @@ import 'package:provider/provider.dart';
 import '../database/database_helper.dart';
 import 'package:contabile_app/providers/app_theme_provider.dart';
 import 'package:contabile_app/screens/invoice_summary_screen.dart';
+import 'memo_form_screen.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import '../services/attachment_service.dart';
 import '../services/pdf_report_service.dart';
 import '../utils/report_utils.dart';
+import '../utils/currency_utils.dart';
+import '../widgets/gradient_scaffold.dart';
 import '../utils/security_utils.dart';
 import '../utils/date_utils_app.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -260,7 +263,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                           SizedBox(height: 8),
                           Row(
                             children: [
-                              Expanded(flex: 2, child: TextField(controller: clientCityCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Città', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54))))),
+                              Expanded(flex: 2, child: TextField(controller: clientCityCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'CittÃ ', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54))))),
                               SizedBox(width: 8),
                               Expanded(flex: 1, child: TextField(controller: clientProvinceCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Provincia', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54))))),
                               SizedBox(width: 8),
@@ -506,309 +509,284 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     }
   }
 
+  // ---- Filtri / ordinamento ----
+  String _statusFilter = 'Tutte';
+  DateTimeRange? _dateRange;
+  String _sortMode = 'Data Piu Recente';
+
+  List<Map<String, dynamic>> get _filteredInvoices {
+    var list = _invoices.where((i) {
+      final st = i['status']?.toString();
+      if (_statusFilter == 'Da Incassare' && st == 'PAID') return false;
+      if (_statusFilter == 'Incassata' && st != 'PAID') return false;
+      if (_dateRange != null) {
+        final d = i['date']?.toString();
+        if (d != null && d.isNotEmpty && !ReportUtils.isDateInRange(d, _dateRange!)) return false;
+      }
+      return true;
+    }).toList();
+    int numOf(Map<String, dynamic> i) {
+      final m = RegExp(r'\d+').firstMatch(i['number']?.toString() ?? '');
+      return m != null ? int.parse(m.group(0)!) : 0;
+    }
+    list.sort((x, y) {
+      switch (_sortMode) {
+        case 'Numero (Crescente)':
+          return numOf(x).compareTo(numOf(y));
+        case 'Numero (Decrescente)':
+          return numOf(y).compareTo(numOf(x));
+        case 'Data Meno Recente':
+          return (x['date']?.toString() ?? '').compareTo(y['date']?.toString() ?? '');
+        default:
+          return (y['date']?.toString() ?? '').compareTo(x['date']?.toString() ?? '');
+      }
+    });
+    return list;
+  }
+
+  Future<void> _pickDateFilter() async {
+    final range = await ReportUtils.showDateRangeFilterDialog(context);
+    if (!mounted || range == null) return;
+    setState(() => _dateRange = range);
+  }
+
+  Future<void> _exportPdfReport(List<Map<String, dynamic>> items, String dateFormat) async {
+    if (items.isEmpty) return;
+    final data = items.map<List<String>>((i) {
+      final c = _getCustomer(i['customer_id']?.toString());
+      final amount = double.tryParse(i['amount']?.toString() ?? '0') ?? 0;
+      final st = i['status']?.toString();
+      return [
+        i['number']?.toString() ?? '-',
+        c?['name']?.toString() ?? 'Sconosciuto',
+        DateUtilsApp.formatDbDate(i['date']?.toString(), dateFormat),
+        CurrencyUtils.formatEuro(amount),
+        st == 'PAID' ? 'Incassata' : st == 'LATE' ? 'In Ritardo' : 'Da Incassare',
+      ];
+    }).toList();
+    await PDFReportService.generateAndDownloadReport(
+      title: 'Report Fatture',
+      headers: ['Numero', 'Cliente', 'Data', 'Importo', 'Stato'],
+      data: data,
+      dateRangeText: _dateRange == null ? 'Tutte le date' : ReportUtils.formatDateRangeText(_dateRange!, dateFormat),
+      dateFormatString: dateFormat,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<AppThemeProvider>();
+    final filtered = _filteredInvoices;
+    final total = filtered.fold<double>(0.0, (sum, i) => sum + (double.tryParse(i['amount']?.toString() ?? '0') ?? 0));
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: Text('Fatture', style: TextStyle(color: Colors.white)),
+    return GradientScaffold(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF22D3EE)))
+          : CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+        floating: true,
+        snap: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        title: const Text(
+          'Fatture',
+          style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+        ),
         actions: [
           IconButton(
-            icon: Icon(Icons.print, color: Colors.blueAccent),
-            tooltip: 'Esporta in PDF',
-            onPressed: () async {
-              if (_invoices.isEmpty) return;
-
-              final range = await ReportUtils.showDateRangeFilterDialog(context);
-              if (range == null) return;
-
-              final filteredInvoices = _invoices.where((i) {
-                final date = i['date'] as String?;
-                if (date == null || date.isEmpty) return true;
-                return ReportUtils.isDateInRange(date, range);
-              }).toList();
-
-              if (filteredInvoices.isEmpty) {
-                if (mounted) {
-                  final snackCtx = context;
-                  ScaffoldMessenger.of(snackCtx).showSnackBar(
-                    const SnackBar(content: Text('Nessuna fattura nel periodo selezionato.')),
-                  );
-                }
-                return;
-              }
-
-              final List<List<String>> data = filteredInvoices.map<List<String>>((i) {
-                final date = DateUtilsApp.formatDbDate(i['date']?.toString(), theme.dateFormat);
-                final num = i['number']?.toString() ?? '-';
-                final amount = '${double.tryParse(i['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'} €';
-                final status = i['status'] == 'PAID' ? 'INC' : i['status'] == 'LATE' ? 'RIT' : 'DA_INC';
-                
-                final customer = _getCustomer(i['customer_id']?.toString());
-                final customerName = customer?['name'] ?? 'Sconosciuto';
-                
-                return [customerName, num, date, amount, status];
-              }).toList();
-              
-              await PDFReportService.generateAndDownloadReport(
-                title: 'Fatture',
-                headers: ['Cliente', 'Descrizione (Num.)', 'Dt.', 'Imp.', 'St.'],
-                data: data,
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(3),
-                  1: const pw.FlexColumnWidth(2),
-                  2: const pw.FixedColumnWidth(55),
-                  3: const pw.FixedColumnWidth(55),
-                  4: const pw.FixedColumnWidth(45),
-                },
-                dateRangeText: ReportUtils.formatDateRangeText(range, theme.dateFormat),
-                dateFormatString: theme.dateFormat,
-                landscape: true,
-                legend: {
-                  'Dt.': 'Data',
-                  'Imp.': 'Importo',
-                  'St.': 'Stato (INC=Incassata, RIT=In Ritardo, DA_INC=Da Incassare)',
-                }
-              );
-            },
+            icon: Icon(Icons.date_range, color: _dateRange == null ? const Color(0xFF38BDF8) : const Color(0xFFEC4899), size: 22),
+            tooltip: 'Filtra per data',
+            onPressed: _pickDateFilter,
+          ),
+          if (_dateRange != null)
+            IconButton(
+              icon: const Icon(Icons.filter_alt_off, color: Colors.white70, size: 20),
+              tooltip: 'Rimuovi filtro data',
+              onPressed: () => setState(() => _dateRange = null),
+            ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort, color: Color(0xFF38BDF8), size: 22),
+            tooltip: 'Ordina',
+            color: const Color(0xFF16192B),
+            onSelected: (val) => setState(() => _sortMode = val),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'Numero (Decrescente)', child: Text('Numero (Decrescente)', style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 'Numero (Crescente)', child: Text('Numero (Crescente)', style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 'Data Piu Recente', child: Text('Data Più Recente', style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 'Data Meno Recente', child: Text('Data Meno Recente', style: TextStyle(color: Colors.white))),
+            ],
           ),
           IconButton(
-              icon: Icon(Icons.add, color: Colors.blueAccent),
-              onPressed: () => _showInvoiceDialog())
+            icon: const Icon(Icons.print_outlined, color: Color(0xFF38BDF8), size: 22),
+            tooltip: 'Esporta Report PDF',
+            onPressed: () => _exportPdfReport(filtered, theme.dateFormat),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: Colors.blueAccent))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _invoices.length,
-              itemBuilder: (context, index) {
-                final invoice = _invoices[index];
-                List<String> attachments = [];
-                if (invoice['attachments'] != null) {
-                  attachments = List<String>.from(invoice['attachments']);
-                }
-
-                final customer = _getCustomer(invoice['customer_id']?.toString());
-                final customerName = customer?['name'] ?? 'Cliente Sconosciuto';
-                // Costruisci stringa contatti estesa
-                List<String> contattiList = [];
-                if (customer?['email']?.toString().isNotEmpty == true) contattiList.add("Email: ${customer!['email']}");
-                if (customer?['pec']?.toString().isNotEmpty == true) contattiList.add("PEC: ${customer!['pec']}");
-                if (customer?['phone']?.toString().isNotEmpty == true) contattiList.add("Tel: ${customer!['phone']}");
-                if (customer?['contacts']?.toString().isNotEmpty == true && contattiList.isEmpty) contattiList.add(customer!['contacts']);
-                
-                final customerContacts = contattiList.isNotEmpty ? contattiList.join(" | ") : 'N/D';
-                
-                String pivaCf = "";
-                if (customer?['vat_number']?.toString().isNotEmpty == true) pivaCf += "P.IVA: ${customer!['vat_number']} ";
-                if (customer?['tax_code']?.toString().isNotEmpty == true) pivaCf += "C.F.: ${customer!['tax_code']} ";
-                if (pivaCf.isEmpty) pivaCf = "N/D";
-                
-                final customerDetails = "$pivaCf\nContatti: $customerContacts";
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: theme.borderColor),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: ['Tutte', 'Da Incassare', 'Incassata'].map((f) {
+                      final sel = _statusFilter == f;
+                      return ChoiceChip(
+                        label: Text(f),
+                        selected: sel,
+                        onSelected: (_) => setState(() => _statusFilter = f),
+                        selectedColor: const Color(0xFF38BDF8).withValues(alpha: 0.25),
+                        backgroundColor: const Color(0xFF16192B),
+                        labelStyle: TextStyle(color: sel ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: FontWeight.bold),
+                      );
+                    }).toList(),
                   ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => InvoiceSummaryScreen(
-                              invoiceId: invoice['id'].toString(),
-                              onEdit: (invoiceData) {
-                                _showInvoiceDialog(invoice: invoiceData, isReadOnly: false);
-                              },
-                            ),
-                          ),
-                        ).then((_) => _loadData());
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(Icons.receipt, color: Colors.blueAccent, size: 28),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Fattura ${invoice['number'] ?? '-'}',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16),
-                                      ),
-                                      if (customer != null)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 4.0),
-                                          child: Tooltip(
-                                            message: customerDetails,
-                                            padding: const EdgeInsets.all(12),
-                                            textStyle: TextStyle(color: Colors.white, fontSize: 13),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF2C2C34),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.person, color: Colors.white.withValues(alpha: 0.7), size: 14),
-                                                SizedBox(width: 4),
-                                                Flexible(
-                                                  child: Text(
-                                                    customerName,
-                                                    style: TextStyle(
-                                                      color: Colors.blueAccent,
-                                                      fontWeight: FontWeight.w600,
-                                                      decoration: TextDecoration.underline,
-                                                      fontSize: 14,
-                                                    ),
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Text('€ ${invoice['amount'].toStringAsFixed(2)}',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18)),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: invoice['status'] == 'PAID'
-                                        ? Colors.green.withValues(alpha: 0.2)
-                                        : invoice['status'] == 'LATE'
-                                            ? Colors.red.withValues(alpha: 0.2)
-                                            : Colors.orange.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: invoice['status'] == 'PAID'
-                                          ? Colors.green
-                                          : invoice['status'] == 'LATE'
-                                              ? Colors.red
-                                              : Colors.orange,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    invoice['status'] == 'PAID'
-                                        ? 'Incassata'
-                                        : invoice['status'] == 'LATE'
-                                            ? 'In Ritardo'
-                                            : 'Da Incassare',
-                                    style: TextStyle(
-                                      color: invoice['status'] == 'PAID'
-                                          ? Colors.greenAccent
-                                          : invoice['status'] == 'LATE'
-                                              ? Colors.redAccent
-                                              : Colors.orangeAccent,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                Text('Data: ${DateUtilsApp.formatDbDate(invoice['date']?.toString(), theme.dateFormat)}',
-                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.54), fontSize: 13)),
-                              ],
-                            ),
-                            SizedBox(height: 8),
-                            if (invoice['notes'] != null && invoice['notes'].toString().isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text('Note: ${invoice['notes']}',
-                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
-                              ),
-                            if (invoice['event_date'] != null && invoice['event_date'].toString().isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text('Evento: ${DateUtilsApp.formatDbDate(invoice['event_date']?.toString(), theme.dateFormat)}',
-                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
-                              ),
-                            if (invoice['vat_code'] != null && invoice['vat_code'].toString().isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text('IVA: ${invoice['vat_code']}',
-                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
-                              ),
-                            SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                if (attachments.isNotEmpty)
-                                  Padding(
-                                    padding: EdgeInsets.only(right: 12.0),
-                                    child: Icon(Icons.attachment, color: Colors.white.withValues(alpha: 0.54), size: 20),
-                                  ),
-                                IconButton(
-                                  icon: Icon(Icons.edit, color: Colors.blueAccent, size: 20),
-                                  constraints: const BoxConstraints(),
-                                  padding: const EdgeInsets.all(8),
-                                  onPressed: () async {
-                                    final authorized = await SecurityUtils.requireAdminAuth(context);
-                                    if (authorized && mounted) {
-                                      _showInvoiceDialog(invoice: invoice, isReadOnly: false);
-                                    }
-                                  },
-                                ),
-                                SizedBox(width: 8),
-                                IconButton(
-                                  icon: Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                                  constraints: const BoxConstraints(),
-                                  padding: const EdgeInsets.all(8),
-                                  onPressed: () async {
-                                    final authorized = await SecurityUtils.requireAdminAuth(context);
-                                    if (authorized && mounted) {
-                                      await _dbHelper.deleteInvoice(invoice['id']);
-                                      _loadData();
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B).withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.15)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('${filtered.length} fatture', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+                        Text(CurrencyUtils.formatEuro(total), style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
+                      ],
                     ),
                   ),
-                );
-              },
+                  const SizedBox(height: 12),
+                  if (filtered.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Center(child: Text('Nessuna fattura trovata', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 16))),
+                    )
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) => _buildInvoiceRow(filtered[index], theme.dateFormat),
+                    ),
+                ],
+              ),
+            ),
+                ),
+              ],
             ),
     );
   }
+
+  Future<void> _toggleInvoiceStatus(Map<String, dynamic> i) async {
+    final isPaid = i['status'] == 'PAID';
+    final newStatus = isPaid ? 'PENDING' : 'PAID';
+
+    try {
+      final updatedData = Map<String, dynamic>.from(i);
+      updatedData['status'] = newStatus;
+      await _dbHelper.updateInvoice(updatedData);
+      _loadData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore: ')));
+      }
+    }
+  }
+
+  Widget _buildInvoiceRow(Map<String, dynamic> invoice, String dateFormat) {
+    final isPaid = invoice['status'] == 'PAID';
+    final isLate = invoice['status'] == 'LATE';
+    final color = isPaid ? const Color(0xFF10B981) : isLate ? const Color(0xFFEF4444) : const Color(0xFFF59E0B);
+    final amountVal = double.tryParse(invoice['amount']?.toString() ?? '0') ?? 0;
+    
+    final invoiceId = invoice['number']?.toString() ?? '-';
+    final clientName = _getCustomer(invoice['customer_id']?.toString())?['name'] ?? 'Cliente Generico';
+    
+    return Material(
+      color: const Color(0xFF13141F).withValues(alpha: 0.7),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => InvoiceSummaryScreen(invoiceId: invoice['id'])),
+          ).then((_) => _loadData());
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Fattura ', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(clientName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    Text(DateUtilsApp.formatDbDate(invoice['date']?.toString(), dateFormat), maxLines: 1,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(CurrencyUtils.formatEuro(amountVal),
+                      style: TextStyle(color: const Color(0xFF10B981), fontSize: 15, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () => _toggleInvoiceStatus(invoice),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: color, width: 1.2),
+                      ),
+                      child: Text(isPaid ? 'Saldato' : isLate ? 'In Ritardo' : 'Da Incassare',
+                          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 20),
+                onPressed: () async {
+                  final authorized = await SecurityUtils.requireAdminAuth(context);
+                  if (authorized && mounted) {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => MemoFormScreen(initialMemo: invoice, sourceTable: 'invoices'))).then((_) => _loadData());
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Color(0xFFEC4899), size: 20),
+                onPressed: () async {
+                  final authorized = await SecurityUtils.requireAdminAuth(context);
+                  if (authorized && mounted) {
+                    await _dbHelper.deleteInvoice(invoice['id']);
+                    _loadData();
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showCustomerSearchDialog(String? currentId, Function(String) onSelected) {
     String searchQuery = '';
     showDialog(

@@ -37,9 +37,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     String? selectedColorHex = category?.colorHex;
 
     final List<Color> palette = [
-      Colors.redAccent, Colors.orangeAccent, Colors.yellowAccent,
-      Colors.greenAccent, Colors.blueAccent, Colors.indigoAccent,
-      Colors.purpleAccent, Colors.pinkAccent, Colors.tealAccent, Colors.grey
+      Colors.redAccent,
+      Colors.orangeAccent,
+      Colors.yellowAccent,
+      Colors.greenAccent,
+      Colors.blueAccent,
+      Colors.indigoAccent,
+      Colors.purpleAccent,
+      Colors.pinkAccent,
+      Colors.tealAccent,
+      Colors.grey,
     ];
 
     showDialog(
@@ -55,8 +62,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      category == null ? 'Nuova Categoria' : 'Modifica Categoria',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                      category == null
+                          ? 'Nuova Categoria'
+                          : 'Modifica Categoria',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                     SizedBox(height: 16),
                     TextField(
@@ -64,8 +77,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: 'Nome Categoria *',
-                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                        labelStyle: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
                       ),
                     ),
                     SizedBox(height: 16),
@@ -75,8 +94,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: 'Tipo',
-                        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.7))),
+                        labelStyle: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
                       ),
                       items: const [
                         DropdownMenuItem(value: 'IN', child: Text('Entrata')),
@@ -89,7 +114,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       },
                     ),
                     SizedBox(height: 16),
-                    Text('Colore (per grafici):', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                    Text(
+                      'Colore (per grafici):',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                     SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -108,7 +138,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                               color: color,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: isSelected ? Colors.white : Colors.transparent,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.transparent,
                                 width: 3,
                               ),
                             ),
@@ -122,7 +154,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       children: [
                         TextButton(
                           onPressed: () => Navigator.pop(dialogContext),
-                          child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                          child: Text(
+                            'ANNULLA',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
                         ),
                         SizedBox(width: 8),
                         ElevatedButton(
@@ -137,22 +174,27 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                             );
 
                             if (category == null) {
-                              await _dbHelper.insertCategory(newCategory.toMap());
+                              await _dbHelper.insertCategory(
+                                newCategory.toMap(),
+                              );
                             } else {
-                              await _dbHelper.updateCategory(newCategory.toMap());
+                              await _dbHelper.updateCategory(
+                                newCategory.toMap(),
+                              );
                             }
-                            if (dialogContext.mounted) Navigator.pop(dialogContext);
+                            if (dialogContext.mounted)
+                              Navigator.pop(dialogContext);
                             _refreshCategories();
                           },
                           child: Text('SALVA'),
                         ),
                       ],
-                    )
+                    ),
                   ],
                 ),
               ),
             );
-          }
+          },
         );
       },
     );
@@ -168,25 +210,42 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Conferma Eliminazione', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(
+                'Conferma Eliminazione',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               SizedBox(height: 16),
-              Text('Eliminando questa categoria, i pagamenti associati rimarranno senza categoria. Procedere?', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+              Text(
+                'Eliminando questa categoria, i pagamenti associati rimarranno senza categoria. Procedere?',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              ),
               SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('ANNULLA', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                    child: Text(
+                      'ANNULLA',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
                     onPressed: () => Navigator.pop(context, true),
                     child: Text('ELIMINA'),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),
@@ -198,11 +257,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         await _dbHelper.deleteCategory(id);
         _refreshCategories();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Categoria eliminata.'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Categoria eliminata.'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore eliminazione: $e'), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Errore eliminazione: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       }
     }
@@ -212,7 +281,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Widget build(BuildContext context) {
     return GradientScaffold(
       appBar: AppBar(
-        title: Text('Categorie Pagamenti', style: TextStyle(color: Colors.white)),
+        
+        title: Text(
+          'Categorie Pagamenti',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: IconThemeData(color: Colors.white),
@@ -220,86 +293,116 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: Colors.white))
           : _categories.isEmpty
-              ? Center(child: Text('Nessuna categoria definita.', style: TextStyle(color: Colors.white.withValues(alpha: 0.54))))
-              : GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 350,
-                    mainAxisExtent: 90, // Altezza fissa della casella
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+          ? Center(
+              child: Text(
+                'Nessuna categoria definita.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+              ),
+            )
+          : GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 350,
+                mainAxisExtent: 90, // Altezza fissa della casella
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: _categories.length,
+              itemBuilder: (context, index) {
+                final cat = _categories[index];
+                return GlassContainer(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final cat = _categories[index];
-                    return GlassContainer(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Row(
-                        children: [
-                          Icon(
-                            cat.type == 'IN' ? Icons.arrow_downward : Icons.arrow_upward,
-                            color: cat.type == 'IN' ? Colors.greenAccent : Colors.redAccent,
-                            size: 32,
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  cat.name,
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  cat.type == 'IN' ? 'Entrata' : 'Uscita',
-                                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
-                                ),
-                              ],
+                  child: Row(
+                    children: [
+                      Icon(
+                        cat.type == 'IN'
+                            ? Icons.arrow_downward
+                            : Icons.arrow_upward,
+                        color: cat.type == 'IN'
+                            ? Colors.greenAccent
+                            : Colors.redAccent,
+                        size: 32,
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              cat.name,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            SizedBox(height: 4),
+                            Text(
+                              cat.type == 'IN' ? 'Entrata' : 'Uscita',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (cat.colorHex != null)
-                                    Container(
-                                      margin: const EdgeInsets.only(right: 12),
-                                      width: 16,
-                                      height: 16,
-                                      decoration: BoxDecoration(
-                                        color: Color(int.parse(cat.colorHex!)),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 2),
-                                      ),
+                              if (cat.colorHex != null)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 12),
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: Color(int.parse(cat.colorHex!)),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
                                     ),
-                                  IconButton(
-                                    icon: Icon(Icons.edit, color: Colors.blueAccent, size: 20),
-                                    onPressed: () => _showCategoryDialog(cat),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
                                   ),
-                                  SizedBox(width: 8),
-                                  IconButton(
-                                    icon: Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                                    onPressed: () => _deleteCategory(cat.id!),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                ],
+                                ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.edit,
+                                  color: Colors.blueAccent,
+                                  size: 20,
+                                ),
+                                onPressed: () => _showCategoryDialog(cat),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                              SizedBox(width: 8),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete,
+                                  color: Colors.redAccent,
+                                  size: 20,
+                                ),
+                                onPressed: () => _deleteCategory(cat.id!),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
                               ),
                             ],
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
+                    ],
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showCategoryDialog(),
         backgroundColor: Colors.blueAccent,
@@ -308,5 +411,3 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 }
-
-

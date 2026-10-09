@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../screens/image_cropper_screen.dart';
 
 class AttachmentService {
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  FirebaseStorage get _storage => FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
 
   Future<File?> _processPickedFile(BuildContext? context, File? file) async {
@@ -88,6 +88,18 @@ class AttachmentService {
     } catch (e) {
       print('Errore durante l\'upload dell\'allegato: $e');
       throw Exception('Caricamento fallito (Controlla le regole di Firebase Storage o la connessione): $e');
+    }
+  }
+
+
+  /// Deletes a file from Firebase Storage given its download URL
+  Future<void> deleteAttachment(String url) async {
+    if (url.isEmpty || !url.contains('firebasestorage')) return;
+    try {
+      Reference ref = _storage.refFromURL(url);
+      await ref.delete();
+    } catch (e) {
+      print('Errore durante l\'eliminazione dell\'allegato: ');
     }
   }
 
