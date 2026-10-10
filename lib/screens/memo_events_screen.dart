@@ -216,14 +216,25 @@ class _MemoEventsScreenState extends State<MemoEventsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            'Pagamenti Programmati',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Pagamenti Programmati',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ],
           ),
           ElevatedButton.icon(
             onPressed: () async {
