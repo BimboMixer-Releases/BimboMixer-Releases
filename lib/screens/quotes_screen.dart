@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:intl/intl.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../database/database_helper.dart';
 import '../services/attachment_service.dart';
 import '../widgets/gradient_scaffold.dart';
@@ -139,8 +140,18 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
     // Try reading raw text from PDF file to find patterns
     try {
-      final bytes = file.readAsBytesSync();
-      final text = String.fromCharCodes(bytes);
+      String text = '';
+      if (file.path.toLowerCase().endsWith('.pdf')) {
+        try {
+          final PdfDocument document = PdfDocument(inputBytes: file.readAsBytesSync());
+          text = PdfTextExtractor(document).extractText();
+          document.dispose();
+        } catch (e) {
+          text = String.fromCharCodes(file.readAsBytesSync());
+        }
+      } else {
+        text = String.fromCharCodes(file.readAsBytesSync());
+      }
 
       // 1. Check for Code (es. P-2023-08 o Preventivo N. 12)
       final codeMatch = RegExp(
@@ -295,7 +306,18 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
         await _dbHelper.insertQuote(quoteData);
         successCount++;
+      }
+
+      if (successCount > 0) {
         await _loadQuotes();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Caricati $successCount preventivi con successo!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
 
       if (mounted) {

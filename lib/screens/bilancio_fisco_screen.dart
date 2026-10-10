@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/glass_container.dart';
@@ -70,7 +70,7 @@ class _BilancioFiscoScreenState extends State<BilancioFiscoScreen> {
           }
 
           final method = (p['payment_method']?.toString() ?? '').toLowerCase();
-          if (method.contains('carta') || method.contains('credito') || method.contains('bancomat')) {
+          if (!method.contains('contant')) {
             double amt = double.tryParse(p['amount']?.toString() ?? '0') ?? 0;
             if (p['type'] == 'IN') entrateF += amt;
             else if (p['type'] == 'OUT') usciteF += amt;
@@ -158,7 +158,7 @@ class _BilancioFiscoScreenState extends State<BilancioFiscoScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Conteggia le fatture incassate e i movimenti pagati esclusivamente con Carta.',
+                          'Conteggia le fatture incassate e i movimenti saldati (esclusi quelli in Contante).',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
                         ),

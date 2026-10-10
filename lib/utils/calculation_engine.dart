@@ -48,12 +48,16 @@ class CalculationEngine {
     double totalOut = 0.0;
     double globalPatrimonio = 0.0;
     
+    // Fallback for tests or missing arguments
+    allPayments ??= payments;
+    allInvoices ??= invoices;
+    
     // Compute Global Net Worth using allPayments and allInvoices
     Set<String> allPaidInvoiceIds = {};
     if (allPayments != null) {
       for (var p in allPayments) {
         String status = (p['status'] ?? '').toString().toUpperCase();
-        if (status == 'PENDING' || status == 'LATE' || status == 'IN ATTESA' || status == 'IN SOSPESO' || status == 'NON PAGATO') continue;
+        if (status.isNotEmpty && status != 'PAID' && status != 'SALDATO' && status != 'PAGATO') continue;
         double amt = CurrencyUtils.parseCurrency(p['amount']?.toString());
         if (p['type'] == 'IN') globalPatrimonio += amt;
         else globalPatrimonio -= amt;
@@ -72,6 +76,15 @@ class CalculationEngine {
         }
       }
     }
+    
+    // Subtract all PAID deadlines from globalPatrimonio
+    for (var d in deadlines) {
+      String status = (d['status'] ?? '').toString().toUpperCase();
+      if (status == 'PAID' || status == 'SALDATO' || status == 'PAGATO') {
+        globalPatrimonio -= CurrencyUtils.parseCurrency(d['amount']?.toString());
+      }
+    }
+
     Map<int, double> monthlyNet = {for (var i = 1; i <= 12; i++) i: 0.0};
     Map<int, double> monthlyIn = {for (var i = 1; i <= 12; i++) i: 0.0};
     Map<int, double> monthlyOut = {for (var i = 1; i <= 12; i++) i: 0.0};
@@ -84,7 +97,7 @@ class CalculationEngine {
     
     for (var p in payments) {
       String status = (p['status'] ?? '').toString().toUpperCase();
-      if (status == 'PENDING' || status == 'LATE' || status == 'IN ATTESA' || status == 'IN SOSPESO' || status == 'NON PAGATO') {
+      if (status.isNotEmpty && status != 'PAID' && status != 'SALDATO' && status != 'PAGATO') {
         continue;
       }
       
@@ -127,7 +140,8 @@ class CalculationEngine {
     
     // Processa Invoices: aggiungi al totalIn e al Fatturato le fatture pagate che non hanno un pagamento associato
     for (var inv in invoices) {
-      if (inv['status'] == 'PAID') {
+      String status = (inv['status'] ?? '').toString().toUpperCase();
+      if (status == 'PAID' || status == 'INCASSATA' || status == 'SALDATO') {
         String invId = inv['id']?.toString() ?? '';
         if (invId.isNotEmpty && !paidInvoiceIds.contains(invId)) {
           String dateStr = inv['date'] ?? '';
@@ -151,7 +165,8 @@ class CalculationEngine {
     // Deadlines processing (filtered by selected year) - da sottrarre al patrimonio
     double totalDeadlinesPaid = 0.0;
     for (var d in deadlines) {
-      if (d['status'] == 'PAID') {
+      String status = (d['status'] ?? '').toString().toUpperCase();
+      if (status == 'PAID' || status == 'SALDATO' || status == 'PAGATO') {
         String? dateStr = d['date_from']?.toString();
         if (dateStr == null || dateStr.isEmpty) {
           dateStr = d['date']?.toString();
@@ -181,7 +196,7 @@ class CalculationEngine {
     return DashboardMetrics(
       totalIn: totalIn,
       totalOut: totalOut,
-      patrimonio: patrimonio,
+      patrimonio: globalPatrimonio,
       margine: margine,
       monthlyNet: monthlyNet,
       monthlyIn: monthlyIn,
