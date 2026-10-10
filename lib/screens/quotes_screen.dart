@@ -1093,6 +1093,57 @@ class _QuotesScreenState extends State<QuotesScreen> {
                           ),
                         );
 
+                        Widget btnGoogleDocs = Tooltip(
+                          message: 'Collega a Google Docs',
+                          child: InkWell(
+                            onTap: () async {
+                              final uri = Uri.parse('https://docs.google.com/document/u/0/');
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.white.withOpacity(0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Image.network(
+                                    'https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/512px-Google_%22G%22_Logo.svg.png',
+                                    height: 16,
+                                    width: 16,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        const Icon(Icons.description, size: 16, color: Colors.blue),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Google Docs',
+                                    style: TextStyle(
+                                      color: Colors.black87,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+
                         if (isMobile) {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1105,7 +1156,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                 spacing: 8,
                                 runSpacing: 8,
                                 alignment: WrapAlignment.spaceBetween,
-                                children: [btnBulk, btnNew],
+                                children: [btnGoogleDocs, btnBulk, btnNew],
                               ),
                             ],
                           );
@@ -1116,6 +1167,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
                               const SizedBox(width: 24),
                               Expanded(child: searchBar),
                               const SizedBox(width: 16),
+                              btnGoogleDocs,
+                              const SizedBox(width: 12),
                               btnBulk,
                               const SizedBox(width: 12),
                               btnNew,
