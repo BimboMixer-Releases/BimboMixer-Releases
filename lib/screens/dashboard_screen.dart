@@ -38,6 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _totalOut = 0;
   double _totalInLastYear = 0;
   double _totalOutLastYear = 0;
+  double _patrimonio = 0;
 
   List<Map<String, dynamic>> _payments = [];
   List<Map<String, dynamic>> _deadlines = [];
@@ -69,6 +70,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final paymentsLastYear = await _dbHelper.getPayments(
       year: _selectedYear - 1,
     );
+    final allPayments = await _dbHelper.getPayments();
+    final allInvoices = await _dbHelper.getInvoices();
 
     final deadlines = await _dbHelper.getDeadlines();
     final invoices = await _dbHelper.getInvoices();
@@ -105,6 +108,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       categoryNames: categoryNames,
       serviceNames: serviceNames,
       selectedYear: _selectedYear,
+      allPayments: allPayments,
+      allInvoices: allInvoices,
     );
 
     final metricsLastYear = CalculationEngine.computeDashboardMetrics(
@@ -141,6 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _totalOut = metrics.totalOut;
       _totalInLastYear = metricsLastYear.totalIn;
       _totalOutLastYear = metricsLastYear.totalOut;
+      _patrimonio = metrics.patrimonio;
       _payments = payments;
       _deadlines = deadlines;
       _invoices = invoices;
@@ -199,9 +205,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildPatrimonioCard(AppThemeProvider theme) {
-    double netto = _totalIn - _totalOut;
-    double nettoLastYear = _totalInLastYear - _totalOutLastYear;
-    String change = _calculatePercentageChange(netto, nettoLastYear);
+    double netto = _patrimonio;
+    double nettoLastYear = _totalInLastYear - _totalOutLastYear; // Historical comparison keeps year net
+    String change = _calculatePercentageChange(_totalIn - _totalOut, nettoLastYear); // Change compares year performance, not all-time!
     bool isPositive = !change.startsWith('-');
 
     return Container(
@@ -317,7 +323,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : 0;
 
     int baseUnpaidInvoices = _invoices.where((i) => i['status'] != 'PAID' && i['status'] != 'Incassata').length;
-    int memoUnpaidFatture = _memoEvents.where((m) => m['memo_type']?.toString().toUpperCase() == 'FATTURA' && m['memo_status']?.toString().toUpperCase() != 'PAGATO').length;
+    int memoUnpaidFatture = _memoEvents.where((m) => m['memo_type']?.toString().toUpperCase() == 'FATTURA' && m['memo_status']?.toString().toUpperCase() != 'PAGATO' && m['memo_status']?.toString().toUpperCase() != 'SALDATO').length;
     int unpaidInvoices = baseUnpaidInvoices + memoUnpaidFatture;
 
     return LayoutBuilder(

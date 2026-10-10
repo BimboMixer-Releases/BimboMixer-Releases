@@ -41,9 +41,37 @@ class CalculationEngine {
     required Map<String, String> categoryNames,
     required Map<String, String> serviceNames,
     required int selectedYear,
+    List<Map<String, dynamic>>? allPayments,
+    List<Map<String, dynamic>>? allInvoices,
   }) {
     double totalIn = 0.0;
     double totalOut = 0.0;
+    double globalPatrimonio = 0.0;
+    
+    // Compute Global Net Worth using allPayments and allInvoices
+    Set<String> allPaidInvoiceIds = {};
+    if (allPayments != null) {
+      for (var p in allPayments) {
+        String status = (p['status'] ?? '').toString().toUpperCase();
+        if (status == 'PENDING' || status == 'LATE' || status == 'IN ATTESA' || status == 'IN SOSPESO' || status == 'NON PAGATO') continue;
+        double amt = CurrencyUtils.parseCurrency(p['amount']?.toString());
+        if (p['type'] == 'IN') globalPatrimonio += amt;
+        else globalPatrimonio -= amt;
+        String? invId = p['invoice_id']?.toString();
+        if (invId != null && invId.isNotEmpty) allPaidInvoiceIds.add(invId);
+      }
+    }
+    if (allInvoices != null) {
+      for (var inv in allInvoices) {
+        String status = (inv['status'] ?? '').toString().toUpperCase();
+        if (status == 'PAID' || status == 'INCASSATA' || status == 'SALDATO') {
+          String invId = inv['id']?.toString() ?? '';
+          if (invId.isNotEmpty && !allPaidInvoiceIds.contains(invId)) {
+            globalPatrimonio += CurrencyUtils.parseCurrency(inv['amount']?.toString());
+          }
+        }
+      }
+    }
     Map<int, double> monthlyNet = {for (var i = 1; i <= 12; i++) i: 0.0};
     Map<int, double> monthlyIn = {for (var i = 1; i <= 12; i++) i: 0.0};
     Map<int, double> monthlyOut = {for (var i = 1; i <= 12; i++) i: 0.0};

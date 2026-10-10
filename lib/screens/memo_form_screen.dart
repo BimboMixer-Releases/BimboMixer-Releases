@@ -26,6 +26,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
   final AttachmentService _attachmentService = AttachmentService();
 
   bool _isUploading = false;
+  bool _isSaving = false;
   List<String> _attachments = [];
 
   // Tipi principali
@@ -76,7 +77,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
         _memoType = 'MOVIMENTO';
         _transactionType = (m['type'] == 'IN') ? 'ENTRATA' : 'USCITA';
         _dateType = 'SINGOLA';
-        _memoStatus = (m['status'] == 'PAID' || m['status'] == 'Saldato') ? 'PAGATO' : 'IN ATTESA';
+        _memoStatus = (m['status'] == 'PAID' || m['status'] == 'Saldato') ? 'SALDATO' : 'IN ATTESA';
         _titleCtrl.text = m['description']?.toString() ?? '';
         _dateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy');
         _customerId = m['client_id']?.toString();
@@ -93,7 +94,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
         _memoType = 'FATTURA';
         _transactionType = 'ENTRATA';
         _dateType = 'SINGOLA';
-        _memoStatus = (m['status'] == 'PAID' || m['status'] == 'Saldato') ? 'PAGATO' : 'IN ATTESA';
+        _memoStatus = (m['status'] == 'PAID' || m['status'] == 'Saldato') ? 'SALDATO' : 'IN ATTESA';
         _titleCtrl.text = m['title']?.toString() ?? '';
         _invoiceNumberCtrl.text = m['number']?.toString() ?? '';
         _dateCtrl.text = DateUtilsApp.formatDbDate(m['date']?.toString(), 'dd/MM/yyyy');
@@ -228,11 +229,14 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
   }
 
   Future<void> _saveMemo() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
     final theme = context.read<AppThemeProvider>();
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Inserisci un titolo per il memo')),
       );
+      setState(() => _isSaving = false);
       return;
     }
 
@@ -277,7 +281,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
           'category_id': data['category_id'],
           'payment_method': data['payment_method'],
           'description': data['title'],
-          'status': _memoStatus == 'PAGATO' ? 'PAID' : 'PENDING',
+          'status': _memoStatus == 'SALDATO' ? 'PAID' : 'PENDING',
           'attachments': data['attachments'] is List ? (data['attachments'] as List).join(',') : data['attachments'],
         };
         await _dbHelper.updatePayment(paymentData);
@@ -288,7 +292,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
           'id': widget.initialMemo!['id'],
           'amount': data['amount'],
           'date': data['date'],
-          'status': _memoStatus == 'PAGATO' ? 'PAID' : 'PENDING',
+          'status': _memoStatus == 'SALDATO' ? 'PAID' : 'PENDING',
           'client_id': data['customer_id'],
           'category_id': data['category_id'],
           'number': data['invoice_number'],
@@ -302,7 +306,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
         return;
       }
 
-      if (_memoStatus == 'PAGATO') {
+      if (_memoStatus == 'SALDATO') {
         // TRASFERIMENTO AUTOMATICO
         if (_memoType == 'MOVIMENTO') {
           // Prepara pagamento
@@ -369,6 +373,8 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
           SnackBar(content: Text('Errore durante il salvataggio: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -513,7 +519,7 @@ class _MemoFormScreenState extends State<MemoFormScreen> {
                         fillColor: Colors.white10,
 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
-                      items: ['IN ATTESA', 'PAGATO', 'DA SOLLECITARE'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      items: ['IN ATTESA', 'SALDATO', 'DA SOLLECITARE'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                       onChanged: (val) => setState(() => _memoStatus = val!),
                     ),
                     SizedBox(height: 24),
@@ -873,7 +879,7 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: 
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: _isUploading ? null : _saveMemo,
+                        onPressed: (_isUploading || _isSaving) ? null : _saveMemo,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blueAccent,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
