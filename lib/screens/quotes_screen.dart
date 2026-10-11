@@ -26,6 +26,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
   final AttachmentService _attachmentService = AttachmentService();
 
   List<Map<String, dynamic>> _quotes = [];
+  List<Map<String, dynamic>> _customers = [];
   bool _isLoading = true;
   String _searchQuery = '';
   String _selectedFilter =
@@ -53,9 +54,11 @@ class _QuotesScreenState extends State<QuotesScreen> {
     setState(() => _isLoading = true);
     try {
       final q = await _dbHelper.getQuotes();
+      final c = await _dbHelper.getCustomers();
       if (mounted) {
         setState(() {
           _quotes = q;
+          _customers = c;
           if (_quotes.isNotEmpty) {
             if (_selectedQuote != null) {
               try {
@@ -136,7 +139,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
     double extractedTotal = 0.0;
     double extractedSubtotal = 0.0;
     double extractedTax = 0.0;
-    List<Map<String, String>> extractedItems = [];
+    List<Map<String, dynamic>> extractedItems = [];
 
     // Try reading raw text from PDF file to find patterns
     try {
@@ -154,12 +157,20 @@ class _QuotesScreenState extends State<QuotesScreen> {
       }
 
       // 1. Check for Code (es. P-2023-08 o Preventivo N. 12)
-      final codeMatch = RegExp(
-        r'(P-\d{4}-\d{2,4}|Preventivo\s*n?\.?\s*(\d+))',
+      final fileNameCodeMatch = RegExp(
+        r'^([Nn]?\s*\d+(?:\s+[-_]?\s*\d{4})?)',
         caseSensitive: false,
-      ).firstMatch(text);
-      if (codeMatch != null) {
-        extractedCode = codeMatch.group(0)!;
+      ).firstMatch(fileName);
+      if (fileNameCodeMatch != null && fileNameCodeMatch.group(1)!.trim().isNotEmpty) {
+        extractedCode = fileNameCodeMatch.group(1)!.trim();
+      } else {
+        final codeMatch = RegExp(
+          r'(P-\d{4}-\d{2,4}|Preventivo\s*n?\.?\s*(\d+))',
+          caseSensitive: false,
+        ).firstMatch(text);
+        if (codeMatch != null) {
+          extractedCode = codeMatch.group(0)!;
+        }
       }
 
       // 2. Check for Date
@@ -186,17 +197,31 @@ class _QuotesScreenState extends State<QuotesScreen> {
       }
 
       // 4. Check for Client
+      String fallbackClient = '';
       final clientMatch = RegExp(
-        r'(?:Spett\.le|Cliente|Client|A:)\s*:?\s*([A-Za-z0-9\s\.\,\-]+)',
+        r'(?:Spett\.le|Gent\.le|Cliente|Client|A:)\s*:?\s*([^\n\r]+)',
         caseSensitive: false,
       ).firstMatch(text);
-      if (clientMatch != null && clientMatch.group(1)!.trim().isNotEmpty) {
-        extractedClient = clientMatch.group(1)!.trim();
+      if (clientMatch != null && clientMatch.group(0)!.trim().isNotEmpty) {
+        fallbackClient = clientMatch.group(0)!.trim();
+        extractedClient = fallbackClient;
       } else {
         // Use filename if it contains a name
         final parts = fileName.split(RegExp(r'[\-_]'));
         if (parts.length > 1) {
-          extractedClient = parts[1].trim();
+          fallbackClient = parts[1].trim();
+          extractedClient = fallbackClient;
+        }
+      }
+
+      if (fallbackClient.isNotEmpty) {
+        final fallbackLower = fallbackClient.toLowerCase();
+        for (var c in _customers) {
+          final cName = (c['name'] ?? '').toString();
+          if (cName.isNotEmpty && fallbackLower.contains(cName.toLowerCase())) {
+            extractedClient = cName;
+            break;
+          }
         }
       }
 
@@ -402,7 +427,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
     );
     String status = existingQuote?['status'] ?? 'Inviato';
 
-    List<Map<String, String>> items = [];
+    List<Map<String, dynamic>> items = [];
     if (existingQuote?['items'] is List) {
       items = (existingQuote!['items'] as List).map((e) {
         if (e is Map) {
@@ -411,10 +436,19 @@ class _QuotesScreenState extends State<QuotesScreen> {
             'qty': e['qty']?.toString() ?? '1',
           };
         }
-        return <String, String>{};
+        return <String, dynamic>{};
       }).toList();
     } else if (initialData?['items'] is List) {
-      items = List<Map<String, String>>.from(initialData!['items']);
+      items = (initialData!['items'] as List).map((e) {
+        if (e is Map) {
+          return {
+            'name': e['name']?.toString() ?? '',
+            'qty': e['qty']?.toString() ?? '1',
+            'checked': e['checked'] == true || e['checked'] == 'true',
+          };
+        }
+        return <String, dynamic>{};
+      }).toList();
     } else {
       items = [
         {'name': 'Servizio Principale', 'qty': '1'},
@@ -590,7 +624,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                         TextButton.icon(
                           onPressed: () {
                             setDialogState(() {
-                              items.add({'name': 'Nuova voce', 'qty': '1'});
+                              items.add({'name': 'Nuova voce', 'qty': '1', 'checked': false});
                             });
                           },
                           icon: const Icon(
@@ -619,6 +653,15 @@ class _QuotesScreenState extends State<QuotesScreen> {
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Row(
                           children: [
+                            Checkbox(
+                              value: item['checked'] == true || item['checked'] == 'true',
+                              activeColor: Colors.tealAccent,
+                              onChanged: (val) {
+                                setDialogState(() {
+                                  item['checked'] = val;
+                                });
+                              },
+                            ),
                             Expanded(
                               flex: 3,
                               child: TextFormField(
@@ -1781,35 +1824,62 @@ class _QuotesScreenState extends State<QuotesScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
-              children: itemsList.take(3).map((item) {
-                final map = item is Map
-                    ? item
-                    : {'name': item.toString(), 'qty': '1'};
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          map['name']?.toString() ?? '',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
+              children: itemsList.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final map = entry.value is Map
+                    ? Map<String, dynamic>.from(entry.value)
+                    : {'name': entry.value.toString(), 'qty': '1', 'checked': false};
+                
+                return StatefulBuilder(
+                  builder: (context, setStateItem) {
+                    bool isChecked = map['checked'] == true || map['checked'] == 'true';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: isChecked,
+                              activeColor: Colors.tealAccent,
+                              onChanged: (val) async {
+                                setStateItem(() {
+                                  map['checked'] = val;
+                                  isChecked = val ?? false;
+                                });
+                                // Aggiorna DB live
+                                itemsList[idx] = map;
+                                quote['items'] = itemsList;
+                                await _dbHelper.updateQuote(quote);
+                              },
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              map['name']?.toString() ?? '',
+                              style: TextStyle(
+                                color: isChecked ? Colors.white38 : Colors.white70,
+                                fontSize: 12,
+                                decoration: isChecked ? TextDecoration.lineThrough : null,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            map['qty']?.toString() ?? '',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        map['qty']?.toString() ?? '',
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  }
                 );
               }).toList(),
             ),
