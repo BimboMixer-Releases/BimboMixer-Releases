@@ -13,7 +13,8 @@ class UpdateService {
   static const String githubRepo = 'BimboMixer-Releases/BimboMixer-Releases';
 
   int _versionToInt(String version) {
-    String cleaned = version.replaceAll(RegExp(r'[^0-9.]'), '');
+    String mainVersion = version.split('+').first.split('-').first;
+    String cleaned = mainVersion.replaceAll(RegExp(r'[^0-9.]'), '');
     List<String> parts = cleaned.split('.');
     int val = 0;
     if (parts.isNotEmpty) val += (int.tryParse(parts[0]) ?? 0) * 1000000;
@@ -66,6 +67,7 @@ class UpdateService {
           if (androidUrl.isNotEmpty || windowsUrl.isNotEmpty) {
             return {
               'version': tagName,
+              'versionName': tagName,
               'releaseNotes': releaseNotes,
               'androidUrl': androidUrl,
               'windowsUrl': windowsUrl,

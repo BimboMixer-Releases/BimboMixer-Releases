@@ -40,12 +40,6 @@ class _UpdateDialogState extends State<UpdateDialog> {
       return;
     }
 
-    // Su Windows: apri direttamente il browser per scaricare e installare
-    if (Platform.isWindows) {
-      await _openInBrowser();
-      return;
-    }
-
     setState(() {
       _isDownloading = true;
       _hasError = false;
@@ -97,7 +91,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
   @override
   Widget build(BuildContext context) {
     final versionName =
-        widget.updateData['versionName']?.toString() ?? 'Nuova versione';
+        widget.updateData['versionName']?.toString() ??
+        widget.updateData['version']?.toString() ??
+        'Nuova versione';
     final notes =
         widget.updateData['releaseNotes']?.toString() ??
         widget.updateData['notes']?.toString() ??
@@ -182,9 +178,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
                     ),
                     SizedBox(height: 6),
                     Text(
-                      '1. Clicca "Scarica Aggiornamento"\n'
-                      '2. Apri il file .msix scaricato\n'
-                      '3. Segui le istruzioni di installazione',
+                      '1. Clicca "Scarica Ora"\n'
+                      '2. Il file ZIP verrà scaricato in Download\n'
+                      '3. Aprilo per estrarre e usare la nuova versione',
                       style: TextStyle(color: Colors.white54, fontSize: 12),
                     ),
                   ],
@@ -192,7 +188,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
               ),
             ],
 
-            // Stato / progresso (solo Android)
+            // Stato / progresso download
             if (_isDownloading) ...[
               Text(
                 _status,
@@ -250,10 +246,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   ],
                 ),
               ),
-            ] else if (!isWindows) ...[
-              const Text(
-                'Vuoi scaricare e installare l\'aggiornamento?',
-                style: TextStyle(color: Colors.white70),
+            ] else ...[
+              Text(
+                isWindows
+                    ? 'Vuoi scaricare la nuova versione per PC?'
+                    : 'Vuoi scaricare e installare l\'aggiornamento?',
+                style: const TextStyle(color: Colors.white70),
               ),
               if (_downloadUrl.isEmpty)
                 const Padding(
@@ -286,25 +284,11 @@ class _UpdateDialogState extends State<UpdateDialog> {
                 style: TextStyle(color: Colors.blueAccent)),
           ),
 
-        // Pulsante principale Windows: apre browser direttamente
-        if (isWindows && !_isDownloading && _downloadUrl.isNotEmpty)
+        // Pulsante principale per tutte le piattaforme
+        if (!_isDownloading && !_hasError)
           ElevatedButton.icon(
             icon: const Icon(Icons.download, size: 16),
-            label: const Text('Scarica Aggiornamento'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: _openInBrowser,
-          ),
-
-        // Pulsante principale Android
-        if (!isWindows && !_isDownloading && !_hasError)
-          ElevatedButton.icon(
-            icon: const Icon(Icons.download, size: 16),
-            label: const Text('Aggiorna Ora'),
+            label: Text(isWindows ? 'Scarica Ora' : 'Aggiorna Ora'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blueAccent,
               foregroundColor: Colors.white,
@@ -315,7 +299,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
           ),
 
         // Dopo errore: riprova
-        if (_hasError && !isWindows)
+        if (_hasError)
           ElevatedButton.icon(
             icon: const Icon(Icons.refresh, size: 16),
             label: const Text('Riprova'),

@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 
 $token = Get-Content -Path 'C:\Users\Hp\Documents\Sviluppo\Token di accesso\token.txt' -Raw
 $token = $token.Trim()
@@ -49,6 +49,19 @@ try {
 }
 
 Write-Host "Release ID: $releaseId" -ForegroundColor Green
+
+# Rimuovi eventuali asset preesistenti sulla release
+try {
+    $existingAssets = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$releaseId/assets" -Method Get -Headers $headers
+    foreach ($asset in $existingAssets) {
+        if ($asset.name -match "\.apk$|\.zip$|\.msix$") {
+            Write-Host "Rimozione vecchio asset da GitHub: $($asset.name)..." -ForegroundColor Yellow
+            Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/assets/$($asset.id)" -Method Delete -Headers $headers
+        }
+    }
+} catch {
+    Write-Host "Nessun vecchio asset da rimuovere o errore query asset: $_" -ForegroundColor DarkGray
+}
 
 # Step 2: Upload assets via Invoke-RestMethod
 $apkPath = "C:\Users\Hp\OneDrive\Documenti\Sviluppo\contabile\contabile_app\Aggiornamenti App\Aggiornamenti Apk Android\BimboMixer_v$($version)_update.apk"
