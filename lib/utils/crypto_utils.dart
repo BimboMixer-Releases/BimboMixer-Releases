@@ -4,7 +4,7 @@ class CryptoUtils {
   // Chiave statica a 32 byte per AES-256
   // (In un'app di produzione con backend andrebbe recuperata via API, 
   // ma per app serverless è il compromesso migliore per cifratura data-at-rest)
-  static final _key = encrypt.Key.fromUtf8('B1mb0M1x3rS3cur3C0nt4b1l3K3y2026!');
+  static final _key = encrypt.Key.fromUtf8('B1mb0M1x3rS3cur3C0nt4b1l3K3y2026');
   static final _iv = encrypt.IV.fromLength(16);
   static final _encrypter = encrypt.Encrypter(encrypt.AES(_key));
 

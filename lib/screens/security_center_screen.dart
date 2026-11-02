@@ -25,15 +25,41 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
-    final access = await _dbHelper.getAccessLogs();
-    final audit = await _dbHelper.getAuditLogs(limit: 200);
-    setState(() {
-      _accessLogs = access;
-      _auditLogs = audit;
-      _isLoading = false;
-    });
+    try {
+      final access = await _dbHelper.getAccessLogs();
+      final audit = await _dbHelper.getAuditLogs(limit: 200);
+      if (!mounted) return;
+      setState(() {
+        _accessLogs = access;
+        _auditLogs = audit;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Errore caricamento log: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  String _formatTimestamp(String? raw, String pattern) {
+    if (raw == null || raw.trim().isEmpty) return '-';
+    final dt = DateTime.tryParse(raw.trim());
+    if (dt == null) return raw.trim();
+    return DateFormat(pattern).format(dt);
   }
 
   Color _getSeverityColor(String severity) {
@@ -55,7 +81,7 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Security Center'),
+        title: const Text('Security Center'),
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
@@ -75,10 +101,12 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
             Tab(icon: Icon(Icons.login), text: 'Accessi Recenti'),
           ],
         ),
-        actions: [IconButton(icon: Icon(Icons.refresh), onPressed: _loadData)],
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+        ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabController,
               children: [_buildAuditLogList(), _buildAccessLogList()],
@@ -88,24 +116,21 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
 
   Widget _buildAuditLogList() {
     if (_auditLogs.isEmpty) {
-      return Center(child: Text("Nessun evento registrato."));
+      return const Center(child: Text('Nessun evento registrato.'));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: _auditLogs.length,
       itemBuilder: (context, index) {
         final log = _auditLogs[index];
-        final String severity = log['severity'] ?? 'INFO';
-        final String eventType = log['event_type'] ?? 'UNKNOWN';
-        final String description = log['description'] ?? '';
-        final String username = log['username'] ?? 'System';
-        final String timestampStr = log['timestamp'] ?? '';
-
-        String formattedDate = '';
-        if (timestampStr.isNotEmpty) {
-          final dt = DateTime.parse(timestampStr);
-          formattedDate = DateFormat('HH:mm:ss - dd/MM/yyyy').format(dt);
-        }
+        final String severity = log['severity']?.toString() ?? 'INFO';
+        final String eventType = log['event_type']?.toString() ?? 'UNKNOWN';
+        final String description = log['description']?.toString() ?? '';
+        final String username = log['username']?.toString() ?? 'System';
+        final String formattedDate = _formatTimestamp(
+          log['timestamp']?.toString(),
+          'HH:mm:ss - dd/MM/yyyy',
+        );
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -116,19 +141,21 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
                 severity,
               ).withValues(alpha: 0.2),
               child: Icon(
-                severity == 'CRITICAL' ? Icons.warning : Icons.info,
+                severity.toUpperCase() == 'CRITICAL'
+                    ? Icons.warning
+                    : Icons.info,
                 color: _getSeverityColor(severity),
               ),
             ),
             title: Text(
-              "[$eventType] $username",
-              style: TextStyle(fontWeight: FontWeight.bold),
+              '[$eventType] $username',
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(description),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
                   formattedDate,
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -144,23 +171,22 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
 
   Widget _buildAccessLogList() {
     if (_accessLogs.isEmpty) {
-      return Center(child: Text("Nessun accesso negli ultimi 7 giorni."));
+      return const Center(child: Text('Nessun accesso negli ultimi 7 giorni.'));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: _accessLogs.length,
       itemBuilder: (context, index) {
         final log = _accessLogs[index];
-        final String username = log['username'] ?? 'Sconosciuto';
-        final String eventType = log['event_type'] ?? 'login_success';
-        final String deviceType = log['device_type'] ?? 'Sconosciuto';
-        final String timestampStr = log['timestamp'] ?? '';
-
-        String formattedDate = '';
-        if (timestampStr.isNotEmpty) {
-          final dt = DateTime.parse(timestampStr);
-          formattedDate = DateFormat('HH:mm - dd/MM/yyyy').format(dt);
-        }
+        final String username = log['username']?.toString() ?? 'Sconosciuto';
+        final String eventType =
+            log['event_type']?.toString() ?? 'login_success';
+        final String deviceType =
+            log['device_type']?.toString() ?? 'Sconosciuto';
+        final String formattedDate = _formatTimestamp(
+          log['timestamp']?.toString(),
+          'HH:mm - dd/MM/yyyy',
+        );
 
         IconData deviceIcon = Icons.device_unknown;
         if (deviceType.contains('Cellulare')) {
@@ -169,7 +195,7 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
           deviceIcon = Icons.computer;
         }
 
-        bool isSuccess = eventType == 'login_success';
+        final bool isSuccess = eventType == 'login_success';
 
         return Card(
           elevation: 2,
@@ -186,12 +212,20 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
               ),
             ),
             title: Text(
-              "$username ${isSuccess ? 'entrato' : 'accesso fallito'} alle $formattedDate",
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              '$username ${isSuccess ? 'entrato' : 'accesso fallito'} alle $formattedDate',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
-            subtitle: Text(
-              "Dispositivo: $deviceType",
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            subtitle: Row(
+              children: [
+                Icon(deviceIcon, size: 15, color: Colors.grey[600]),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Dispositivo: $deviceType',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -199,3 +233,4 @@ class _SecurityCenterScreenState extends State<SecurityCenterScreen>
     );
   }
 }
+

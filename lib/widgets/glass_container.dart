@@ -35,22 +35,16 @@ class _GlassContainerState extends State<GlassContainer> {
   Widget build(BuildContext context) {
     final themeProvider = context.watch<AppThemeProvider>();
     final theme = themeProvider.currentColors;
-    
-    // Sfondo molto scuro per le card (come da immagine)
+
     final cardColor = widget.opacity != null
         ? themeProvider.panelBackground.withValues(alpha: widget.opacity!)
         : themeProvider.panelBackground;
 
-    // Se viene fornito un borderColor, questo diventa un NeonContainer (es. le 4 card in alto)
-    // Altrimenti è un container normale con un bordo sottilissimo
     final baseBorderColor = widget.borderColor ?? AppColors.cardBorder;
-    
     Color currentBorderColor = baseBorderColor;
-    Color currentCardColor = cardColor;
-    
-    // Se è un neon container, aggiungiamo sempre un po' di glow.
-    // Altrimenti solo un po' d'ombra scura base.
-    List<BoxShadow> currentShadows = widget.borderColor != null 
+    final Color currentCardColor = cardColor;
+
+    List<BoxShadow> currentShadows = widget.borderColor != null
         ? [
             BoxShadow(
               color: widget.borderColor!.withValues(alpha: 0.15),
@@ -61,7 +55,7 @@ class _GlassContainerState extends State<GlassContainer> {
               color: widget.borderColor!.withValues(alpha: 0.3),
               blurRadius: 4,
               spreadRadius: -1,
-            )
+            ),
           ]
         : [
             BoxShadow(
@@ -71,7 +65,7 @@ class _GlassContainerState extends State<GlassContainer> {
             ),
           ];
 
-    double currentBorderWidth = widget.borderColor != null ? 1.5 : 1.0;
+    final double currentBorderWidth = widget.borderColor != null ? 1.5 : 1.0;
 
     if (_isHovered) {
       if (widget.borderColor == null) {
@@ -84,7 +78,6 @@ class _GlassContainerState extends State<GlassContainer> {
           ),
         ];
       } else {
-        // Se è già neon, intensifica l\'effetto all\'hover
         currentShadows = [
           BoxShadow(
             color: widget.borderColor!.withValues(alpha: 0.3),
@@ -95,43 +88,58 @@ class _GlassContainerState extends State<GlassContainer> {
             color: widget.borderColor!.withValues(alpha: 0.5),
             blurRadius: 8,
             spreadRadius: 0,
-          )
+          ),
         ];
       }
+    }
+
+    final resolvedRadius = widget.borderRadius ?? BorderRadius.circular(16);
+
+    Widget innerCard = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: widget.padding ?? const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: currentCardColor,
+        borderRadius: resolvedRadius,
+        border: Border.all(
+          color: currentBorderColor,
+          width: currentBorderWidth,
+        ),
+      ),
+      child: widget.child,
+    );
+
+    if (widget.opacity != null && widget.opacity! < 1.0 && widget.blur > 0) {
+      innerCard = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: widget.blur, sigmaY: widget.blur),
+        child: innerCard,
+      );
     }
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _isHovered = true),
-        onTapUp: (_) => setState(() => _isHovered = false),
-        onTapCancel: () => setState(() => _isHovered = false),
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) {
+          if (!_isHovered) setState(() => _isHovered = true);
+        },
+        onPointerUp: (_) {
+          if (_isHovered) setState(() => _isHovered = false);
+        },
+        onPointerCancel: (_) {
+          if (_isHovered) setState(() => _isHovered = false);
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: widget.margin,
           decoration: BoxDecoration(
-            borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
+            borderRadius: resolvedRadius,
             boxShadow: currentShadows,
           ),
           child: ClipRRect(
-            borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: widget.blur, sigmaY: widget.blur),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: widget.padding ?? const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: currentCardColor,
-                  borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
-                  border: Border.all(
-                    color: currentBorderColor,
-                    width: currentBorderWidth,
-                  ),
-                ),
-                child: widget.child,
-              ),
-            ),
+            borderRadius: resolvedRadius,
+            child: innerCard,
           ),
         ),
       ),

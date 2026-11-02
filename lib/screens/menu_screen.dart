@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'customers_screen.dart';
-import 'categories_screen.dart';
-import 'services_screen.dart';
-import 'users_screen.dart';
-import 'settings_screen.dart';
-import 'security_center_screen.dart';
-import 'changelog_screen.dart';
-import 'reports_screen.dart';
-import 'bilancio_fisco_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
 import '../widgets/hover_glow_text.dart';
+import 'bilancio_fisco_screen.dart';
+import 'categories_screen.dart';
+import 'changelog_screen.dart';
+import 'customers_screen.dart';
+import 'reports_screen.dart';
+import 'security_center_screen.dart';
+import 'services_screen.dart';
+import 'settings_screen.dart';
+import 'users_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final String role;
@@ -20,11 +20,19 @@ class MenuScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<AppThemeProvider>();
+    final isAdmin = role.toLowerCase() == 'admin';
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('Altro', style: TextStyle(color: Colors.white)),
+        automaticallyImplyLeading: false,
+        leading: Scaffold.maybeOf(context)?.hasDrawer == true
+            ? IconButton(
+                icon: const Icon(Icons.menu, color: Colors.white),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              )
+            : null,
+        title: const Text('Altro', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -41,7 +49,7 @@ class MenuScreen extends StatelessWidget {
               'Clienti/Fornitori',
               const CustomersScreen(),
             ),
-            if (role.toLowerCase() == 'admin')
+            if (isAdmin)
               _buildMenuItem(
                 context,
                 theme,
@@ -49,7 +57,6 @@ class MenuScreen extends StatelessWidget {
                 'Gestione Utenti',
                 const UsersScreen(),
               ),
-
             _buildSectionHeader('Inserimento Voci', theme),
             _buildMenuItem(
               context,
@@ -65,8 +72,7 @@ class MenuScreen extends StatelessWidget {
               'Tipi Prestazione',
               const ServicesScreen(),
             ),
-
-            if (role.toLowerCase() == 'admin') ...[
+            if (isAdmin) ...[
               _buildSectionHeader('Amministrazione', theme),
               _buildMenuItem(
                 context,
@@ -82,16 +88,16 @@ class MenuScreen extends StatelessWidget {
                 'Impostazioni',
                 const SettingsScreen(),
               ),
-              _buildMenuItem(
-                context,
-                theme,
-                Icons.bug_report,
-                'Report Bug e Consigli',
-                const ReportsScreen(),
-              ),
             ],
-
-                        _buildSectionHeader('Fisco', theme),
+            _buildSectionHeader('Supporto', theme),
+            _buildMenuItem(
+              context,
+              theme,
+              Icons.bug_report,
+              'Report Bug e Consigli',
+              const ReportsScreen(),
+            ),
+            _buildSectionHeader('Fisco', theme),
             _buildMenuItem(
               context,
               theme,
@@ -99,7 +105,6 @@ class MenuScreen extends StatelessWidget {
               'Bilancio Fisco',
               const BilancioFiscoScreen(),
             ),
-            
             _buildSectionHeader('Informazioni', theme),
             _buildMenuItem(
               context,
@@ -149,7 +154,10 @@ class MenuScreen extends StatelessWidget {
           leading: Icon(icon, color: theme.primaryColor),
           title: HoverGlowText(
             title,
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
             glowColor: theme.primaryColor,
           ),
           trailing: Icon(

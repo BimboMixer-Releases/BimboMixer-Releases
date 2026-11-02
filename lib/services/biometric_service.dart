@@ -1,4 +1,3 @@
-import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'secure_storage_service.dart';
 
@@ -13,9 +12,10 @@ class BiometricService {
   Future<bool> isBiometricAvailable() async {
     try {
       final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
-      final bool canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+      final bool canAuthenticate =
+          canAuthenticateWithBiometrics || await auth.isDeviceSupported();
       return canAuthenticate;
-    } on PlatformException {
+    } catch (_) {
       return false;
     }
   }
@@ -27,7 +27,7 @@ class BiometricService {
         persistAcrossBackgrounding: true,
         biometricOnly: false,
       );
-    } on PlatformException {
+    } catch (_) {
       return false;
     }
   }
@@ -40,12 +40,16 @@ class BiometricService {
   Future<String?> getSavedPassword(String username) async {
     return await _secureStorage.read(key: 'biometric_user_$username');
   }
-  
+
   Future<String?> getLastBiometricUser() async {
     return await _secureStorage.read(key: 'last_biometric_user');
   }
 
   Future<void> clearUserCredentials(String username) async {
     await _secureStorage.delete(key: 'biometric_user_$username');
+    final last = await _secureStorage.read(key: 'last_biometric_user');
+    if (last == username) {
+      await _secureStorage.delete(key: 'last_biometric_user');
+    }
   }
 }

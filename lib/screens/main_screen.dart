@@ -1,22 +1,23 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import '../database/database_helper.dart';
 import '../utils/app_colors.dart';
-import 'customers_screen.dart';
-import 'services_screen.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/app_sidebar.dart';
+import 'bilancio_fisco_screen.dart';
 import 'categories_screen.dart';
+import 'customers_screen.dart';
+import 'dashboard_screen.dart';
+import 'deadlines_selection_screen.dart';
+import 'invoices_screen.dart';
+import 'login_screen.dart';
+import 'menu_screen.dart';
+import 'notes_screen.dart';
+import 'payments_screen.dart';
+import 'quotes_screen.dart';
 import 'reports_screen.dart';
 import 'settings_screen.dart';
-import 'dashboard_screen.dart';
-import 'payments_screen.dart';
-import 'invoices_screen.dart';
-import 'deadlines_selection_screen.dart';
-import 'menu_screen.dart';
-import 'bilancio_fisco_screen.dart';
-import 'notes_screen.dart';
-import 'quotes_screen.dart';
-import 'login_screen.dart';
-import '../widgets/app_sidebar.dart';
-import '../widgets/app_drawer.dart';
+import 'services_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final String role;
@@ -34,7 +35,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final _shellKey = GlobalKey<ScaffoldState>();
   DateTime? _lastActivity;
 
-  // Timeout sessione: 30 minuti di inattività
   static const int _sessionTimeoutMinutes = 30;
 
   late List<Widget> _screens;
@@ -44,6 +44,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _lastActivity = DateTime.now();
+    if (widget.username.trim().isNotEmpty) {
+      DatabaseHelper().currentUser = widget.username.trim();
+    }
     _screens = [
       DashboardScreen(role: widget.role),
       const PaymentsScreen(),
@@ -71,8 +74,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkSessionTimeout();
-    } else if (state == AppLifecycleState.paused) {
-      _lastActivity = DateTime.now();
     }
   }
 
@@ -81,36 +82,38 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final elapsed = DateTime.now().difference(_lastActivity!);
       if (elapsed.inMinutes >= _sessionTimeoutMinutes) {
         _logout(reason: 'Sessione scaduta per inattività.');
+        return;
       }
     }
     _lastActivity = DateTime.now();
   }
 
   Future<void> _logout({String? reason}) async {
+    DatabaseHelper().currentUser = null;
     try {
       await FirebaseAuth.instance.signOut();
-    } catch (e) {
+    } catch (_) {
       // Non bloccare il logout
     }
 
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+    if (reason != null && messenger != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(reason), backgroundColor: Colors.orange),
       );
-      if (reason != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(reason), backgroundColor: Colors.orange),
-        );
-      }
     }
   }
 
   void _showLogoutConfirmation() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.panelBackground,
         title: const Text(
           'Disconnessione',
@@ -122,7 +125,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text(
               'ANNULLA',
               style: TextStyle(color: AppColors.textSecondary),
@@ -133,7 +136,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               backgroundColor: AppColors.expenseRed,
             ),
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               _logout();
             },
             child: const Text(
@@ -150,6 +153,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _selectSection(int index) {
+    if (index < 0 || index >= _screens.length) return;
     if (index == _currentIndex) return;
     setState(() {
       if (index == 0) {
@@ -171,87 +175,89 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _sectionBody() => Column(
-    children: [
-      if (_sectionHistory.isNotEmpty)
-        SafeArea(
-          bottom: false,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              tooltip: 'Torna alla sezione precedente',
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: _goBack,
+        children: [
+          if (_sectionHistory.isNotEmpty)
+            SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  tooltip: 'Torna alla sezione precedente',
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: _goBack,
+                ),
+              ),
             ),
-          ),
-        ),
-      Expanded(child: _screens[_currentIndex]),
-    ],
-  );
+          Expanded(child: _screens[_currentIndex]),
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {
-    _lastActivity = DateTime.now();
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _lastActivity = DateTime.now(),
+      child: PopScope(
+        canPop: _sectionHistory.isEmpty,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) _goBack();
+        },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth > 800;
 
-    return PopScope(
-      canPop: _sectionHistory.isEmpty,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) _goBack();
-      },
-      child: LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth > 800;
-
-        if (isDesktop) {
-          // DESKTOP LAYOUT (Sidebar)
-          return Scaffold(
-            key: _shellKey,
-            backgroundColor: const Color(0xFF080614), // Dark deep neon base
-            body: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0.5, -0.8),
-                  radius: 1.5,
-                  colors: [
-                    Color(0xFF2A114A), // Neon purple glow top
-                    Color(0xFF080614), // Deep dark
-                  ],
-                ),
-              ),
-              child: Row(
-                children: [
-                  AppSidebar(
-                    currentIndex: _currentIndex,
-                    onItemSelected: _selectSection,
-                    onLogout: _showLogoutConfirmation,
+            if (isDesktop) {
+              return Scaffold(
+                key: _shellKey,
+                backgroundColor: const Color(0xFF080614),
+                body: Container(
+                  decoration: const BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(0.5, -0.8),
+                      radius: 1.5,
+                      colors: [
+                        Color(0xFF2A114A),
+                        Color(0xFF080614),
+                      ],
+                    ),
                   ),
-                  Expanded(child: _sectionBody()),
-                ],
-              ),
-            ),
-          );
-        } else {
-          // MOBILE LAYOUT (Bottom Navigation)
-          return Scaffold(
-            key: _shellKey,
-            backgroundColor: const Color(0xFF080614),
-            body: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0.0, -1.0),
-                  radius: 1.5,
-                  colors: [Color(0xFF2A114A), Color(0xFF080614)],
+                  child: Row(
+                    children: [
+                      AppSidebar(
+                        currentIndex: _currentIndex,
+                        onItemSelected: _selectSection,
+                        onLogout: _showLogoutConfirmation,
+                        role: widget.role,
+                      ),
+                      Expanded(child: _sectionBody()),
+                    ],
+                  ),
                 ),
-              ),
-              child: _sectionBody(),
-            ),
-            drawer: AppDrawer(
-              currentIndex: _currentIndex,
-              onItemSelected: _selectSection,
-              onLogout: _showLogoutConfirmation,
-            ),
-          );
-        }
-      },
+              );
+            } else {
+              return Scaffold(
+                key: _shellKey,
+                backgroundColor: const Color(0xFF080614),
+                body: Container(
+                  decoration: const BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(0.0, -1.0),
+                      radius: 1.5,
+                      colors: [Color(0xFF2A114A), Color(0xFF080614)],
+                    ),
+                  ),
+                  child: _sectionBody(),
+                ),
+                drawer: AppDrawer(
+                  currentIndex: _currentIndex,
+                  onItemSelected: _selectSection,
+                  onLogout: _showLogoutConfirmation,
+                  role: widget.role,
+                ),
+              );
+            }
+          },
+        ),
       ),
     );
   }

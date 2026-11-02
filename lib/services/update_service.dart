@@ -1,21 +1,20 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UpdateService {
   final Dio _dio = Dio();
 
-  // INSERISCI QUI IL TUO NOME UTENTE GITHUB
-  // Es: 'MarioRossi/BimboMixer-Releases'
   static const String githubRepo = 'BimboMixer-Releases/BimboMixer-Releases';
 
   int _versionToInt(String version) {
-    String mainVersion = version.split('+').first.split('-').first;
-    String cleaned = mainVersion.replaceAll(RegExp(r'[^0-9.]'), '');
-    List<String> parts = cleaned.split('.');
+    final String mainVersion = version.split('+').first.split('-').first;
+    final String cleaned = mainVersion.replaceAll(RegExp(r'[^0-9.]'), '');
+    final List<String> parts = cleaned.split('.');
     int val = 0;
     if (parts.isNotEmpty) val += (int.tryParse(parts[0]) ?? 0) * 1000000;
     if (parts.length > 1) val += (int.tryParse(parts[1]) ?? 0) * 1000;
@@ -26,12 +25,12 @@ class UpdateService {
   Future<Map<String, dynamic>?> checkForUpdate() async {
     try {
       if (githubRepo.contains('TUO_USERNAME')) {
-        print("Devi impostare il tuo username GitHub in update_service.dart");
+        debugPrint('Devi impostare il tuo username GitHub in update_service.dart');
         return null;
       }
 
-      PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      int currentVersionVal = _versionToInt(packageInfo.version);
+      final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      final int currentVersionVal = _versionToInt(packageInfo.version);
 
       final response = await _dio.get(
         'https://api.github.com/repos/$githubRepo/releases/latest',
@@ -44,25 +43,33 @@ class UpdateService {
 
       if (response.statusCode == 200) {
         final data = response.data;
-        String tagName = data['tag_name'] ?? '';
-        int latestVersionVal = _versionToInt(tagName);
+        final String tagName = data['tag_name']?.toString() ?? '';
+        final int latestVersionVal = _versionToInt(tagName);
 
         if (latestVersionVal > currentVersionVal) {
-          // Trova gli URL degli asset
           String androidUrl = '';
-          String windowsUrl = '';
-          String releaseNotes = data['body'] ?? 'Nuovo aggiornamento disponibile.';
+          String windowsZipUrl = '';
+          String windowsFallbackUrl = '';
+          final String releaseNotes =
+              data['body']?.toString() ?? 'Nuovo aggiornamento disponibile.';
 
-          List assets = data['assets'] ?? [];
-          for (var asset in assets) {
-            String name = asset['name'].toString().toLowerCase();
-            String downloadUrl = asset['browser_download_url'];
+          final List assets = (data['assets'] as List?) ?? [];
+          for (final asset in assets) {
+            final String name = asset['name']?.toString().toLowerCase() ?? '';
+            final String downloadUrl =
+                asset['browser_download_url']?.toString() ?? '';
+            if (downloadUrl.isEmpty) continue;
             if (name.endsWith('.apk')) {
               androidUrl = downloadUrl;
-            } else if (name.endsWith('.exe') || name.endsWith('.msix') || name.endsWith('.zip')) {
-              windowsUrl = downloadUrl;
+            } else if (name.endsWith('.zip')) {
+              windowsZipUrl = downloadUrl;
+            } else if (name.endsWith('.exe') || name.endsWith('.msix')) {
+              windowsFallbackUrl = downloadUrl;
             }
           }
+
+          final String windowsUrl =
+              windowsZipUrl.isNotEmpty ? windowsZipUrl : windowsFallbackUrl;
 
           if (androidUrl.isNotEmpty || windowsUrl.isNotEmpty) {
             return {
@@ -76,15 +83,19 @@ class UpdateService {
         }
       }
     } catch (e) {
-      print("Errore controllo aggiornamenti GitHub: $e");
+      debugPrint('Errore controllo aggiornamenti GitHub: $e');
     }
     return null;
   }
 
   Future<void> downloadAndInstallUpdate(
-      String url, Function(double) onProgress) async {
+    String url,
+    Function(double) onProgress,
+  ) async {
     if (url.isEmpty) {
-      throw Exception('URL aggiornamento non disponibile per questa piattaforma.');
+      throw Exception(
+        'URL aggiornamento non disponibile per questa piattaforma.',
+      );
     }
 
     try {
@@ -93,26 +104,23 @@ class UpdateService {
       } else if (Platform.isWindows) {
         await _downloadAndInstallWindows(url, onProgress);
       } else {
-        // Fallback: apri nel browser
         final uri = Uri.parse(url);
-        try {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } catch (e) {
+        final launched =
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched) {
           throw Exception('Impossibile aprire il link di download nel browser.');
         }
       }
     } catch (e) {
-      print("Errore durante il download o installazione: $e");
+      debugPrint('Errore durante il download o installazione: $e');
       rethrow;
     }
   }
 
-  // ─── Android: scarica APK e avvia installazione ────────────────────────────
-
   Future<void> _downloadAndInstallAndroid(
-      String url, Function(double) onProgress) async {
-    // Salviamo nella cartella pubblica Download per evitare il problema 
-    // "Il pacchetto non  valido" causato dallo Scoped Storage su Android 11+
+    String url,
+    Function(double) onProgress,
+  ) async {
     Directory? downloadsDir;
     if (Platform.isAndroid) {
       downloadsDir = Directory('/storage/emulated/0/Download');
@@ -124,13 +132,17 @@ class UpdateService {
     }
     downloadsDir ??= await getApplicationDocumentsDirectory();
 
-    final savePath = '${downloadsDir.path}/BimboMixer_update.apk';
-
-    // Rimuovi versione precedente se esiste
+    String savePath = '${downloadsDir.path}/BimboMixer_update.apk';
     final file = File(savePath);
-    if (file.existsSync()) file.deleteSync();
+    try {
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {
+      savePath =
+          '${downloadsDir.path}/BimboMixer_update_${DateTime.now().millisecondsSinceEpoch}.apk';
+    }
 
-    // Download con Dio
     try {
       await _dio.download(
         url,
@@ -150,49 +162,57 @@ class UpdateService {
         },
       );
     } catch (e) {
-      print('Errore Dio durante il download: $e');
-      // Fallback: apri nel browser
+      debugPrint('Errore Dio durante il download: $e');
       try {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } catch (_) {}
-      throw Exception('Server error o blocco download. Ti ho aperto il browser per scaricarlo manualmente!');
+      throw Exception(
+        'Server error o blocco download. Ti ho aperto il browser per scaricarlo manualmente!',
+      );
     }
 
-    // Verifica che il file esista e abbia dimensione ragionevole
     final downloaded = File(savePath);
     if (!downloaded.existsSync() || downloaded.lengthSync() < 1024) {
       throw Exception('File scaricato non valido o troppo piccolo.');
     }
 
-    // Apri l'APK per installazione
-    final result = await OpenFilex.open(savePath, type: 'application/vnd.android.package-archive');
+    final result = await OpenFilex.open(
+      savePath,
+      type: 'application/vnd.android.package-archive',
+    );
     if (result.type != ResultType.done) {
-      // Fallback: prova con url_launcher
       final fileUri = Uri.file(savePath);
       try {
         await launchUrl(fileUri);
-      } catch (e) {
+      } catch (_) {
         throw Exception(
-            'Impossibile avviare l\'installazione: ${result.message}\n'
-            'Vai in Download e apri BimboMixer_update.apk manualmente.');
+          'Impossibile avviare l\'installazione: ${result.message}\n'
+          'Vai in Download e apri il file APK manualmente.',
+        );
       }
     }
   }
 
-  // ─── Windows: scarica ZIP/EXE e aggiorna ──────────────────────────────────
-
   Future<void> _downloadAndInstallWindows(
-      String url, Function(double) onProgress) async {
+    String url,
+    Function(double) onProgress,
+  ) async {
     Directory? downloadsDir = await getDownloadsDirectory();
     downloadsDir ??= await getApplicationDocumentsDirectory();
-    
+
     String ext = url.split('?').first.split('.').last.toLowerCase();
     if (ext != 'zip' && ext != 'exe' && ext != 'msix') ext = 'zip';
-    
-    final savePath = '${downloadsDir.path}\\BimboMixer_update.$ext';
 
+    String savePath = '${downloadsDir.path}\\BimboMixer_update.$ext';
     final file = File(savePath);
-    if (file.existsSync()) file.deleteSync();
+    try {
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {
+      savePath =
+          '${downloadsDir.path}\\BimboMixer_update_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    }
 
     try {
       await _dio.download(
@@ -213,11 +233,13 @@ class UpdateService {
         },
       );
     } catch (e) {
-      print('Errore Dio durante il download su Windows: $e');
+      debugPrint('Errore Dio durante il download su Windows: $e');
       try {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } catch (_) {}
-      throw Exception('Server error o blocco download. Ti ho aperto il browser per scaricarlo manualmente!');
+      throw Exception(
+        'Server error o blocco download. Ti ho aperto il browser per scaricarlo manualmente!',
+      );
     }
 
     final downloaded = File(savePath);
@@ -230,10 +252,11 @@ class UpdateService {
       final fileUri = Uri.file(savePath);
       try {
         await launchUrl(fileUri);
-      } catch (e) {
+      } catch (_) {
         throw Exception(
-            'Impossibile avviare il file: ${result.message}\n'
-            'Vai in Download e apri BimboMixer_update.$ext manualmente.');
+          'Impossibile avviare il file: ${result.message}\n'
+          'Vai in Download e apri il file manualmente.',
+        );
       }
     }
   }

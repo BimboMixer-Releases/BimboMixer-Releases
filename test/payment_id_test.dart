@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:contabile_app/database/database_helper.dart';
 
@@ -12,6 +12,10 @@ void main() {
       DatabaseHelper.setMockFirestore(fakeFirestore);
       dbHelper = DatabaseHelper();
       dbHelper.currentUser = 'test_user';
+    });
+
+    tearDown(() {
+      dbHelper.currentUser = null;
     });
 
     test('Initial ID should be A001', () async {

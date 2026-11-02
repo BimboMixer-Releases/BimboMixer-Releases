@@ -2,9 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:contabile_app/database/database_helper.dart';
-
 import 'package:contabile_app/screens/main_screen.dart';
-import 'package:contabile_app/widgets/gradient_scaffold.dart';
 import 'package:contabile_app/widgets/glass_container.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:contabile_app/services/update_service.dart';
@@ -21,14 +19,18 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final DatabaseHelper _dbHelper = DatabaseHelper();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final SecureStorageService _secureStorage = SecureStorageService();
+
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String _errorMessage = '';
   String? _lastBiometricUser;
   bool _isBiometricSupported = false;
   bool _rememberMe = false;
-  final SecureStorageService _secureStorage = SecureStorageService();
 
   // Rate limiting
   static const int _maxLoginAttempts = 3;
@@ -42,9 +44,15 @@ class _LoginScreenState extends State<LoginScreen> {
     _loadSavedCredentials();
   }
 
+  String _getDeviceType() {
+    if (kIsWeb) return 'Computer / Web';
+    return (Platform.isAndroid || Platform.isIOS) ? 'Cellulare' : 'Computer';
+  }
+
   Future<void> _loadSavedCredentials() async {
     final savedUser = await _secureStorage.read(key: 'saved_username');
-    if (savedUser != null) {
+    if (!mounted) return;
+    if (savedUser != null && savedUser.isNotEmpty) {
       setState(() {
         _usernameController.text = savedUser;
         _rememberMe = true;
@@ -55,15 +63,19 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _checkBiometrics() async {
     final bioService = BiometricService();
     final supported = await bioService.isBiometricAvailable();
+    if (!mounted) return;
     setState(() {
       _isBiometricSupported = supported;
     });
     if (supported) {
       final user = await bioService.getLastBiometricUser();
-      if (user != null) {
+      if (!mounted) return;
+      if (user != null && user.isNotEmpty) {
         setState(() {
           _lastBiometricUser = user;
-          _usernameController.text = user;
+          if (_usernameController.text.trim().isEmpty) {
+            _usernameController.text = user;
+          }
         });
       }
     }
@@ -85,15 +97,22 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
     }
-    
-    if (await bioService.authenticate(reason: 'Autenticati per effettuare l\'accesso')) {
+
+    final authenticated = await bioService.authenticate(
+      reason: 'Autenticati per effettuare l\'accesso',
+    );
+    if (!mounted) return;
+
+    if (authenticated) {
       final password = await bioService.getSavedPassword(user);
-      if (password != null) {
+      if (!mounted) return;
+      if (password != null && password.isNotEmpty) {
         _passwordController.text = password;
-        _login();
+        await _login();
       } else {
         setState(() {
-          _errorMessage = 'Biometria non configurata per "$user". Abilitala dalla Gestione Utenti.';
+          _errorMessage =
+              'Biometria non configurata per "$user". Abilitala dalla Gestione Utenti.';
         });
       }
     }
@@ -102,22 +121,23 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _checkForUpdates() async {
     final updateService = UpdateService();
     final updateData = await updateService.checkForUpdate();
-    if (updateData != null && mounted) {
-      try {
-        final player = AudioPlayer();
-        await player.play(AssetSource('audio/notification.mp3'));
-      } catch (e) {
-        // Errore riproduzione suono non critico
-      }
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => UpdateDialog(updateData: updateData, updateService: updateService),
-      );
+    if (!mounted || updateData == null) return;
+    try {
+      await _audioPlayer.play(AssetSource('audio/notification.mp3'));
+    } catch (_) {
+      // Errore riproduzione suono non critico
     }
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) =>
+          UpdateDialog(updateData: updateData, updateService: updateService),
+    );
   }
 
   Future<void> _login() async {
+    if (_isLoading) return;
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -134,23 +154,27 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final dbHelper = DatabaseHelper();
-
     // Rate limiting: controlla tentativi recenti
     try {
-      final recentAttempts = await dbHelper.getRecentFailedAttempts(username, minutes: _lockoutMinutes);
+      final recentAttempts = await _dbHelper.getRecentFailedAttempts(
+        username,
+        minutes: _lockoutMinutes,
+      );
+      if (!mounted) return;
       if (recentAttempts >= _maxLoginAttempts) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Troppi tentativi falliti. Riprova tra $_lockoutMinutes minuti.';
+          _errorMessage =
+              'Troppi tentativi falliti. Riprova tra $_lockoutMinutes minuti.';
         });
         return;
       }
-    } catch (e) {
-      // Se il rate limiting fallisce, non bloccare il login
+    } catch (_) {
+      // Se il rate limiting fallisce prima dell'auth, non bloccare il login
     }
 
-    final String sanitizedUser = username.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+    final String sanitizedUser =
+        username.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
     final String authEmail = '$sanitizedUser@bimbomixer.local';
 
     try {
@@ -161,15 +185,17 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       // 2. Verifica credenziali in Firestore con password hashata
-      var usersList = await dbHelper.getUsers();
-      // Usa verifyCredentials per confronto sicuro con hash
-      final verifiedUser = await dbHelper.verifyCredentials(username, password);
+      final verifiedUser =
+          await _dbHelper.verifyCredentials(username, password);
+      if (!mounted) return;
 
       setState(() => _isLoading = false);
 
       if (verifiedUser != null) {
-        final role = verifiedUser['role'] ?? 'User';
-        
+        final rawRole = verifiedUser['role']?.toString() ?? 'User';
+        final role = rawRole.toLowerCase() == 'admin' ? 'Admin' : 'User';
+        _dbHelper.currentUser = username;
+
         // Salva solo username (mai la password) per "Ricordami"
         if (_rememberMe) {
           await _secureStorage.write(key: 'saved_username', value: username);
@@ -178,59 +204,88 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         // Pulisci vecchi tentativi di login
-        dbHelper.cleanOldLoginAttempts();
+        _dbHelper.cleanOldLoginAttempts();
 
-        if (mounted) {
-          try {
-            String deviceType = 'Sconosciuto';
-            if (kIsWeb) {
-              deviceType = 'Computer / Web';
-            } else {
-              deviceType = (Platform.isAndroid || Platform.isIOS) ? 'Cellulare' : 'Computer';
-            }
-            await dbHelper.logAccess(username, role, deviceType, eventType: 'login_success');
-          } catch (e) {
-            // Non bloccare il login se il logging fallisce
-          }
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Benvenuto $username!")),
+        if (!mounted) return;
+        try {
+          await _dbHelper.logAccess(
+            username,
+            role,
+            _getDeviceType(),
+            eventType: 'login_success',
           );
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainScreen(role: role, username: username)));
+        } catch (_) {
+          // Non bloccare il login se il logging fallisce
         }
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Benvenuto $username!')),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MainScreen(role: role, username: username),
+          ),
+        );
       } else {
         await FirebaseAuth.instance.signOut();
 
         // Registra tentativo fallito
         try {
-          final attempts = await dbHelper.recordFailedLogin(username);
-          String deviceType = 'Sconosciuto';
-          if (!kIsWeb) {
-            deviceType = (Platform.isAndroid || Platform.isIOS) ? 'Cellulare' : 'Computer';
-          }
-          await dbHelper.logAccess(username, 'unknown', deviceType, eventType: 'login_failed');
-          
+          final attempts = await _dbHelper.recordFailedLogin(username);
+          await _dbHelper.logAccess(
+            username,
+            'unknown',
+            _getDeviceType(),
+            eventType: 'login_failed',
+          );
+          if (!mounted) return;
           final remaining = _maxLoginAttempts - attempts;
-          if (remaining > 0) {
-            setState(() {
-              _errorMessage = 'Credenziali non valide. Tentativi rimasti: $remaining';
-            });
-          } else {
-            setState(() {
-              _errorMessage = 'Account temporaneamente bloccato. Riprova tra $_lockoutMinutes minuti.';
-            });
-          }
-        } catch (e) {
+          setState(() {
+            if (remaining > 0) {
+              _errorMessage =
+                  'Credenziali non valide. Tentativi rimasti: $remaining';
+            } else {
+              _errorMessage =
+                  'Account temporaneamente bloccato. Riprova tra $_lockoutMinutes minuti.';
+            }
+          });
+        } catch (_) {
+          if (!mounted) return;
           setState(() {
             _errorMessage = 'Credenziali non valide.';
           });
         }
       }
     } on FirebaseAuthException catch (e) {
+      int? attempts;
+      if (e.code != 'network-request-failed') {
+        try {
+          attempts = await _dbHelper.recordFailedLogin(username);
+          await _dbHelper.logAccess(
+            username,
+            'unknown',
+            _getDeviceType(),
+            eventType: 'login_failed',
+          );
+        } catch (_) {
+          // Non bloccare la gestione errore se Firestore rifiuta scritture non autenticate
+        }
+      }
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
-        if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
-          _errorMessage = 'Credenziali di autenticazione non valide o account inesistente.';
+        if (e.code == 'user-not-found' ||
+            e.code == 'invalid-credential' ||
+            e.code == 'wrong-password') {
+          if (attempts != null && attempts >= _maxLoginAttempts) {
+            _errorMessage =
+                'Account temporaneamente bloccato. Riprova tra $_lockoutMinutes minuti.';
+          } else {
+            _errorMessage =
+                'Credenziali di autenticazione non valide o account inesistente.';
+          }
         } else if (e.code == 'network-request-failed') {
           _errorMessage = 'Errore di rete. Verifica la connessione.';
         } else {
@@ -238,6 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     } on FirebaseException catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         if (e.code == 'permission-denied') {
@@ -246,7 +302,8 @@ class _LoginScreenState extends State<LoginScreen> {
           _errorMessage = 'Errore database (${e.code}).';
         }
       });
-    } catch (e) {
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = 'Errore imprevisto. Riprova.';
@@ -342,68 +399,109 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Accedi al tuo account per\ngestire la tua attivitÃ  in modo semplice.',
+                        'Accedi al tuo account per\ngestire la tua attività in modo semplice.',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 14,
                         ),
                       ),
                       const SizedBox(height: 32),
-                      
+
                       // NOME UTENTE
                       TextField(
                         controller: _usernameController,
+                        textInputAction: TextInputAction.next,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: 'Nome utente',
-                          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                          hintStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
                           filled: true,
                           fillColor: Colors.transparent,
-                          prefixIcon: const Icon(Icons.person_outline, color: Colors.white70),
+                          prefixIcon: const Icon(
+                            Icons.person_outline,
+                            color: Colors.white70,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFF4A3B69)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF4A3B69),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFF4A3B69)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF4A3B69),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFF885CF6)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF885CF6),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // PASSWORD
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: _obscurePassword,
+                        onSubmitted: (_) {
+                          if (!_isLoading) _login();
+                        },
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: 'Password',
-                          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                          hintStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
                           filled: true,
                           fillColor: Colors.transparent,
-                          prefixIcon: const Icon(Icons.lock_outline, color: Colors.white70),
-                          suffixIcon: const Icon(Icons.visibility_off, color: Colors.white70),
+                          prefixIcon: const Icon(
+                            Icons.lock_outline,
+                            color: Colors.white70,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.white70,
+                            ),
+                            tooltip: _obscurePassword
+                                ? 'Mostra password'
+                                : 'Nascondi password',
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFF4A3B69)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF4A3B69),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFF4A3B69)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF4A3B69),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFF885CF6)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF885CF6),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      
+
                       // RICORDA E PASSWORD DIMENTICATA
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -422,12 +520,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                     });
                                   },
                                   activeColor: const Color(0xFF885CF6),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
                                 ),
                               ),
                               Text(
                                 'Ricorda',
-                                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 14,
+                                ),
                               ),
                             ],
                           ),
@@ -447,17 +550,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       if (_errorMessage.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 16),
                           child: Text(
                             _errorMessage,
-                            style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        
+
                       // PULSANTE ACCEDI
                       Container(
                         decoration: BoxDecoration(
@@ -467,7 +573,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF885CF6).withValues(alpha: 0.5),
+                              color: const Color(0xFF885CF6).withValues(
+                                alpha: 0.5,
+                              ),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
@@ -487,7 +595,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
                                 )
                               : const Text(
                                   'Accedi',
@@ -500,12 +611,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      
+
                       // ACCESSO IMPRONTA
                       if (_isBiometricSupported)
                         OutlinedButton.icon(
                           onPressed: _isLoading ? null : _loginWithBiometrics,
-                          icon: const Icon(Icons.fingerprint, color: Colors.white),
+                          icon: const Icon(
+                            Icons.fingerprint,
+                            color: Colors.white,
+                          ),
                           label: const Text(
                             "Accesso con l'impronta",
                             style: TextStyle(color: Colors.white, fontSize: 16),
@@ -518,35 +632,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-                      
-                      const SizedBox(height: 32),
-                      
-                      // REGISTRATI
-                      Center(
-                        child: GestureDetector(
-                          onTap: () {
-                            // TODO: Add register logic if exists
-                          },
-                          child: RichText(
-                            text: const TextSpan(
-                              text: 'Non hai un account? ',
-                              style: TextStyle(color: Colors.white54, fontSize: 14),
-                              children: [
-                                TextSpan(
-                                  text: 'Registrati',
-                                  style: TextStyle(
-                                    color: Color(0xFFEC4899),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      
+
                       const SizedBox(height: 40),
-                      
+
                       // ICONS ROW
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,30 +642,81 @@ class _LoginScreenState extends State<LoginScreen> {
                           Expanded(
                             child: Column(
                               children: [
-                                const Icon(Icons.lock_outline, color: Color(0xFFEC4899)),
+                                const Icon(
+                                  Icons.lock_outline,
+                                  color: Color(0xFFEC4899),
+                                ),
                                 const SizedBox(height: 8),
-                                const Text('Sicuro', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('I tuoi dati protetti', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10)),
+                                const Text(
+                                  'Sicuro',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  'I tuoi dati protetti',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 10,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           Expanded(
                             child: Column(
                               children: [
-                                const Icon(Icons.cloud_queue, color: Color(0xFFEC4899)),
+                                const Icon(
+                                  Icons.cloud_queue,
+                                  color: Color(0xFFEC4899),
+                                ),
                                 const SizedBox(height: 8),
-                                const Text('Sincronizzato', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('su tutti i dispositivi', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10)),
+                                const Text(
+                                  'Sincronizzato',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  'su tutti i dispositivi',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 10,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           Expanded(
                             child: Column(
                               children: [
-                                const Icon(Icons.bar_chart, color: Color(0xFFEC4899)),
+                                const Icon(
+                                  Icons.bar_chart,
+                                  color: Color(0xFFEC4899),
+                                ),
                                 const SizedBox(height: 8),
-                                const Text('Smart', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('Gestisci in mobilitÃ ', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10)),
+                                const Text(
+                                  'Smart',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  'Gestisci in mobilità',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 10,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -595,88 +734,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showRecoveryWizard() {
-    final emailCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    String errorMsg = '';
-    String successMsg = '';
-
     showDialog(
       context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: Colors.transparent,
-          contentPadding: EdgeInsets.zero,
-          content: GlassContainer(
-            padding: const EdgeInsets.all(24),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Recupero Credenziali', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 16),
-                  Text('Inserisci Email e Cellulare associati al tuo account per recuperare il tuo username.', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
-                  SizedBox(height: 16),
-                  TextField(
-                    controller: emailCtrl,
-                    style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
-                  ),
-                  SizedBox(height: 8),
-                  TextField(
-                    controller: phoneCtrl,
-                    style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(labelText: 'Cellulare', labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
-                  ),
-                  SizedBox(height: 16),
-                  if (errorMsg.isNotEmpty) Text(errorMsg, style: TextStyle(color: Colors.redAccent)),
-                  if (successMsg.isNotEmpty) Text(successMsg, style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(onPressed: () => Navigator.pop(dialogCtx), child: Text('CHIUDI', style: TextStyle(color: Colors.white.withValues(alpha: 0.7)))),
-                      SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () async {
-                          setDialogState(() { errorMsg = ''; successMsg = ''; });
-                          final email = emailCtrl.text.trim();
-                          final phone = phoneCtrl.text.trim();
-                          if (email.isEmpty || phone.isEmpty) {
-                            setDialogState(() => errorMsg = 'Compila entrambi i campi.');
-                            return;
-                          }
-                          try {
-                            final dbHelper = DatabaseHelper();
-                            final users = await dbHelper.getUsers();
-                            
-                            // Cerca utente per email e telefono
-                            final matchingUsers = users.where((u) =>
-                              u['email'] == email && u['phone'] == phone
-                            ).toList();
-                            
-                            if (matchingUsers.isNotEmpty) {
-                              final data = matchingUsers.first;
-                              // Mostra SOLO lo username, MAI la password
-                              setDialogState(() {
-                                successMsg = 'Account trovato!\nUsername: ${data["username"]}\n\nPer resettare la password, contatta un amministratore.';
-                              });
-                            } else {
-                              setDialogState(() => errorMsg = 'Nessun account trovato con questi dati.');
-                            }
-                          } catch (e) {
-                            setDialogState(() => errorMsg = 'Errore di connessione.');
-                          }
-                        },
-                        child: Text('RECUPERA'),
-                      ),
-                    ],
-                  )
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      builder: (_) => const _RecoveryWizardDialog(),
     );
   }
 
@@ -684,11 +744,176 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 }
 
+class _RecoveryWizardDialog extends StatefulWidget {
+  const _RecoveryWizardDialog();
 
+  @override
+  State<_RecoveryWizardDialog> createState() => _RecoveryWizardDialogState();
+}
 
+class _RecoveryWizardDialogState extends State<_RecoveryWizardDialog> {
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _phoneCtrl = TextEditingController();
+  bool _isRecovering = false;
+  String _errorMsg = '';
+  String _successMsg = '';
 
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
 
+  Future<void> _recover() async {
+    if (_isRecovering) return;
+    setState(() {
+      _errorMsg = '';
+      _successMsg = '';
+    });
+    final email = _emailCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    if (email.isEmpty || phone.isEmpty) {
+      setState(() => _errorMsg = 'Compila entrambi i campi.');
+      return;
+    }
+
+    setState(() => _isRecovering = true);
+    try {
+      final dbHelper = DatabaseHelper();
+      final users = await dbHelper.getUsers();
+      if (!mounted) return;
+
+      final matchingUsers = users
+          .where(
+            (u) =>
+                (u['email']?.toString().trim().toLowerCase() ?? '') ==
+                    email.toLowerCase() &&
+                (u['phone']?.toString().trim() ?? '') == phone,
+          )
+          .toList();
+
+      if (matchingUsers.isNotEmpty) {
+        final data = matchingUsers.first;
+        setState(() {
+          _successMsg =
+              'Account trovato!\nUsername: ${data["username"]}\n\nPer resettare la password, contatta un amministratore.';
+        });
+      } else {
+        setState(
+          () => _errorMsg = 'Nessun account trovato con questi dati.',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorMsg = 'Errore di connessione.');
+    } finally {
+      if (mounted) {
+        setState(() => _isRecovering = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.transparent,
+      contentPadding: EdgeInsets.zero,
+      content: GlassContainer(
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Recupero Credenziali',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Inserisci Email e Cellulare associati al tuo account per recuperare il tuo username.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  labelStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Cellulare',
+                  labelStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_errorMsg.isNotEmpty)
+                Text(
+                  _errorMsg,
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
+              if (_successMsg.isNotEmpty)
+                Text(
+                  _successMsg,
+                  style: const TextStyle(
+                    color: Colors.greenAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _isRecovering
+                        ? null
+                        : () => Navigator.pop(context),
+                    child: Text(
+                      'CHIUDI',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _isRecovering ? null : _recover,
+                    child: _isRecovering
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('RECUPERA'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

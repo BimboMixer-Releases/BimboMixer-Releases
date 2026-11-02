@@ -18,18 +18,38 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
   final CropController _controller = CropController();
   bool _isProcessing = false;
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   Future<void> _processAndReturn() async {
+    if (_isProcessing) {
+      return;
+    }
     setState(() {
       _isProcessing = true;
     });
 
     try {
       // 1. Ottieni l'immagine ritagliata come ui.Image
-      ui.Image bitmap = await _controller.croppedBitmap();
+      final ui.Image bitmap = await _controller.croppedBitmap();
+      if (!mounted) {
+        bitmap.dispose();
+        return;
+      }
 
       // 2. Converti in byte (PNG base)
       final data = await bitmap.toByteData(format: ui.ImageByteFormat.png);
-      final bytes = data!.buffer.asUint8List();
+      bitmap.dispose();
+      if (!mounted) {
+        return;
+      }
+      if (data == null) {
+        throw Exception("Impossibile convertire l'immagine ritagliata.");
+      }
+      final bytes = data.buffer.asUint8List();
 
       // 3. Elabora con il pacchetto "image" (compressione, contrasto, nitidezza)
       img.Image? decodedImage = img.decodeImage(bytes);
@@ -48,7 +68,6 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
         decodedImage = img.adjustColor(decodedImage, contrast: 1.3);
 
         // Miglioramento Nitidezza (Sharpen tramite matrice di convoluzione)
-        // Una matrice standard per sharpening
         decodedImage = img.convolution(
           decodedImage,
           filter: [0, -1, 0, -1, 5, -1, 0, -1, 0],
@@ -61,6 +80,9 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
 
         // Salva su un file temporaneo
         final tempDir = await getTemporaryDirectory();
+        if (!mounted) {
+          return;
+        }
         final tempFile = File(
           '${tempDir.path}/cropped_receipt_${DateTime.now().millisecondsSinceEpoch}.jpg',
         );
@@ -73,7 +95,7 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
         throw Exception("Impossibile decodificare l'immagine ritagliata.");
       }
     } catch (e) {
-      print("Errore durante l'elaborazione dell'immagine: $e");
+      debugPrint("Errore durante l'elaborazione dell'immagine: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Errore durante il ritaglio: $e')),
@@ -95,10 +117,10 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Ritaglia e Ottimizza'),
+        title: const Text('Ritaglia e Ottimizza'),
         actions: [
           IconButton(
-            icon: Icon(Icons.rotate_right),
+            icon: const Icon(Icons.rotate_right),
             onPressed: _isProcessing
                 ? null
                 : () {
@@ -106,7 +128,7 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
                   },
           ),
           IconButton(
-            icon: Icon(Icons.check),
+            icon: const Icon(Icons.check),
             onPressed: _isProcessing ? null : _processAndReturn,
           ),
         ],
@@ -122,7 +144,7 @@ class _ImageCropperScreenState extends State<ImageCropperScreen> {
           if (_isProcessing)
             Container(
               color: Colors.black54,
-              child: Center(
+              child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

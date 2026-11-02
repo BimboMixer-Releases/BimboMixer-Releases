@@ -1,23 +1,30 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Servizio di storage sicuro cross-platform.
-/// - Android: usa file cifrato nella directory app (non accessibile senza root)
-/// - Windows: usa file cifrato nella directory AppData
-/// 
-/// Cifratura: XOR con chiave derivata da SHA-256 (device-specific).
-/// Non è AES hardware, ma è molto meglio di SharedPreferences in chiaro.
 class SecureStorageService {
   static final SecureStorageService _instance = SecureStorageService._internal();
   factory SecureStorageService() => _instance;
   SecureStorageService._internal();
 
   Map<String, String>? _cache;
-  
-  /// Chiave di cifratura derivata da un seme fisso + path della app.
-  /// Diversa per ogni installazione.
+  Future<void> _ioQueue = Future<void>.value();
+
+  Future<T> _synchronized<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _ioQueue = _ioQueue.whenComplete(() async {
+      try {
+        completer.complete(await action());
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
+  }
+
   Future<List<int>> _getKey() async {
     final dir = await getApplicationSupportDirectory();
     final seed = 'BM_SEC_${dir.path}_v2';
@@ -26,12 +33,15 @@ class SecureStorageService {
 
   Future<File> _getFile() async {
     final dir = await getApplicationSupportDirectory();
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
     return File('${dir.path}${Platform.pathSeparator}.secure_store');
   }
 
   Future<Map<String, String>> _loadStore() async {
     if (_cache != null) return _cache!;
-    
+
     try {
       final file = await _getFile();
       if (await file.exists()) {
@@ -43,7 +53,7 @@ class SecureStorageService {
         _cache = map.map((k, v) => MapEntry(k, v.toString()));
         return _cache!;
       }
-    } catch (e) {
+    } catch (_) {
       // Se il file è corrotto, ricomincia da zero
     }
     _cache = {};
@@ -68,31 +78,39 @@ class SecureStorageService {
   }
 
   /// Scrive un valore sicuro.
-  Future<void> write({required String key, required String value}) async {
-    final store = await _loadStore();
-    store[key] = value;
-    await _saveStore(store);
+  Future<void> write({required String key, required String value}) {
+    return _synchronized(() async {
+      final store = await _loadStore();
+      store[key] = value;
+      await _saveStore(store);
+    });
   }
 
   /// Legge un valore sicuro.
-  Future<String?> read({required String key}) async {
-    final store = await _loadStore();
-    return store[key];
+  Future<String?> read({required String key}) {
+    return _synchronized(() async {
+      final store = await _loadStore();
+      return store[key];
+    });
   }
 
   /// Elimina un valore.
-  Future<void> delete({required String key}) async {
-    final store = await _loadStore();
-    store.remove(key);
-    await _saveStore(store);
+  Future<void> delete({required String key}) {
+    return _synchronized(() async {
+      final store = await _loadStore();
+      store.remove(key);
+      await _saveStore(store);
+    });
   }
 
   /// Elimina tutto lo storage sicuro.
-  Future<void> deleteAll() async {
-    _cache = {};
-    final file = await _getFile();
-    if (await file.exists()) {
-      await file.delete();
-    }
+  Future<void> deleteAll() {
+    return _synchronized(() async {
+      _cache = {};
+      final file = await _getFile();
+      if (await file.exists()) {
+        await file.delete();
+      }
+    });
   }
 }

@@ -1,12 +1,17 @@
-import 'package:contabile_app/utils/currency_utils.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:contabile_app/database/database_helper.dart';
+import 'package:contabile_app/models/models.dart';
+import 'package:contabile_app/screens/payment_form_screen.dart';
+import 'package:contabile_app/services/attachment_service.dart';
+import 'package:contabile_app/utils/calculation_engine.dart';
+import 'package:contabile_app/utils/currency_utils.dart';
 import 'package:contabile_app/utils/date_utils_app.dart';
 import 'package:contabile_app/utils/security_utils.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:contabile_app/screens/payment_form_screen.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PaymentSummaryScreen extends StatefulWidget {
   final String paymentId;
@@ -19,6 +24,8 @@ class PaymentSummaryScreen extends StatefulWidget {
 
 class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  final AttachmentService _attachmentService = AttachmentService();
+
   Map<String, dynamic>? _data;
   String? _customerName;
   String? _categoryName;
@@ -32,61 +39,149 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-
-    final pData = await _dbHelper.getPaymentById(widget.paymentId);
-    if (pData != null) {
-      _data = pData;
-
-      final custId = pData['customer_id'];
-      if (custId != null) {
-        final custList = await _dbHelper.getCustomers();
-        final c = custList.cast<Map<String, dynamic>>().firstWhere(
-          (e) => e['id'].toString() == custId.toString(),
-          orElse: () => {},
-        );
-        _customerName = c['name'];
-      }
-
-      final catId = pData['category_id'];
-      if (catId != null) {
-        final catList = await _dbHelper.getCategories();
-        final c = catList.cast<Map<String, dynamic>>().firstWhere(
-          (e) => e['id'].toString() == catId.toString(),
-          orElse: () => {},
-        );
-        _categoryName = c['name'];
-      }
-
-      final srvId = pData['service_id'];
-      if (srvId != null) {
-        final srvList = await _dbHelper.getServiceTypes();
-        final s = srvList.cast<Map<String, dynamic>>().firstWhere(
-          (e) => e['id'].toString() == srvId.toString(),
-          orElse: () => {},
-        );
-        _serviceName = s['name'];
-      }
-
-      if (pData['attachments'] != null) {
-        try {
-          _attachments = List<String>.from(jsonDecode(pData['attachments']));
-        } catch (_) {}
-      }
+  static List<String> _parseAttachmentsSafely(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is List) {
+      return raw
+          .map((e) => e?.toString().trim() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
     }
-
-    setState(() => _isLoading = false);
+    final trimmed = raw.toString().trim();
+    if (trimmed.isEmpty || trimmed == '[]') return [];
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is List) {
+        return decoded
+            .map((e) => e?.toString().trim() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toList();
+      }
+      if (decoded is String && decoded.trim().isNotEmpty) {
+        return [decoded.trim()];
+      }
+    } catch (_) {
+      final inner = (trimmed.startsWith('[') && trimmed.endsWith(']'))
+          ? trimmed.substring(1, trimmed.length - 1)
+          : trimmed;
+      return inner
+          .split(',')
+          .map((s) => s.replaceAll('"', '').replaceAll("'", '').trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    }
+    return [];
   }
 
-  Future<void> _launchUrl(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
+  String _resolveStatusLabel(Map<String, dynamic> data) {
+    if (CalculationEngine.isPaymentSettled(data)) {
+      return 'Saldato';
+    }
+    final raw = (data['status'] ?? '').toString().trim().toUpperCase();
+    if (raw.contains('SOLLECIT') || raw == 'LATE') {
+      return 'Da Sollecitare';
+    }
+    return 'In Attesa';
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final pData = await _dbHelper.getPaymentById(widget.paymentId);
+      if (!mounted) return;
+
+      String? custName;
+      String? catName;
+      String? srvName;
+      List<String> parsedAttachments = [];
+
+      if (pData != null) {
+        final custId = pData['customer_id']?.toString();
+        if (custId != null && custId.isNotEmpty) {
+          final custList = await _dbHelper.getCustomers();
+          final c = custList.cast<Map<String, dynamic>>().firstWhere(
+            (e) => e['id']?.toString() == custId,
+            orElse: () => <String, dynamic>{},
+          );
+          custName = c['name']?.toString();
+        }
+
+        final catId = pData['category_id']?.toString();
+        if (catId != null && catId.isNotEmpty) {
+          final catList = await _dbHelper.getCategories();
+          final c = catList.cast<Map<String, dynamic>>().firstWhere(
+            (e) => e['id']?.toString() == catId,
+            orElse: () => <String, dynamic>{},
+          );
+          catName = c['name']?.toString();
+        }
+
+        final srvId = pData['service_id']?.toString();
+        if (srvId != null && srvId.isNotEmpty) {
+          final srvList = await _dbHelper.getServiceTypes();
+          final s = srvList.cast<Map<String, dynamic>>().firstWhere(
+            (e) => e['id']?.toString() == srvId,
+            orElse: () => <String, dynamic>{},
+          );
+          srvName = s['name']?.toString();
+        }
+
+        parsedAttachments = _parseAttachmentsSafely(pData['attachments']);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _data = pData;
+        _customerName = custName;
+        _categoryName = catName;
+        _serviceName = srvName;
+        _attachments = parsedAttachments;
+      });
+    } catch (e) {
+      debugPrint('Errore caricamento riepilogo movimento: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _openAttachment(String pathOrUrl) async {
+    final trimmed = pathOrUrl.trim();
+    if (trimmed.isEmpty) return;
+
+    final isRemote =
+        trimmed.startsWith('http://') || trimmed.startsWith('https://');
+
+    try {
+      if (!isRemote) {
+        final localFile = File(trimmed);
+        if (await localFile.exists()) {
+          await OpenFilex.open(localFile.path);
+          return;
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('File locale non trovato sul dispositivo.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final Uri url = Uri.parse(trimmed);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else if (mounted) {
+        await _attachmentService.downloadAttachment(context, trimmed);
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossibile aprire l\'allegato')),
+          SnackBar(content: Text('Impossibile aprire l\'allegato: $e')),
         );
       }
     }
@@ -120,14 +215,16 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
       );
     }
 
-    final isIN = _data!['type'] == 'IN';
-    final amount = double.tryParse(_data!['amount']?.toString() ?? '0') ?? 0.0;
+    final isIN =
+        (_data!['type'] ?? 'IN').toString().trim().toUpperCase() == 'IN';
     final regDate = DateUtilsApp.formatDbDate(
       _data!['date']?.toString(),
       'dd MMMM yyyy',
     );
-    final displayId = 'ID: ' + (_data!['id']?.toString() ?? '');
+    final displayId = 'ID: ${_data!['id'] ?? ''}';
     final String title2 = isIN ? 'INCASSO' : 'PAGAMENTO';
+    final bool isSettled = CalculationEngine.isPaymentSettled(_data!);
+    final String statusLabel = _resolveStatusLabel(_data!);
     final screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 800;
 
@@ -136,7 +233,6 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
       body: Stack(
         children: [
           Container(color: const Color(0xFF0A0710)),
-
           Positioned(
             top: 0,
             right: 0,
@@ -159,7 +255,6 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
               ),
             ),
           ),
-
           SafeArea(
             child: Column(
               children: [
@@ -188,22 +283,31 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           HoverEditButton(
-                        onTap: () async {
-                          bool authorized =
-                              await SecurityUtils.requireAdminAuth(context);
-                          if (!authorized || !context.mounted) return;
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PaymentFormScreen(
-                                paymentId: widget.paymentId,
-                                isReadOnly: false,
-                              ),
-                            ),
-                          );
-                          _loadData();
-                        },
-                      ),
+                            onTap: () async {
+                              final authorized =
+                                  await SecurityUtils.requireAdminAuth(context);
+                              if (!authorized || !context.mounted) return;
+                              final currentData = _data;
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PaymentFormScreen(
+                                    paymentId: widget.paymentId,
+                                    payment: currentData != null
+                                        ? Payment.fromMap(
+                                            currentData,
+                                            widget.paymentId,
+                                          )
+                                        : null,
+                                    isReadOnly: false,
+                                  ),
+                                ),
+                              );
+                              if (mounted) {
+                                await _loadData();
+                              }
+                            },
+                          ),
                           const SizedBox(width: 8),
                           Container(
                             decoration: BoxDecoration(
@@ -211,9 +315,15 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                               shape: BoxShape.circle,
                             ),
                             child: IconButton(
-                              icon: const Icon(Icons.close, color: Colors.white),
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                              ),
                               tooltip: 'Chiudi e torna alla Home',
-                              onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
+                              onPressed: () => Navigator.popUntil(
+                                context,
+                                (route) => route.isFirst,
+                              ),
                             ),
                           ),
                         ],
@@ -221,7 +331,6 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                     ],
                   ),
                 ),
-
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
@@ -233,9 +342,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _buildHeader(isMobile),
-
                         SizedBox(height: isMobile ? 24 : 40),
-
                         Container(
                           width: double.infinity,
                           decoration: BoxDecoration(
@@ -256,8 +363,14 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _buildBannerHeader(isMobile, title2, displayId, regDate),
-
+                              _buildBannerHeader(
+                                isMobile,
+                                title2,
+                                displayId,
+                                regDate,
+                                isSettled,
+                                statusLabel,
+                              ),
                               Padding(
                                 padding: EdgeInsets.symmetric(
                                   horizontal: isMobile ? 14.0 : 24.0,
@@ -269,13 +382,20 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                                   ),
                                   padding: EdgeInsets.all(isMobile ? 16 : 24),
                                   child: isMobile
-                                      ? _buildDetailsContent()
+                                      ? _buildDetailsContent(
+                                          isSettled,
+                                          statusLabel,
+                                        )
                                       : Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Expanded(
                                               flex: 7,
-                                              child: _buildDetailsContent(),
+                                              child: _buildDetailsContent(
+                                                isSettled,
+                                                statusLabel,
+                                              ),
                                             ),
                                             const SizedBox(width: 24),
                                             Expanded(
@@ -283,8 +403,10 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                                               child: Container(
                                                 height: 380,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFF8F7FA),
-                                                  borderRadius: BorderRadius.circular(16),
+                                                  color:
+                                                      const Color(0xFFF8F7FA),
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
                                                 ),
                                                 child: Center(
                                                   child: Opacity(
@@ -303,9 +425,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                                         ),
                                 ),
                               ),
-
                               const SizedBox(height: 24),
-
                               _buildFooter(isMobile, title2),
                             ],
                           ),
@@ -316,6 +436,43 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                 ),
                 const SizedBox(height: 20),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(bool isSettled, String statusLabel) {
+    final Color badgeColor = isSettled
+        ? const Color(0xFF10B981)
+        : (statusLabel == 'Da Sollecitare'
+            ? const Color(0xFFEF4444)
+            : const Color(0xFFF59E0B));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: badgeColor, width: 1.2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isSettled ? Icons.check_circle_outline : Icons.schedule,
+            color: badgeColor,
+            size: 14,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            statusLabel.toUpperCase(),
+            style: TextStyle(
+              color: badgeColor,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.6,
             ),
           ),
         ],
@@ -362,9 +519,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                 ),
                 TextSpan(
                   text: 'MIXER',
-                  style: TextStyle(
-                    color: Color(0xFFB142F5),
-                  ),
+                  style: TextStyle(color: Color(0xFFB142F5)),
                 ),
               ],
             ),
@@ -398,10 +553,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 6),
                   Text(
                     'Vetralla (VT)',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
                   ),
                 ],
               ),
@@ -416,10 +568,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 6),
                   Text(
                     'bimbomixer91@gmail.com',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
                   ),
                 ],
               ),
@@ -434,10 +583,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 6),
                   Text(
                     'P.IVA 02494800564',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
                   ),
                 ],
               ),
@@ -452,10 +598,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 6),
                   Text(
                     '+39 3807483998',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
                   ),
                 ],
               ),
@@ -505,9 +648,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                     ),
                     TextSpan(
                       text: 'MIXER',
-                      style: TextStyle(
-                        color: Color(0xFFB142F5),
-                      ),
+                      style: TextStyle(color: Color(0xFFB142F5)),
                     ),
                   ],
                 ),
@@ -534,10 +675,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 8),
                   Text(
                     'Vetralla (VT)',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
                   ),
                   const SizedBox(width: 32),
                   const Icon(
@@ -548,10 +686,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 8),
                   Text(
                     'bimbomixer91@gmail.com',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
                   ),
                 ],
               ),
@@ -566,10 +701,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 8),
                   Text(
                     'P.IVA 02494800564',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
                   ),
                   const SizedBox(width: 32),
                   const Icon(
@@ -580,10 +712,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 8),
                   Text(
                     '+39 3807483998',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
                   ),
                 ],
               ),
@@ -599,6 +728,8 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
     String title2,
     String displayId,
     String regDate,
+    bool isSettled,
+    String statusLabel,
   ) {
     if (isMobile) {
       return Padding(
@@ -606,31 +737,34 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RichText(
-              text: TextSpan(
-                text: 'RICEVUTA DI ',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-                children: [
-                  TextSpan(
-                    text: title2,
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    text: 'RICEVUTA DI ',
                     style: const TextStyle(
-                      color: Color(0xFFB142F5),
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
                     ),
+                    children: [
+                      TextSpan(
+                        text: title2,
+                        style: const TextStyle(color: Color(0xFFB142F5)),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                _buildStatusBadge(isSettled, statusLabel),
+              ],
             ),
             const SizedBox(height: 4),
             Text(
               displayId,
-              style: TextStyle(
-                color: Colors.grey[400],
-                fontSize: 13,
-              ),
+              style: TextStyle(color: Colors.grey[400], fontSize: 13),
             ),
             const SizedBox(height: 12),
             Container(
@@ -641,9 +775,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF161124),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFF261D42),
-                ),
+                border: Border.all(color: const Color(0xFF261D42)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -688,48 +820,49 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RichText(
-                text: TextSpan(
-                  text: 'RICEVUTA DI ',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                  ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    TextSpan(
-                      text: title2,
-                      style: const TextStyle(
-                        color: Color(0xFFB142F5),
+                    RichText(
+                      text: TextSpan(
+                        text: 'RICEVUTA DI ',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: title2,
+                            style: const TextStyle(color: Color(0xFFB142F5)),
+                          ),
+                        ],
                       ),
                     ),
+                    _buildStatusBadge(isSettled, statusLabel),
                   ],
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                displayId,
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 14,
+                const SizedBox(height: 4),
+                Text(
+                  displayId,
+                  style: TextStyle(color: Colors.grey[400], fontSize: 14),
                 ),
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 14,
+              ],
             ),
+          ),
+          const SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: BoxDecoration(
               color: const Color(0xFF161124),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFF261D42),
-              ),
+              border: Border.all(color: const Color(0xFF261D42)),
             ),
             child: Row(
               children: [
@@ -744,10 +877,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   children: [
                     Text(
                       'Data registrazione',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 11,
-                      ),
+                      style: TextStyle(color: Colors.grey[400], fontSize: 11),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -768,8 +898,13 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
     );
   }
 
-  Widget _buildDetailsContent() {
-    final amount = double.tryParse(_data!['amount']?.toString() ?? '0') ?? 0.0;
+  Widget _buildDetailsContent(bool isSettled, String statusLabel) {
+    final amount = CurrencyUtils.parseCurrency(_data!['amount']?.toString());
+    final statusColor = isSettled
+        ? const Color(0xFF059669)
+        : (statusLabel == 'Da Sollecitare'
+            ? const Color(0xFFDC2626)
+            : const Color(0xFFD97706));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -779,46 +914,39 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
           'Cliente',
           _customerName ?? '-',
         ),
-        const Divider(
-          color: Color(0xFFE5E0F1),
-          height: 24,
-        ),
+        const Divider(color: Color(0xFFE5E0F1), height: 24),
         _buildRowItem(
           Icons.layers_outlined,
           'Importo',
-          '${CurrencyUtils.formatEuro(amount)}',
+          CurrencyUtils.formatEuro(amount),
           isAmount: true,
         ),
-        const Divider(
-          color: Color(0xFFE5E0F1),
-          height: 24,
+        const Divider(color: Color(0xFFE5E0F1), height: 24),
+        _buildRowItem(
+          isSettled ? Icons.check_circle_outline : Icons.schedule,
+          'Stato',
+          statusLabel,
+          valueColor: statusColor,
         ),
+        const Divider(color: Color(0xFFE5E0F1), height: 24),
         _buildRowItem(
           Icons.credit_card_outlined,
           'Metodo di pagamento',
           _data!['payment_method']?.toString() ?? '-',
         ),
-        const Divider(
-          color: Color(0xFFE5E0F1),
-          height: 24,
-        ),
+        const Divider(color: Color(0xFFE5E0F1), height: 24),
         _buildRowItem(
           Icons.folder_outlined,
           'Categoria',
           _categoryName ?? '-',
         ),
-        const Divider(
-          color: Color(0xFFE5E0F1),
-          height: 24,
-        ),
+        const Divider(color: Color(0xFFE5E0F1), height: 24),
         _buildRowItem(
           Icons.receipt_long_outlined,
           'Prestazione',
           _serviceName ?? '-',
         ),
-
         const SizedBox(height: 24),
-
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
@@ -870,7 +998,6 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
             ],
           ),
         ),
-
         if (_attachments.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
@@ -895,44 +1022,75 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: _attachments
-                      .map(
-                        (path) => InkWell(
-                          onTap: () => _launchUrl(path),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE3DCF0),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                  children: _attachments.map((pathOrUrl) {
+                    final cleanName =
+                        AttachmentService.extractCleanFileName(pathOrUrl);
+                    final isRemote = pathOrUrl.startsWith('http://') ||
+                        pathOrUrl.startsWith('https://');
+                    final isPdf = cleanName.toLowerCase().endsWith('.pdf');
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3DCF0),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          InkWell(
+                            onTap: () => _openAttachment(pathOrUrl),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
-                                  Icons.picture_as_pdf,
-                                  size: 14,
-                                  color: Color(0xFF322756),
+                                Icon(
+                                  isPdf
+                                      ? Icons.picture_as_pdf
+                                      : Icons.insert_drive_file_outlined,
+                                  size: 15,
+                                  color: const Color(0xFF322756),
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  path.split('/').last.length > 15
-                                      ? path.split('/').last.substring(0, 15) + '...'
-                                      : path.split('/').last,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF322756),
-                                    fontWeight: FontWeight.bold,
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 180,
+                                  ),
+                                  child: Text(
+                                    cleanName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF322756),
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                      )
-                      .toList(),
+                          if (isRemote) ...[
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () => _attachmentService
+                                  .downloadAttachment(context, pathOrUrl),
+                              child: const Tooltip(
+                                message: 'Scarica allegato',
+                                child: Icon(
+                                  Icons.download_rounded,
+                                  size: 16,
+                                  color: Color(0xFF7F30D8),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -945,10 +1103,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
   Widget _buildFooter(bool isMobile, String title2) {
     if (isMobile) {
       return Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -972,7 +1127,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'RICEVUTA DI ' + title2,
+                        'RICEVUTA DI $title2',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -1055,10 +1210,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 32,
-        vertical: 24,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -1081,7 +1233,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'RICEVUTA DI ' + title2,
+                    'RICEVUTA DI $title2',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -1162,6 +1314,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
     String label,
     String value, {
     bool isAmount = false,
+    Color? valueColor,
   }) {
     return Row(
       children: [
@@ -1192,7 +1345,10 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
             child: Align(
               alignment: Alignment.centerRight,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEBE6F5),
                   borderRadius: BorderRadius.circular(8),
@@ -1218,9 +1374,11 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
               value,
               textAlign: TextAlign.right,
               style: TextStyle(
-                color: Colors.grey[800],
+                color: valueColor ?? Colors.grey[800],
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontWeight: valueColor != null
+                    ? FontWeight.bold
+                    : FontWeight.w600,
               ),
             ),
           ),

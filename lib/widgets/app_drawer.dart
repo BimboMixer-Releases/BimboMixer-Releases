@@ -1,26 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../providers/app_theme_provider.dart';
 import 'package:provider/provider.dart';
+import '../providers/app_theme_provider.dart';
 
 class AppDrawer extends StatelessWidget {
   final int currentIndex;
   final Function(int) onItemSelected;
   final VoidCallback onLogout;
+  final String role;
 
   const AppDrawer({
     super.key,
     required this.currentIndex,
     required this.onItemSelected,
     required this.onLogout,
+    this.role = 'User',
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<AppThemeProvider>();
+    final isAdmin = role.toLowerCase() == 'admin';
 
     return Drawer(
-      backgroundColor: const Color(0xFF080812), // Stesso colore di app_sidebar
+      backgroundColor: const Color(0xFF080812),
       child: Column(
         children: [
           Container(
@@ -62,10 +65,11 @@ class AppDrawer extends StatelessWidget {
                   child: const CircleAvatar(
                     radius: 30,
                     backgroundColor: Color(0xFF2A2D34),
-                    backgroundImage: AssetImage('assets/images/logo_bimbomixer_neon.jpg'),
+                    backgroundImage:
+                        AssetImage('assets/images/logo_bimbomixer_neon.jpg'),
                   ),
                 ),
-                SizedBox(width: 16),
+                const SizedBox(width: 16),
                 Expanded(
                   child: ShaderMask(
                     shaderCallback: (bounds) => LinearGradient(
@@ -173,15 +177,30 @@ class AppDrawer extends StatelessWidget {
                 ),
                 _buildDrawerItem(
                   context,
-                  10,
-                  LucideIcons.settings,
-                  'Impostazioni',
+                  9,
+                  Icons.bug_report_outlined,
+                  'Segnalazioni',
+                  theme.primaryColor,
+                ),
+                if (isAdmin)
+                  _buildDrawerItem(
+                    context,
+                    10,
+                    LucideIcons.settings,
+                    'Impostazioni',
+                    theme.primaryColor,
+                  ),
+                _buildDrawerItem(
+                  context,
+                  11,
+                  Icons.grid_view_rounded,
+                  'Altro',
                   theme.primaryColor,
                 ),
               ],
             ),
           ),
-          Divider(color: Colors.white24),
+          const Divider(color: Colors.white24),
           ListTile(
             leading: Icon(Icons.logout, color: theme.currentColors.secondary),
             title: Text(
@@ -206,7 +225,7 @@ class AppDrawer extends StatelessWidget {
     String title,
     Color primaryColor,
   ) {
-    bool isSelected = currentIndex == index;
+    final bool isSelected = currentIndex == index;
     return ListTile(
       leading: Icon(icon, color: isSelected ? primaryColor : Colors.white70),
       title: Text(
@@ -220,7 +239,7 @@ class AppDrawer extends StatelessWidget {
       selectedTileColor: primaryColor.withValues(alpha: 0.1),
       onTap: () {
         onItemSelected(index);
-        Navigator.pop(context); // Chiudi il drawer
+        Navigator.pop(context);
       },
     );
   }

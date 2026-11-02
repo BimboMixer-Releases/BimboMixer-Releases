@@ -1,58 +1,31 @@
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'screens/login_screen.dart'; // Ripristinato LoginScreen
-import 'providers/app_theme_provider.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'providers/app_theme_provider.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('it_IT', null);
 
-  // Setup ffi for Windows/Linux desktop apps for local DB if still needed
   if (Platform.isWindows || Platform.isLinux) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
   } catch (e) {
     debugPrint("Firebase initialization failed: $e");
   }
-
-  // Livello 2 e Livello 3: Protezioni RASP e Anti-Screenshot (DISABILITATO PER SVILUPPO)
-  /*
-  if (Platform.isAndroid || Platform.isIOS) {
-    try {
-      bool isJailBroken = await SafeDevice.isJailBroken;
-      bool isRealDevice = await SafeDevice.isRealDevice;
-      
-      if (isJailBroken || !isRealDevice) {
-        runApp(
-          const MaterialApp(
-            home: Scaffold(
-              backgroundColor: Colors.redAccent, 
-              body: Center(
-                child: Text(
-                  "ACCESSO NEGATO\nDispositivo Compromesso (Root/Emulatore)", 
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
-                )
-              )
-            )
-          )
-        );
-        return; // Blocca l'avvio
-      }
-    } catch (e) {
-      print("Errore RASP: $e");
-    }
-  }
-  */
 
   runApp(
     ChangeNotifierProvider(
@@ -94,7 +67,7 @@ class ContabileApp extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.white),
         useMaterial3: true,
       ),
-      home: const LoginScreen(), // Login e Impronta Digitale riattivati
+      home: const LoginScreen(),
     );
   }
 }

@@ -1,14 +1,13 @@
-import '../services/biometric_service.dart';
 import 'dart:io';
+import 'package:contabile_app/utils/currency_utils.dart';
+import 'package:contabile_app/utils/security_utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:contabile_app/utils/auth_fallback.dart';
-import 'package:contabile_app/utils/currency_utils.dart';
-import 'package:path/path.dart' as p;
-import 'package:url_launcher/url_launcher.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../database/database_helper.dart';
 import '../services/attachment_service.dart';
 import '../widgets/gradient_scaffold.dart';
@@ -25,12 +24,29 @@ class _QuotesScreenState extends State<QuotesScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final AttachmentService _attachmentService = AttachmentService();
 
+  static const List<String> _quoteStatuses = [
+    'Inviato',
+    'Accettato',
+    'In Revisione',
+    'Bozza',
+    'Rifiutato',
+  ];
+
+  static const List<String> _filterOptions = [
+    'Tutti',
+    'Accettati',
+    'Inviati',
+    'In Revisione',
+    'Bozza',
+    'Rifiutati',
+  ];
+
   List<Map<String, dynamic>> _quotes = [];
   List<Map<String, dynamic>> _customers = [];
   bool _isLoading = true;
+  bool _isBulkUploading = false;
   String _searchQuery = '';
-  String _selectedFilter =
-      'Tutti'; // Tutti, Accettati, Inviati, In Revisione, Bozza
+  String _selectedFilter = 'Tutti';
   Map<String, dynamic>? _selectedQuote;
 
   final TextEditingController _searchCtrl = TextEditingController();
@@ -38,10 +54,11 @@ class _QuotesScreenState extends State<QuotesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.openDialog) _showQuoteFormDialog();
+    _loadQuotes().then((_) {
+      if (widget.openDialog && mounted) {
+        _showQuoteFormDialog();
+      }
     });
-    _loadQuotes();
   }
 
   @override
@@ -50,8 +67,65 @@ class _QuotesScreenState extends State<QuotesScreen> {
     super.dispose();
   }
 
+  static String _normalizeQuoteStatus(Map<String, dynamic>? q) {
+    if (q == null) return 'Inviato';
+    final raw = (q['status'] ?? '').toString().trim().toLowerCase();
+    if (raw == 'accettato' ||
+        raw == 'accettata' ||
+        raw == 'accepted' ||
+        raw == 'approved') {
+      return 'Accettato';
+    }
+    if (raw == 'rifiutato' ||
+        raw == 'rifiutata' ||
+        raw == 'rejected' ||
+        raw == 'declined') {
+      return 'Rifiutato';
+    }
+    if (raw == 'in revisione' ||
+        raw == 'revisione' ||
+        raw == 'review' ||
+        raw == 'in_review') {
+      return 'In Revisione';
+    }
+    if (raw == 'bozza' || raw == 'draft') {
+      return 'Bozza';
+    }
+    if (raw == 'inviato' ||
+        raw == 'inviata' ||
+        raw == 'sent' ||
+        raw == 'pending') {
+      return 'Inviato';
+    }
+    if (q['accepted'] == true) return 'Accettato';
+    if (q['rejected'] == true) return 'Rifiutato';
+    return 'Inviato';
+  }
+
+  String _resolveQuoteClient(Map<String, dynamic> q) {
+    final direct =
+        (q['client_name'] ?? q['client'])?.toString().trim() ?? '';
+    if (direct.isNotEmpty) return direct;
+
+    final custId = (q['customer_id'] ?? q['client_id'])?.toString().trim() ?? '';
+    if (custId.isNotEmpty) {
+      for (final c in _customers) {
+        if (c['id']?.toString() == custId) {
+          final cName = c['name']?.toString().trim() ?? '';
+          if (cName.isNotEmpty) return cName;
+        }
+      }
+    }
+    return '-';
+  }
+
+  double _resolveQuoteTotal(Map<String, dynamic> q) {
+    final raw = q['total_amount'] ?? q['total'];
+    return CurrencyUtils.parseCurrency(raw?.toString());
+  }
+
   Future<void> _loadQuotes() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final q = await _dbHelper.getQuotes();
       final c = await _dbHelper.getCustomers();
@@ -63,7 +137,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
             if (_selectedQuote != null) {
               try {
                 _selectedQuote = _quotes.firstWhere(
-                  (q) => q['id'] == _selectedQuote!['id'],
+                  (item) => item['id'] == _selectedQuote!['id'],
                 );
               } catch (_) {
                 _selectedQuote = _quotes.first;
@@ -92,34 +166,32 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
   List<Map<String, dynamic>> get _filteredQuotes {
     return _quotes.where((q) {
-      // Status filter
-      final status =
-          (q['status'] ??
-                  (q['accepted'] == true
-                      ? 'Accettato'
-                      : (q['rejected'] == true ? 'Rifiutato' : 'Inviato')))
-              .toString();
+      final status = _normalizeQuoteStatus(q);
       if (_selectedFilter != 'Tutti') {
-        if (_selectedFilter == 'Accettati' && status != 'Accettato')
+        if (_selectedFilter == 'Accettati' && status != 'Accettato') {
           return false;
-        if (_selectedFilter == 'Inviati' && status != 'Inviato') return false;
-        if (_selectedFilter == 'In Revisione' && status != 'In Revisione')
+        }
+        if (_selectedFilter == 'Inviati' && status != 'Inviato') {
           return false;
-        if (_selectedFilter == 'Bozza' && status != 'Bozza') return false;
+        }
+        if (_selectedFilter == 'In Revisione' && status != 'In Revisione') {
+          return false;
+        }
+        if (_selectedFilter == 'Bozza' && status != 'Bozza') {
+          return false;
+        }
+        if (_selectedFilter == 'Rifiutati' && status != 'Rifiutato') {
+          return false;
+        }
       }
 
-      // Search filter
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
-        final code = (q['code'] ?? q['serial_number'] ?? '')
-            .toString()
-            .toLowerCase();
-        final client = (q['client_name'] ?? q['client'] ?? '')
-            .toString()
-            .toLowerCase();
-        final subject = (q['subject'] ?? q['file_name'] ?? '')
-            .toString()
-            .toLowerCase();
+        final code =
+            (q['code'] ?? q['serial_number'] ?? '').toString().toLowerCase();
+        final client = _resolveQuoteClient(q).toLowerCase();
+        final subject =
+            (q['subject'] ?? q['file_name'] ?? '').toString().toLowerCase();
         return code.contains(query) ||
             client.contains(query) ||
             subject.contains(query);
@@ -129,132 +201,342 @@ class _QuotesScreenState extends State<QuotesScreen> {
   }
 
   // --- PDF PARSER UTILITY ---
+  static String? _detectSectionCategory(String line) {
+    final clean = line
+        .replaceAll(RegExp(r'[:\-–•\*#]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase();
+    if (clean.isEmpty || clean.length > 45) return null;
+
+    if (RegExp(
+      r'^(impianto\s+audio|sezione\s+audio|reparto\s+audio|audio|fonica|amplificazione\s+audio)$',
+    ).hasMatch(clean)) {
+      return 'Audio';
+    }
+    if (RegExp(
+      r'^(impianto\s+luci|sezione\s+luci|reparto\s+luci|illuminazione|luci|lighting|luci\s+scenografiche)$',
+    ).hasMatch(clean)) {
+      return 'Luci';
+    }
+    if (RegExp(
+      r'^(impianto\s+video|sezione\s+video|reparto\s+video|video|ledwall|proiezione|regia\s+video)$',
+    ).hasMatch(clean)) {
+      return 'Video';
+    }
+    if (RegExp(
+      r'^(strutture|struttura|palco|pedane|truss|americane|copertura|rigging|allestimento\s+strutture)$',
+    ).hasMatch(clean)) {
+      return 'Strutture';
+    }
+    if (RegExp(
+      r'^(effetti\s+speciali|effetti|macchine\s+effetti|sfx)$',
+    ).hasMatch(clean)) {
+      return 'Effetti';
+    }
+    if (RegExp(r'^(backline|strumentazione|strumenti)$').hasMatch(clean)) {
+      return 'Backline';
+    }
+    if (RegExp(
+      r'^(regia|personale\s+tecnico|personale|assistenza\s+tecnica|servizi\s+tecnici|trasporto\s+e\s+montaggio)$',
+    ).hasMatch(clean)) {
+      return 'Regia/Servizi';
+    }
+    return null;
+  }
+
+  static bool _isBoilerplateLine(String line) {
+    final lower = line.toLowerCase().trim();
+    if (lower.length < 3) return true;
+    const skipPrefixes = [
+      'bimbomixer',
+      'service audio',
+      'produzioni teatrali',
+      'vetralla',
+      'p.iva',
+      'partita iva',
+      'cod. fisc',
+      'codice fiscale',
+      'spett.le',
+      'gent.le',
+      'preventivo',
+      'data:',
+      'oggetto:',
+      'totale',
+      'subtotale',
+      'imponibile',
+      'iva ',
+      'iban',
+      'banca',
+      'condizioni',
+      'validit',
+      'firma',
+      'pagina ',
+      'tel.',
+      'cell.',
+      'email:',
+      'pec:',
+    ];
+    for (final pfx in skipPrefixes) {
+      if (lower.startsWith(pfx)) return true;
+    }
+    if (lower.contains('bimbomixer91@gmail.com') ||
+        lower.contains('02494800564')) {
+      return true;
+    }
+    return false;
+  }
+
+  static List<Map<String, dynamic>> _extractItemsFromText(String text) {
+    final List<Map<String, dynamic>> extractedItems = [];
+    final Set<String> seenKeys = <String>{};
+    String? currentCategory;
+
+    final equipmentKeywords = RegExp(
+      r'\b(audio|casse|diffusor|subwoofer|sub|monitor|spie|mixer|microfon|radiomicrofon|asta|aste|luci|fari|faro|par|testa\s+mobile|teste\s+mobili|beam|wash|spot|strobo|blinder|hazer|fumo|sparkular|laser|dimmer|dmx|video|ledwall|proiettor|schermo|telecamer|regia|struttur|truss|american|elevatori|stativ|palco|pedan|transenn|cavi|cablagg|quadro\s+elettrico|backline|tecnic|fonico|light\s+designer|montaggio|smontaggio|noleggio|allestimento|trasporto|consulenza|servizi|ore)\b',
+      caseSensitive: false,
+    );
+
+    for (final rawLine in text.split(RegExp(r'[\r\n]+'))) {
+      final line = rawLine.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (line.isEmpty) continue;
+
+      final detectedCat = _detectSectionCategory(line);
+      if (detectedCat != null) {
+        currentCategory = detectedCat;
+        continue;
+      }
+
+      if (_isBoilerplateLine(line)) continue;
+
+      String candidateDesc = '';
+      String qty = '1';
+      bool matchedStructure = false;
+
+      // 1. Bullet line: •, -, *, ▪, –, ›
+      final bulletMatch =
+          RegExp(r'^[\•\-\*\▪\–\›\◦\+]\s*(.+)$').firstMatch(line);
+      if (bulletMatch != null) {
+        candidateDesc = bulletMatch.group(1)!.trim();
+        matchedStructure = true;
+      }
+
+      // 2. Leading quantity: "4x Teste mobili", "n. 2 Subwoofer", "2 pz Microfoni"
+      if (!matchedStructure) {
+        final qtyPrefix = RegExp(
+          r'^(?:n\.?\s*|nr\.?\s*)?(\d{1,4})\s*(?:[xX×]|pz\.?|mt\.?|m\.?|gg\.?|ore|h)(?:\s+|\b)(.+)$',
+          caseSensitive: false,
+        ).firstMatch(line);
+        if (qtyPrefix != null) {
+          qty = qtyPrefix.group(1)!;
+          candidateDesc = qtyPrefix.group(2)!.trim();
+          matchedStructure = true;
+        }
+      }
+
+      // 3. Leading quantity inside bullet: "• 4x Teste mobili"
+      if (matchedStructure && qty == '1') {
+        final innerQty = RegExp(
+          r'^(?:n\.?\s*|nr\.?\s*)?(\d{1,4})\s*(?:[xX×]|pz\.?)\s+(.+)$',
+          caseSensitive: false,
+        ).firstMatch(candidateDesc);
+        if (innerQty != null) {
+          qty = innerQty.group(1)!;
+          candidateDesc = innerQty.group(2)!.trim();
+        }
+      }
+
+      // 4. Inside a material category section or matching equipment/service keywords
+      if (!matchedStructure &&
+          line.length >= 4 &&
+          line.length <= 130 &&
+          (currentCategory != null ||
+              equipmentKeywords.hasMatch(line) ||
+              line.contains('€'))) {
+        candidateDesc = line;
+        matchedStructure = true;
+      }
+
+      if (!matchedStructure || candidateDesc.isEmpty) continue;
+
+      // Check trailing quantity e.g. "(x4)" or "q.tà 2"
+      final trailingQty = RegExp(
+        r'(?:\(\s*[xX×]?\s*(\d{1,4})\s*(?:pz\.?)?\s*\)|(?:q\.?t[àa]|pz\.?)\s*:?\s*(\d{1,4}))\s*$',
+        caseSensitive: false,
+      ).firstMatch(candidateDesc);
+      if (trailingQty != null) {
+        qty = (trailingQty.group(1) ?? trailingQty.group(2)) ?? qty;
+        candidateDesc =
+            candidateDesc.substring(0, trailingQty.start).trim();
+      }
+
+      // Clean stray control chars while preserving Italian accents and punctuation
+      candidateDesc = candidateDesc
+          .replaceAll(RegExp(r'[\x00-\x1F]'), '')
+          .trim();
+      if (candidateDesc.length < 3 || candidateDesc.length > 140) continue;
+
+      final String displayName = (currentCategory != null &&
+              !candidateDesc
+                  .toLowerCase()
+                  .startsWith('[${currentCategory.toLowerCase()}]'))
+          ? '[$currentCategory] $candidateDesc'
+          : candidateDesc;
+
+      final dedupKey = displayName.toLowerCase();
+      if (seenKeys.contains(dedupKey)) continue;
+      seenKeys.add(dedupKey);
+
+      extractedItems.add({
+        'name': displayName,
+        'qty': qty,
+        'checked': false,
+      });
+
+      if (extractedItems.length >= 120) break;
+    }
+
+    return extractedItems;
+  }
+
   Map<String, dynamic> _extractDataFromPdf(File file) {
     final fileName = p.basenameWithoutExtension(file.path);
-    String extractedCode =
-        'P-${DateFormat('yyyy').format(DateTime.now())}-${(_quotes.length + 1).toString().padLeft(2, '0')}';
-    String extractedClient = 'Cliente';
+    String extractedCode = fileName.trim().isNotEmpty
+        ? fileName.trim()
+        : 'P-${DateFormat('yyyy').format(DateTime.now())}';
+    String extractedClient = '';
     String extractedDate = DateFormat('dd/MM/yyyy').format(DateTime.now());
-    String extractedSubject = 'Prestazioni e Servizi';
+    String extractedSubject = fileName.trim();
     double extractedTotal = 0.0;
     double extractedSubtotal = 0.0;
     double extractedTax = 0.0;
     List<Map<String, dynamic>> extractedItems = [];
 
-    // Try reading raw text from PDF file to find patterns
     try {
       String text = '';
       if (file.path.toLowerCase().endsWith('.pdf')) {
         try {
-          final PdfDocument document = PdfDocument(inputBytes: file.readAsBytesSync());
+          final PdfDocument document =
+              PdfDocument(inputBytes: file.readAsBytesSync());
           text = PdfTextExtractor(document).extractText();
           document.dispose();
-        } catch (e) {
-          text = String.fromCharCodes(file.readAsBytesSync());
+        } catch (_) {
+          text = '';
         }
       } else {
-        text = String.fromCharCodes(file.readAsBytesSync());
+        try {
+          text = file.readAsStringSync();
+        } catch (_) {
+          text = '';
+        }
       }
 
-      // 1. Check for Code (es. P-2023-08 o Preventivo N. 12)
+      // 1. Code from filename or PDF text
       final fileNameCodeMatch = RegExp(
-        r'^([Nn]?\s*\d+(?:\s+[-_]?\s*\d{4})?)',
+        r'^([NnPp]?\s*\d+(?:\s*[\-_\/]\s*\d{2,4})?)',
         caseSensitive: false,
       ).firstMatch(fileName);
-      if (fileNameCodeMatch != null && fileNameCodeMatch.group(1)!.trim().isNotEmpty) {
+      if (fileNameCodeMatch != null &&
+          fileNameCodeMatch.group(1)!.trim().isNotEmpty) {
         extractedCode = fileNameCodeMatch.group(1)!.trim();
-      } else {
+      } else if (text.isNotEmpty) {
         final codeMatch = RegExp(
-          r'(P-\d{4}-\d{2,4}|Preventivo\s*n?\.?\s*(\d+))',
+          r'(P-\d{4}-\d{2,4}|Preventivo\s*n?\.?\s*([\w\/\-]+))',
           caseSensitive: false,
         ).firstMatch(text);
         if (codeMatch != null) {
-          extractedCode = codeMatch.group(0)!;
+          extractedCode = codeMatch.group(0)!.trim();
         }
       }
 
-      // 2. Check for Date
-      final dateMatch = RegExp(
-        r'(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
-      ).firstMatch(text);
-      if (dateMatch != null) {
-        extractedDate = dateMatch.group(1)!;
+      if (text.isNotEmpty) {
+        // 2. Date
+        final dateMatch = RegExp(
+          r'(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
+        ).firstMatch(text);
+        if (dateMatch != null) {
+          extractedDate = dateMatch.group(1)!.replaceAll('.', '/').replaceAll('-', '/');
+        }
+
+        // 3. Subtotal / Tax / Total parsed strictly with CurrencyUtils.parseCurrency (0.0 if absent)
+        final subMatch = RegExp(
+          r'(?:Imponibile|Subtotale|Sub-totale)\s*:?\s*(?:€|EUR)?\s*([\d\.\,]+)',
+          caseSensitive: false,
+        ).allMatches(text);
+        if (subMatch.isNotEmpty) {
+          extractedSubtotal =
+              CurrencyUtils.parseCurrency(subMatch.last.group(1));
+        }
+
+        final taxMatch = RegExp(
+          r'(?:Totale\s+IVA|Importo\s+IVA|\bIVA\b(?:\s*\d{1,2}\s*%)?)\s*:?\s*(?:€|EUR)?\s*([\d\.\,]+)',
+          caseSensitive: false,
+        ).allMatches(text);
+        if (taxMatch.isNotEmpty) {
+          extractedTax = CurrencyUtils.parseCurrency(taxMatch.last.group(1));
+        }
+
+        final totalMatches = RegExp(
+          r'(?:Totale(?:\s+Preventivo|\s+Complessivo|\s+Generale|\s+Documento|\s+IVA\s+inclusa)?|Total|Importo\s+Totale)\s*:?\s*(?:€|EUR)?\s*([\d\.\,]+)',
+          caseSensitive: false,
+        ).allMatches(text);
+        if (totalMatches.isNotEmpty) {
+          extractedTotal =
+              CurrencyUtils.parseCurrency(totalMatches.last.group(1));
+        }
+
+        if (extractedTotal > 0 && extractedSubtotal == 0.0) {
+          extractedSubtotal = extractedTax > 0 && extractedTax <= extractedTotal
+              ? CurrencyUtils.roundMoney(extractedTotal - extractedTax)
+              : extractedTotal;
+        } else if (extractedTotal == 0.0 && extractedSubtotal > 0) {
+          extractedTotal =
+              CurrencyUtils.roundMoney(extractedSubtotal + extractedTax);
+        }
+
+        // 4. Subject
+        final subjectMatch = RegExp(
+          r'(?:Oggetto|Evento|Manifestazione|Rif\.?)\s*:\s*([^\n\r]+)',
+          caseSensitive: false,
+        ).firstMatch(text);
+        if (subjectMatch != null &&
+            subjectMatch.group(1)!.trim().isNotEmpty) {
+          extractedSubject = subjectMatch.group(1)!.trim();
+        }
+
+        // 5. Client
+        final clientMatch = RegExp(
+          r'(?:Spett\.le|Gent\.le|Cliente|Committente|Alla\s+c\.a\.\s*di)\s*:?\s*([^\n\r]+)',
+          caseSensitive: false,
+        ).firstMatch(text);
+        if (clientMatch != null && clientMatch.group(1)!.trim().isNotEmpty) {
+          extractedClient = clientMatch.group(1)!.trim();
+        }
+
+        // 6. Material items (Audio, Luci, Strutture, Video, ecc.)
+        extractedItems = _extractItemsFromText(text);
       }
 
-      // 3. Check for Total (€ 1.200,00 o Totale: 1200)
-      final totalMatch = RegExp(
-        r'(?:Totale|Total|Importo|EUR|€)\s*:?\s*([\d\.\,]+)',
-        caseSensitive: false,
-      ).firstMatch(text);
-      if (totalMatch != null) {
-        final numStr = totalMatch
-            .group(1)!
-            .replaceAll('.', '')
-            .replaceAll(',', '.');
-        extractedTotal = double.tryParse(numStr) ?? 0.0;
-        extractedSubtotal = extractedTotal; // IVA di default 0%
-        extractedTax = extractedTotal - extractedSubtotal;
-      }
-
-      // 4. Check for Client
-      String fallbackClient = '';
-      final clientMatch = RegExp(
-        r'(?:Spett\.le|Gent\.le|Cliente|Client|A:)\s*:?\s*([^\n\r]+)',
-        caseSensitive: false,
-      ).firstMatch(text);
-      if (clientMatch != null && clientMatch.group(0)!.trim().isNotEmpty) {
-        fallbackClient = clientMatch.group(0)!.trim();
-        extractedClient = fallbackClient;
-      } else {
-        // Use filename if it contains a name
+      if (extractedClient.isEmpty) {
         final parts = fileName.split(RegExp(r'[\-_]'));
-        if (parts.length > 1) {
-          fallbackClient = parts[1].trim();
-          extractedClient = fallbackClient;
+        if (parts.length > 1 && parts[1].trim().isNotEmpty) {
+          extractedClient = parts[1].trim();
         }
       }
 
-      if (fallbackClient.isNotEmpty) {
-        final fallbackLower = fallbackClient.toLowerCase();
-        for (var c in _customers) {
-          final cName = (c['name'] ?? '').toString();
-          if (cName.isNotEmpty && fallbackLower.contains(cName.toLowerCase())) {
+      if (extractedClient.isNotEmpty) {
+        final lowerCandidate = extractedClient.toLowerCase();
+        for (final c in _customers) {
+          final cName = (c['name'] ?? '').toString().trim();
+          if (cName.isNotEmpty &&
+              lowerCandidate.contains(cName.toLowerCase())) {
             extractedClient = cName;
             break;
           }
         }
       }
-
-      // 5. Check for Items / Services
-      final lines = text.split('\n');
-      for (var l in lines) {
-        if (l.contains('€') ||
-            l.toLowerCase().contains('ore') ||
-            l.toLowerCase().contains('consulenza') ||
-            l.toLowerCase().contains('servizi')) {
-          final clean = l.replaceAll(RegExp(r'[^\w\s\(\)\€\.\,]'), '').trim();
-          if (clean.length > 5 &&
-              clean.length < 80 &&
-              extractedItems.length < 5) {
-            extractedItems.add({'name': clean, 'qty': '1'});
-          }
-        }
-      }
     } catch (_) {
-      // Fallback to defaults
-    }
-
-    if (extractedItems.isEmpty) {
-      extractedItems = [
-        {'name': 'Consulenza e Prestazioni', 'qty': '1'},
-        {'name': 'Servizi Professionali', 'qty': '1'},
-      ];
-    }
-
-    if (extractedTotal <= 0) {
-      extractedTotal = 1500.0;
-      extractedSubtotal = 1500.0;
-      extractedTax = 0.0;
+      // Keep safe zero/empty defaults without fake values
     }
 
     return {
@@ -270,14 +552,17 @@ class _QuotesScreenState extends State<QuotesScreen> {
   }
 
   Future<void> _bulkUploadQuotes() async {
+    if (_isBulkUploading) return;
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: true,
       );
-      if (result == null || result.paths.isEmpty) return;
+      if (result == null || result.paths.isEmpty || !mounted) return;
 
+      setState(() => _isBulkUploading = true);
       int successCount = 0;
+      int failCount = 0;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -287,69 +572,67 @@ class _QuotesScreenState extends State<QuotesScreen> {
         ),
       );
 
-      for (String? path in result.paths) {
-        if (path == null) continue;
-        File file = File(path);
-
-        final extracted = _extractDataFromPdf(file);
-
-        String fileUrl = '';
+      for (final String? path in result.paths) {
+        if (path == null || path.trim().isEmpty) continue;
         try {
-          fileUrl =
-              (await _attachmentService.uploadAttachment(file, 'quotes')) ?? '';
-        } catch (_) {}
+          final File file = File(path);
+          final extracted = _extractDataFromPdf(file);
 
-        final code =
-            extracted['code']?.toString() ??
-            'N${_quotes.length + 1}-${DateFormat('yyyy').format(DateTime.now())}';
+          String fileUrl = '';
+          try {
+            fileUrl =
+                (await _attachmentService.uploadAttachment(file, 'quotes')) ??
+                    '';
+          } catch (_) {}
 
-        final quoteData = {
-          'code': code,
-          'serial_number': code,
-          'client_name': extracted['client_name']?.toString() ?? '',
-          'date':
-              extracted['date']?.toString() ??
-              DateFormat('dd/MM/yyyy').format(DateTime.now()),
-          'subject': extracted['subject']?.toString() ?? 'Consulenza e Servizi',
-          'status': 'Inviato',
-          'accepted': false,
-          'rejected': false,
-          'items':
-              extracted['items'] ??
-              [
-                {'name': 'Servizio Principale', 'qty': '1'},
-              ],
-          'subtotal': extracted['subtotal'] ?? 0.0,
-          'tax_amount': extracted['tax'] ?? 0.0,
-          'total_amount': extracted['total'] ?? 0.0,
-          'file_name': p.basename(file.path),
-          'file_url': fileUrl.isEmpty ? file.path : fileUrl,
-          'local_path': file.path,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        };
+          final code = (extracted['code']?.toString().trim().isNotEmpty == true)
+              ? extracted['code'].toString().trim()
+              : p.basenameWithoutExtension(file.path);
 
-        await _dbHelper.insertQuote(quoteData);
-        successCount++;
+          // Omit 'serial_number' so DatabaseHelper.insertQuote assigns an atomic sequential serial_number!
+          final quoteData = <String, dynamic>{
+            'code': code,
+            'client_name': extracted['client_name']?.toString() ?? '',
+            'date': extracted['date']?.toString() ??
+                DateFormat('dd/MM/yyyy').format(DateTime.now()),
+            'subject': extracted['subject']?.toString() ?? '',
+            'status': 'Inviato',
+            'accepted': false,
+            'rejected': false,
+            'items': extracted['items'] is List ? extracted['items'] : <Map<String, dynamic>>[],
+            'subtotal': extracted['subtotal'] ?? 0.0,
+            'tax_amount': extracted['tax'] ?? 0.0,
+            'total_amount': extracted['total'] ?? 0.0,
+            'total': extracted['total'] ?? 0.0,
+            'file_name': p.basename(file.path),
+            'file_url': fileUrl.isEmpty ? file.path : fileUrl,
+            'local_path': file.path,
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          };
+
+          await _dbHelper.insertQuote(quoteData);
+          successCount++;
+        } catch (e) {
+          failCount++;
+          debugPrint('Errore caricamento singolo preventivo in blocco: $e');
+        }
       }
 
       if (successCount > 0) {
         await _loadQuotes();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Caricati $successCount preventivi con successo!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
       }
 
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$successCount preventivi caricati in blocco!'),
-            backgroundColor: Colors.green,
+            content: Text(
+              failCount == 0
+                  ? 'Caricati $successCount preventivi con successo!'
+                  : 'Caricati $successCount preventivi ($failCount non riusciti).',
+            ),
+            backgroundColor: failCount == 0 ? Colors.green : Colors.orange,
           ),
         );
       }
@@ -362,19 +645,19 @@ class _QuotesScreenState extends State<QuotesScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isBulkUploading = false);
     }
   }
 
   Future<void> _uploadAndCreateQuote() async {
     try {
-      File? file = await _attachmentService.pickFile(context);
+      final File? file = await _attachmentService.pickFile(context);
       if (file == null) return;
 
       final extracted = _extractDataFromPdf(file);
-
       if (!mounted) return;
 
-      // Show Confirmation & Editing Dialog
       await _showQuoteFormDialog(initialFile: file, initialData: extracted);
     } catch (e) {
       if (mounted) {
@@ -390,470 +673,23 @@ class _QuotesScreenState extends State<QuotesScreen> {
     Map<String, dynamic>? initialData,
     Map<String, dynamic>? existingQuote,
   }) async {
+    if (!mounted) return;
     final isEditing = existingQuote != null;
-
-    final codeCtrl = TextEditingController(
-      text:
-          existingQuote?['code']?.toString() ??
-          initialData?['code']?.toString() ??
-          'N${_quotes.length + 1}-${DateFormat('yyyy').format(DateTime.now())}',
-    );
-    final clientCtrl = TextEditingController(
-      text: existingQuote?['client_name'] ?? initialData?['client_name'] ?? '',
-    );
-    final dateCtrl = TextEditingController(
-      text:
-          existingQuote?['date'] ??
-          initialData?['date'] ??
-          DateFormat('dd/MM/yyyy').format(DateTime.now()),
-    );
-    final subjectCtrl = TextEditingController(
-      text:
-          existingQuote?['subject'] ??
-          initialData?['subject'] ??
-          'Consulenza e Servizi',
-    );
-    final totalCtrl = TextEditingController(
-      text: (existingQuote?['total_amount'] ?? initialData?['total'] ?? '0.00')
-          .toString(),
-    );
-    final subtotalCtrl = TextEditingController(
-      text: (existingQuote?['subtotal'] ?? initialData?['subtotal'] ?? '0.00')
-          .toString(),
-    );
-    final taxCtrl = TextEditingController(
-      text: (existingQuote?['tax_amount'] ?? initialData?['tax'] ?? '0.00')
-          .toString(),
-    );
-    String status = existingQuote?['status'] ?? 'Inviato';
-
-    List<Map<String, dynamic>> items = [];
-    if (existingQuote?['items'] is List) {
-      items = (existingQuote!['items'] as List).map((e) {
-        if (e is Map) {
-          return {
-            'name': e['name']?.toString() ?? '',
-            'qty': e['qty']?.toString() ?? '1',
-          };
-        }
-        return <String, dynamic>{};
-      }).toList();
-    } else if (initialData?['items'] is List) {
-      items = (initialData!['items'] as List).map((e) {
-        if (e is Map) {
-          return {
-            'name': e['name']?.toString() ?? '',
-            'qty': e['qty']?.toString() ?? '1',
-            'checked': e['checked'] == true || e['checked'] == 'true',
-          };
-        }
-        return <String, dynamic>{};
-      }).toList();
-    } else {
-      items = [
-        {'name': 'Servizio Principale', 'qty': '1'},
-      ];
-    }
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return Dialog(
-            backgroundColor: const Color(0xFF131722),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
-            ),
-            child: Container(
-              width: 600,
-              padding: const EdgeInsets.all(24),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          isEditing
-                              ? 'Modifica Preventivo'
-                              : 'Nuovo Preventivo da PDF',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white54),
-                          onPressed: () => Navigator.pop(ctx, false),
-                        ),
-                      ],
-                    ),
-                    const Divider(color: Colors.white12, height: 24),
-
-                    // Row 1: Code & Date
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
-                            'Codice Preventivo (es. N1-2026)',
-                            codeCtrl,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildTextField('Data (dd/MM/yyyy)', dateCtrl),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Row 2: Client & Status
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: _buildTextField(
-                            'Nome Cliente / Azienda',
-                            clientCtrl,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Stato',
-                                style: TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white10,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: status,
-                                    dropdownColor: const Color(0xFF1E2235),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                    ),
-                                    isExpanded: true,
-                                    items:
-                                        [
-                                          {
-                                            'status': 'Inviato',
-                                            'color': Colors.blueAccent,
-                                          },
-                                          {
-                                            'status': 'Accettato',
-                                            'color': Colors.greenAccent,
-                                          },
-                                          {
-                                            'status': 'In Revisione',
-                                            'color': Colors.orangeAccent,
-                                          },
-                                          {
-                                            'status': 'Bozza',
-                                            'color': Colors.purpleAccent,
-                                          },
-                                          {
-                                            'status': 'Rifiutato',
-                                            'color': Colors.redAccent,
-                                          },
-                                        ].map((item) {
-                                          final s = item['status'] as String;
-                                          final c = item['color'] as Color;
-                                          return DropdownMenuItem(
-                                            value: s,
-                                            child: Text(
-                                              s,
-                                              style: TextStyle(
-                                                color: c,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
-                                    onChanged: (val) {
-                                      if (val != null)
-                                        setDialogState(() => status = val);
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Subject
-                    _buildTextField(
-                      'Oggetto / Descrizione sintetica',
-                      subjectCtrl,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Items Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Voci / Items',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: () {
-                            setDialogState(() {
-                              items.add({'name': 'Nuova voce', 'qty': '1', 'checked': false});
-                            });
-                          },
-                          icon: const Icon(
-                            Icons.add,
-                            size: 16,
-                            color: Color(0xFF38BDF8),
-                          ),
-                          label: const Text(
-                            'Aggiungi voce',
-                            style: TextStyle(
-                              color: Color(0xFF38BDF8),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-
-                    // Items List
-                    ...items.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final item = entry.value;
-                      return Padding(
-                        key: ObjectKey(item),
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Row(
-                          children: [
-                            Checkbox(
-                              value: item['checked'] == true || item['checked'] == 'true',
-                              activeColor: Colors.tealAccent,
-                              onChanged: (val) {
-                                setDialogState(() {
-                                  item['checked'] = val;
-                                });
-                              },
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: TextFormField(
-                                initialValue: item['name'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: 'Descrizione item...',
-                                  hintStyle: const TextStyle(
-                                    color: Colors.white38,
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(
-                                    alpha: 0.05,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(6),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                ),
-                                onChanged: (v) => item['name'] = v,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 1,
-                              child: TextFormField(
-                                initialValue: item['qty'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: 'Q.tà/Ore',
-                                  hintStyle: const TextStyle(
-                                    color: Colors.white38,
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(
-                                    alpha: 0.05,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(6),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                ),
-                                onChanged: (v) => item['qty'] = v,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.remove_circle_outline,
-                                color: Colors.redAccent,
-                                size: 18,
-                              ),
-                              onPressed: () {
-                                setDialogState(() => items.removeAt(idx));
-                              },
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 12),
-
-                    // Totals Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
-                            'Subtotale (€)',
-                            subtotalCtrl,
-                            isNumber: true,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
-                            'IVA (€)',
-                            taxCtrl,
-                            isNumber: true,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
-                            'Totale (€)',
-                            totalCtrl,
-                            isNumber: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Actions
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text(
-                            'Annulla',
-                            style: TextStyle(color: Colors.white54),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF38BDF8),
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                          ),
-                          icon: const Icon(Icons.check, size: 18),
-                          label: Text(
-                            isEditing ? 'Salva Modifiche' : 'Crea Preventivo',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
+      builder: (_) => _QuoteFormDialog(
+        initialFile: initialFile,
+        initialData: initialData,
+        existingQuote: existingQuote,
+        nextSuggestedNumber: _quotes.length + 1,
+        dbHelper: _dbHelper,
+        attachmentService: _attachmentService,
       ),
     );
 
-    if (saved == true) {
-      String? fileUrl = existingQuote?['file_url'];
-      String fileName =
-          existingQuote?['file_name'] ??
-          (initialFile != null
-              ? p.basename(initialFile.path)
-              : 'preventivo.pdf');
-
-      if (initialFile != null && !isEditing) {
-        fileUrl = await _attachmentService.uploadAttachment(
-          initialFile,
-          'quotes',
-        );
-      }
-
-      final quoteData = {
-        'code': codeCtrl.text.trim(),
-        'serial_number': codeCtrl.text.trim(),
-        'client_name': clientCtrl.text.trim(),
-        'date': dateCtrl.text.trim(),
-        'subject': subjectCtrl.text.trim(),
-        'status': status,
-        'accepted': status == 'Accettato',
-        'rejected': status == 'Rifiutato',
-        'items': items,
-        'subtotal':
-            CurrencyUtils.parseCurrency(subtotalCtrl.text),
-        'tax_amount': CurrencyUtils.parseCurrency(taxCtrl.text),
-        'total_amount':
-            CurrencyUtils.parseCurrency(totalCtrl.text),
-        'file_name': fileName,
-        'file_url': fileUrl ?? initialFile?.path ?? '',
-        'local_path': initialFile?.path ?? existingQuote?['local_path'] ?? '',
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-
-      if (isEditing) {
-        await _dbHelper.updateQuote({'id': existingQuote['id'], ...quoteData});
-      } else {
-        quoteData['created_at'] = DateTime.now().toIso8601String();
-        await _dbHelper.insertQuote(quoteData);
-      }
-
+    if (saved == true && mounted) {
       await _loadQuotes();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -869,46 +705,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
     }
   }
 
-  Widget _buildTextField(
-    String label,
-    TextEditingController ctrl, {
-    bool isNumber = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: ctrl,
-          keyboardType: isNumber
-              ? const TextInputType.numberWithOptions(decimal: true)
-              : TextInputType.text,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.06),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   // --- OPEN ORIGINAL PDF ---
   Future<void> _openPdf(Map<String, dynamic> quote) async {
-    final pathOrUrl = quote['local_path'] ?? quote['file_url'];
-    if (pathOrUrl == null || pathOrUrl.toString().isEmpty) {
+    final localPath = quote['local_path']?.toString().trim() ?? '';
+    final fileUrl = quote['file_url']?.toString().trim() ?? '';
+
+    if (localPath.isEmpty && fileUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Nessun file PDF associato a questo preventivo.'),
@@ -919,21 +721,42 @@ class _QuotesScreenState extends State<QuotesScreen> {
     }
 
     try {
-      final file = File(pathOrUrl.toString());
-      if (file.existsSync()) {
-        await OpenFilex.open(file.path);
-        return;
+      // 1. Check local file first
+      if (localPath.isNotEmpty &&
+          !localPath.startsWith('http://') &&
+          !localPath.startsWith('https://')) {
+        final localFile = File(localPath);
+        if (localFile.existsSync()) {
+          await OpenFilex.open(localFile.path);
+          return;
+        }
       }
 
-      // If URL or fallback
-      final uri = Uri.parse(pathOrUrl.toString());
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else if (Platform.isWindows) {
-        await Process.start('cmd', ['/c', 'start', '', pathOrUrl.toString()]);
-      } else {
-        throw Exception("File non apribile");
+      if (fileUrl.isNotEmpty &&
+          !fileUrl.startsWith('http://') &&
+          !fileUrl.startsWith('https://')) {
+        final fallbackLocal = File(fileUrl);
+        if (fallbackLocal.existsSync()) {
+          await OpenFilex.open(fallbackLocal.path);
+          return;
+        }
       }
+
+      // 2. Launch URL safely via url_launcher (including Windows, preserving '&' tokens)
+      final targetUrl = fileUrl.isNotEmpty ? fileUrl : localPath;
+      final uri = Uri.tryParse(targetUrl);
+      if (uri != null &&
+          (uri.scheme == 'http' ||
+              uri.scheme == 'https' ||
+              uri.scheme == 'file')) {
+        final launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (launched) return;
+      }
+
+      throw Exception(' Risorsa non trovata o non apribile');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -946,7 +769,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
     }
   }
 
-  Future<void> _deleteQuote(String id) async {
+  Future<void> _deleteQuote(String? rawId) async {
+    final id = rawId?.trim() ?? '';
+    if (id.isEmpty) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -978,26 +804,37 @@ class _QuotesScreenState extends State<QuotesScreen> {
       ),
     );
 
-    if (confirm == true) {
-      final bioService = BiometricService();
-      bool isAuth = false;
-      if (await bioService.isBiometricAvailable()) {
-        isAuth = await bioService.authenticate(reason: 'Autenticati per eliminare il preventivo');
+    if (confirm != true || !mounted) return;
+
+    final authorized = await SecurityUtils.requireAdminAuth(context);
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Autenticazione fallita o annullata. Eliminazione annullata.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-      if (!isAuth && mounted) {
-        isAuth = await promptForPasswordFallback(context);
-      }
-      if (!isAuth) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Autenticazione fallita o annullata. Eliminazione annullata.'), backgroundColor: Colors.red),
-          );
-        }
-        return;
-      }
-      
+      return;
+    }
+
+    try {
       await _dbHelper.deleteQuote(id);
-      await _loadQuotes();
+      if (mounted) {
+        await _loadQuotes();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore eliminazione preventivo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -1019,12 +856,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. TOP HEADER: Title with Count, Search Bar & "+ Nuovo Preventivo" Button
+                    // 1. TOP HEADER
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        bool isMobile = constraints.maxWidth < 600;
+                        final bool isMobile = constraints.maxWidth < 600;
 
-                        Widget title = RichText(
+                        final Widget title = RichText(
                           text: TextSpan(
                             text: 'Preventivi e Stime ',
                             style: const TextStyle(
@@ -1046,13 +883,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
                           ),
                         );
 
-                        Widget searchBar = Container(
+                        final Widget searchBar = Container(
                           height: 42,
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF16192B,
-                            ).withValues(alpha: 0.8),
+                            color: const Color(0xFF16192B)
+                                .withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: Colors.white.withValues(alpha: 0.08),
@@ -1103,8 +939,9 @@ class _QuotesScreenState extends State<QuotesScreen> {
                           ),
                         );
 
-                        Widget btnBulk = OutlinedButton.icon(
-                          onPressed: _bulkUploadQuotes,
+                        final Widget btnBulk = OutlinedButton.icon(
+                          onPressed:
+                              _isBulkUploading ? null : _bulkUploadQuotes,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF22D3EE),
                             side: const BorderSide(color: Color(0xFF22D3EE)),
@@ -1126,15 +963,14 @@ class _QuotesScreenState extends State<QuotesScreen> {
                           ),
                         );
 
-                        Widget btnNew = ElevatedButton.icon(
+                        final Widget btnNew = ElevatedButton.icon(
                           onPressed: _uploadAndCreateQuote,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF22D3EE),
                             foregroundColor: Colors.black,
                             elevation: 8,
-                            shadowColor: const Color(
-                              0xFF22D3EE,
-                            ).withValues(alpha: 0.5),
+                            shadowColor: const Color(0xFF22D3EE)
+                                .withValues(alpha: 0.5),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
                             ),
@@ -1158,14 +994,17 @@ class _QuotesScreenState extends State<QuotesScreen> {
                           ),
                         );
 
-                        Widget btnGoogleDocs = Tooltip(
+                        final Widget btnGoogleDocs = Tooltip(
                           message: 'Collega a Google Docs',
                           child: InkWell(
                             onTap: () async {
-                              final uri = Uri.parse('https://docs.google.com/document/u/0/');
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri, mode: LaunchMode.externalApplication);
-                              }
+                              final uri = Uri.parse(
+                                'https://docs.google.com/document/u/0/',
+                              );
+                              await launchUrl(
+                                uri,
+                                mode: LaunchMode.externalApplication,
+                              );
                             },
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
@@ -1178,7 +1017,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1191,8 +1030,13 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                     'https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/512px-Google_%22G%22_Logo.svg.png',
                                     height: 16,
                                     width: 16,
-                                    errorBuilder: (context, error, stackTrace) =>
-                                        const Icon(Icons.description, size: 16, color: Colors.blue),
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            const Icon(
+                                      Icons.description,
+                                      size: 16,
+                                      color: Colors.blue,
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
@@ -1245,13 +1089,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
                     const SizedBox(height: 20),
 
-
-
-                    // 3. BOTTOM SECTION: Table of Quotes with Status Filter Header
+                    // 2. TABLE OF QUOTES
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF101322).withValues(alpha: 0.7),
+                          color:
+                              const Color(0xFF101322).withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.08),
@@ -1259,11 +1102,11 @@ class _QuotesScreenState extends State<QuotesScreen> {
                         ),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final double minTableWidth = 850.0;
+                            const double minTableWidth = 850.0;
                             final double actualWidth =
                                 constraints.maxWidth > minTableWidth
-                                ? constraints.maxWidth
-                                : minTableWidth;
+                                    ? constraints.maxWidth
+                                    : minTableWidth;
 
                             return SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
@@ -1295,22 +1138,24 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                       ),
                                       child: Row(
                                         children: [
-                                          // Filter Dropdown
                                           Expanded(
                                             flex: 3,
                                             child: Row(
                                               children: [
                                                 Expanded(
-                                                  child: PopupMenuButton<String>(
+                                                  child:
+                                                      PopupMenuButton<String>(
                                                     color: const Color(
                                                       0xFF16192B,
                                                     ),
-                                                    offset: const Offset(0, 30),
-                                                    shape: RoundedRectangleBorder(
+                                                    offset:
+                                                        const Offset(0, 30),
+                                                    shape:
+                                                        RoundedRectangleBorder(
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                            10,
-                                                          ),
+                                                        10,
+                                                      ),
                                                       side: const BorderSide(
                                                         color: Colors.white12,
                                                       ),
@@ -1322,50 +1167,50 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                         Expanded(
                                                           child: Text(
                                                             'Preventivi ($_selectedFilter)',
-                                                            overflow: TextOverflow.ellipsis,
-                                                            style: const TextStyle(
-                                                              color: Colors.white70,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style:
+                                                                const TextStyle(
+                                                              color: Colors
+                                                                  .white70,
                                                               fontSize: 13,
                                                               fontWeight:
-                                                                  FontWeight.bold,
+                                                                  FontWeight
+                                                                      .bold,
                                                             ),
                                                           ),
                                                         ),
-                                                      const Icon(
-                                                        Icons
-                                                            .keyboard_arrow_down,
-                                                        color: Colors.white70,
-                                                        size: 18,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  onSelected: (v) => setState(
-                                                    () => _selectedFilter = v,
-                                                  ),
-                                                  itemBuilder: (ctx) =>
-                                                      [
-                                                            'Tutti',
-                                                            'Accettati',
-                                                            'Inviati',
-                                                            'In Revisione',
-                                                            'Bozza',
-                                                          ]
-                                                          .map(
-                                                            (
-                                                              s,
-                                                            ) => PopupMenuItem(
-                                                              value: s,
-                                                              child: Text(
-                                                                s,
-                                                                style: const TextStyle(
-                                                                  color: Colors
-                                                                      .white,
-                                                                  fontSize: 13,
+                                                        const Icon(
+                                                          Icons
+                                                              .keyboard_arrow_down,
+                                                          color: Colors.white70,
+                                                          size: 18,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    onSelected: (v) => setState(
+                                                      () => _selectedFilter = v,
+                                                    ),
+                                                    itemBuilder: (ctx) =>
+                                                        _filterOptions
+                                                            .map(
+                                                              (s) =>
+                                                                  PopupMenuItem(
+                                                                value: s,
+                                                                child: Text(
+                                                                  s,
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    color: Colors
+                                                                        .white,
+                                                                    fontSize:
+                                                                        13,
+                                                                  ),
                                                                 ),
                                                               ),
-                                                            ),
-                                                          )
-                                                          .toList(),
+                                                            )
+                                                            .toList(),
                                                   ),
                                                 ),
                                               ],
@@ -1407,14 +1252,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(
-                                            width: 80,
-                                          ), // For action buttons
+                                          const SizedBox(width: 96),
                                         ],
                                       ),
                                     ),
 
-                                    // Table Content
+                                    // Table Content (Single ListView in screen)
                                     Expanded(
                                       child: filtered.isEmpty
                                           ? const Center(
@@ -1428,58 +1271,73 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                           : ListView.separated(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    vertical: 4,
-                                                  ),
+                                                vertical: 4,
+                                              ),
                                               itemCount: filtered.length,
                                               separatorBuilder: (ctx, i) =>
                                                   Divider(
-                                                    color: Colors.white
-                                                        .withValues(
-                                                          alpha: 0.04,
-                                                        ),
-                                                    height: 1,
-                                                  ),
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.04,
+                                                ),
+                                                height: 1,
+                                              ),
                                               itemBuilder: (context, index) {
                                                 final q = filtered[index];
                                                 final isSelected =
                                                     _selectedQuote?['id'] ==
-                                                    q['id'];
-                                                final code =
-                                                    q['code']?.toString() ??
+                                                        q['id'];
+                                                final code = q['code']
+                                                        ?.toString() ??
                                                     q['serial_number']
                                                         ?.toString() ??
                                                     'P-${index + 1}';
                                                 final client =
-                                                    q['client_name']
-                                                        ?.toString() ??
-                                                    'Cliente';
+                                                    _resolveQuoteClient(q);
                                                 final date =
                                                     q['date']?.toString() ??
-                                                    '-';
-                                                final subject =
-                                                    q['subject']?.toString() ??
+                                                        '-';
+                                                final subject = q['subject']
+                                                        ?.toString() ??
                                                     q['file_name']
                                                         ?.toString() ??
                                                     '-';
                                                 final total =
-                                                    double.tryParse(
-                                                      q['total_amount']
-                                                              ?.toString() ??
-                                                          '0',
-                                                    ) ??
-                                                    0.0;
+                                                    _resolveQuoteTotal(q);
 
                                                 return InkWell(
                                                   onTap: () {
-                                                    setState(() => _selectedQuote = q);
+                                                    setState(
+                                                      () => _selectedQuote = q,
+                                                    );
                                                     showDialog(
                                                       context: context,
-                                                      builder: (ctx) => Dialog(
-                                                        backgroundColor: Colors.transparent,
-                                                        insetPadding: const EdgeInsets.all(16),
+                                                      builder: (dialogCtx) =>
+                                                          Dialog(
+                                                        backgroundColor:
+                                                            Colors.transparent,
+                                                        insetPadding:
+                                                            const EdgeInsets
+                                                                .all(16),
                                                         child: ConstrainedBox(
-                                                          constraints: const BoxConstraints(maxWidth: 600),
-                                                          child: _buildFeaturedQuoteCard(q, 0),
+                                                          constraints:
+                                                              BoxConstraints(
+                                                            maxWidth: 600,
+                                                            maxHeight: MediaQuery
+                                                                        .of(
+                                                                      dialogCtx,
+                                                                    )
+                                                                        .size
+                                                                        .height *
+                                                                    0.88,
+                                                          ),
+                                                          child:
+                                                              SingleChildScrollView(
+                                                            child:
+                                                                _buildFeaturedQuoteCard(
+                                                              q,
+                                                              dialogCtx,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     );
@@ -1487,15 +1345,15 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                   child: Container(
                                                     color: isSelected
                                                         ? Colors.white
-                                                              .withValues(
-                                                                alpha: 0.05,
-                                                              )
+                                                            .withValues(
+                                                              alpha: 0.05,
+                                                            )
                                                         : Colors.transparent,
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 20,
-                                                          vertical: 12,
-                                                        ),
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 20,
+                                                      vertical: 12,
+                                                    ),
                                                     child: Row(
                                                       children: [
                                                         Expanded(
@@ -1507,7 +1365,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                             children: [
                                                               Text(
                                                                 code,
-                                                                style: const TextStyle(
+                                                                style:
+                                                                    const TextStyle(
                                                                   color: Colors
                                                                       .white,
                                                                   fontSize: 13,
@@ -1518,7 +1377,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                               ),
                                                               Text(
                                                                 'Client: $client',
-                                                                style: const TextStyle(
+                                                                style:
+                                                                    const TextStyle(
                                                                   color: Colors
                                                                       .white54,
                                                                   fontSize: 11,
@@ -1537,10 +1397,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                             date,
                                                             style:
                                                                 const TextStyle(
-                                                                  color: Colors
-                                                                      .white70,
-                                                                  fontSize: 13,
-                                                                ),
+                                                              color: Colors
+                                                                  .white70,
+                                                              fontSize: 13,
+                                                            ),
                                                           ),
                                                         ),
                                                         Expanded(
@@ -1549,10 +1409,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                             subject,
                                                             style:
                                                                 const TextStyle(
-                                                                  color: Colors
-                                                                      .white70,
-                                                                  fontSize: 13,
-                                                                ),
+                                                              color: Colors
+                                                                  .white70,
+                                                              fontSize: 13,
+                                                            ),
                                                             maxLines: 1,
                                                             overflow:
                                                                 TextOverflow
@@ -1565,8 +1425,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                             alignment: Alignment
                                                                 .centerRight,
                                                             child: Text(
-                                                              '€ ${total.toStringAsFixed(2)}',
-                                                              style: const TextStyle(
+                                                              CurrencyUtils
+                                                                  .formatEuro(
+                                                                total,
+                                                              ),
+                                                              style:
+                                                                  const TextStyle(
                                                                 color: Colors
                                                                     .white,
                                                                 fontSize: 13,
@@ -1610,8 +1474,9 @@ class _QuotesScreenState extends State<QuotesScreen> {
                                                                     'Elimina',
                                                                 onPressed: () =>
                                                                     _deleteQuote(
-                                                                      q['id'],
-                                                                    ),
+                                                                  q['id']
+                                                                      ?.toString(),
+                                                                ),
                                                               ),
                                                             ],
                                                           ),
@@ -1638,11 +1503,12 @@ class _QuotesScreenState extends State<QuotesScreen> {
     );
   }
 
-  // --- TOP FEATURED NEON CARD ---
-  Widget _buildFeaturedQuoteCard(Map<String, dynamic> quote, int index) {
-    final status =
-        quote['status']?.toString() ??
-        (quote['accepted'] == true ? 'Accettato' : 'Inviato');
+  // --- DETAIL NEON CARD ---
+  Widget _buildFeaturedQuoteCard(
+    Map<String, dynamic> quote,
+    BuildContext dialogContext,
+  ) {
+    final status = _normalizeQuoteStatus(quote);
 
     Color neonColor;
     switch (status) {
@@ -1664,35 +1530,30 @@ class _QuotesScreenState extends State<QuotesScreen> {
         break;
     }
 
-    final code =
-        quote['code']?.toString() ??
+    final code = quote['code']?.toString() ??
         quote['serial_number']?.toString() ??
-        'P-2023-08';
-    final client = quote['client_name']?.toString() ?? 'Tech Solutions Inc.';
-    final date = quote['date']?.toString() ?? '24/10/2023';
-    final subject =
-        quote['subject']?.toString() ??
-        quote['file_name']?.toString() ??
-        'Servizi Contabili & Consulenza Fiscale';
-    final total =
-        double.tryParse(quote['total_amount']?.toString() ?? '0') ?? 6850.0;
-    final subtotal =
-        double.tryParse(quote['subtotal']?.toString() ?? '0') ?? total;
-    final tax =
-        double.tryParse(quote['tax_amount']?.toString() ?? '0') ??
-        (total - subtotal);
+        '-';
+    final client = _resolveQuoteClient(quote);
+    final date = quote['date']?.toString() ?? '-';
+    final subject = quote['subject']?.toString().trim().isNotEmpty == true
+        ? quote['subject'].toString()
+        : (quote['file_name']?.toString() ?? '-');
+    final total = _resolveQuoteTotal(quote);
+    final subtotal = quote['subtotal'] != null
+        ? CurrencyUtils.parseCurrency(quote['subtotal'].toString())
+        : total;
+    final tax = quote['tax_amount'] != null
+        ? CurrencyUtils.parseCurrency(quote['tax_amount'].toString())
+        : CurrencyUtils.roundMoney(
+            (total - subtotal) > 0 ? (total - subtotal) : 0.0,
+          );
 
-    List itemsList = quote['items'] is List
-        ? (quote['items'] as List)
-        : [
-            {'name': 'Consulenza Fiscale', 'qty': '20h'},
-            {'name': 'Contabilità Trimestrale', 'qty': '20h'},
-            {'name': 'Dichiarazione IVA', 'qty': '20h'},
-          ];
+    final List<dynamic> itemsList =
+        quote['items'] is List ? List<dynamic>.from(quote['items']) : [];
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF101322).withValues(alpha: 0.9),
+        color: const Color(0xFF101322).withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: neonColor.withValues(alpha: 0.8), width: 1.8),
         boxShadow: [
@@ -1706,9 +1567,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Header: Code, Status Pill, Client
+          // 1. Header: Code, Client & Close button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1729,10 +1591,17 @@ class _QuotesScreenState extends State<QuotesScreen> {
                     const SizedBox(height: 2),
                     Text(
                       'Client: $client',
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                onPressed: () => Navigator.pop(dialogContext),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ],
           ),
@@ -1753,14 +1622,13 @@ class _QuotesScreenState extends State<QuotesScreen> {
                     const SizedBox(height: 6),
                     _buildMetaRow(
                       'Totale',
-                      '€ ${total.toStringAsFixed(2)}',
+                      CurrencyUtils.formatEuro(total),
                       isBold: true,
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              // Status Stamp Badge
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -1794,8 +1662,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
                       status == 'Accettato'
                           ? Icons.check_circle
                           : (status == 'Rifiutato'
-                                ? Icons.cancel
-                                : Icons.arrow_forward),
+                              ? Icons.cancel
+                              : Icons.arrow_forward),
                       size: 14,
                       color: neonColor,
                     ),
@@ -1807,10 +1675,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
 
           const SizedBox(height: 14),
 
-          // 3. Items Box
-          const Text(
-            'Items',
-            style: TextStyle(
+          // 3. Items / Materials Box with live checkboxes
+          Text(
+            'Materiali / Voci (${itemsList.length})',
+            style: const TextStyle(
               color: Colors.white70,
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -1818,71 +1686,96 @@ class _QuotesScreenState extends State<QuotesScreen> {
           ),
           const SizedBox(height: 6),
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.03),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Column(
-              children: itemsList.asMap().entries.map((entry) {
-                final idx = entry.key;
-                final map = entry.value is Map
-                    ? Map<String, dynamic>.from(entry.value)
-                    : {'name': entry.value.toString(), 'qty': '1', 'checked': false};
-                
-                return StatefulBuilder(
-                  builder: (context, setStateItem) {
-                    bool isChecked = map['checked'] == true || map['checked'] == 'true';
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Checkbox(
-                              value: isChecked,
-                              activeColor: Colors.tealAccent,
-                              onChanged: (val) async {
-                                setStateItem(() {
-                                  map['checked'] = val;
-                                  isChecked = val ?? false;
-                                });
-                                // Aggiorna DB live
-                                itemsList[idx] = map;
-                                quote['items'] = itemsList;
-                                await _dbHelper.updateQuote(quote);
-                              },
+            child: itemsList.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text(
+                      'Nessuna voce materiale registrata.',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  )
+                : Column(
+                    children: itemsList.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final map = entry.value is Map
+                          ? Map<String, dynamic>.from(entry.value)
+                          : <String, dynamic>{
+                              'name': entry.value.toString(),
+                              'qty': '1',
+                              'checked': false,
+                            };
+
+                      return StatefulBuilder(
+                        builder: (context, setStateItem) {
+                          bool isChecked = map['checked'] == true ||
+                              map['checked'] == 'true';
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: Checkbox(
+                                    value: isChecked,
+                                    activeColor: Colors.tealAccent,
+                                    onChanged: (val) async {
+                                      final newChecked = val ?? false;
+                                      setStateItem(() {
+                                        map['checked'] = newChecked;
+                                        isChecked = newChecked;
+                                      });
+                                      itemsList[idx] = map;
+                                      quote['items'] = itemsList;
+                                      if (quote['id'] != null) {
+                                        try {
+                                          await _dbHelper.updateQuote(quote);
+                                        } catch (e) {
+                                          debugPrint(
+                                            'Errore salvataggio spunta materiale: $e',
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    map['name']?.toString() ?? '',
+                                    style: TextStyle(
+                                      color: isChecked
+                                          ? Colors.white38
+                                          : Colors.white70,
+                                      fontSize: 12,
+                                      decoration: isChecked
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  map['qty']?.toString() ?? '',
+                                  style: const TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              map['name']?.toString() ?? '',
-                              style: TextStyle(
-                                color: isChecked ? Colors.white38 : Colors.white70,
-                                fontSize: 12,
-                                decoration: isChecked ? TextDecoration.lineThrough : null,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Text(
-                            map['qty']?.toString() ?? '',
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                );
-              }).toList(),
-            ),
+                          );
+                        },
+                      );
+                    }).toList(),
+                  ),
           ),
 
           const SizedBox(height: 12),
@@ -1896,7 +1789,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
                 style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
               Text(
-                '€ ${subtotal.toStringAsFixed(2)}',
+                CurrencyUtils.formatEuro(subtotal),
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 12,
@@ -1911,10 +1804,10 @@ class _QuotesScreenState extends State<QuotesScreen> {
             children: [
               Text(
                 'IVA (${subtotal > 0 ? (tax / subtotal * 100).toStringAsFixed(0) : 0}%)',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
               ),
               Text(
-                '€ ${tax.toStringAsFixed(2)}',
+                CurrencyUtils.formatEuro(tax),
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 12,
@@ -1928,7 +1821,7 @@ class _QuotesScreenState extends State<QuotesScreen> {
           const Divider(color: Colors.white10, height: 1),
           const SizedBox(height: 12),
 
-          // 5. Actions Footer (Visualizza PDF, Modifica, Cronologia)
+          // 5. Actions Footer (Visualizza PDF, Modifica, Elimina)
           Row(
             children: [
               Expanded(
@@ -1959,7 +1852,13 @@ class _QuotesScreenState extends State<QuotesScreen> {
               Expanded(
                 flex: 1,
                 child: OutlinedButton.icon(
-                  onPressed: () => _showQuoteFormDialog(existingQuote: quote),
+                  onPressed: () async {
+                    Navigator.pop(dialogContext);
+                    final authorized =
+                        await SecurityUtils.requireAdminAuth(context);
+                    if (!authorized || !mounted) return;
+                    await _showQuoteFormDialog(existingQuote: quote);
+                  },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white70,
                     side: BorderSide(
@@ -1977,8 +1876,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
               const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () {
-                  Navigator.pop(context);
-                  _deleteQuote(quote['id']);
+                  Navigator.pop(dialogContext);
+                  _deleteQuote(quote['id']?.toString());
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.redAccent,
@@ -1988,7 +1887,8 @@ class _QuotesScreenState extends State<QuotesScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                   minimumSize: Size.zero,
                 ),
                 child: const Icon(Icons.delete_outline, size: 16),
@@ -2028,6 +1928,651 @@ class _QuotesScreenState extends State<QuotesScreen> {
   }
 }
 
+class _QuoteItemEntry {
+  final TextEditingController nameCtrl;
+  final TextEditingController qtyCtrl;
+  bool checked;
+  final Map<String, dynamic> extraFields;
 
+  _QuoteItemEntry({
+    required String name,
+    required String qty,
+    required this.checked,
+    Map<String, dynamic>? extra,
+  })  : nameCtrl = TextEditingController(text: name),
+        qtyCtrl = TextEditingController(text: qty),
+        extraFields = extra != null ? Map<String, dynamic>.from(extra) : {};
 
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      ...extraFields,
+      'name': nameCtrl.text.trim(),
+      'qty': qtyCtrl.text.trim().isEmpty ? '1' : qtyCtrl.text.trim(),
+      'checked': checked,
+    };
+  }
 
+  void dispose() {
+    nameCtrl.dispose();
+    qtyCtrl.dispose();
+  }
+}
+
+class _QuoteFormDialog extends StatefulWidget {
+  final File? initialFile;
+  final Map<String, dynamic>? initialData;
+  final Map<String, dynamic>? existingQuote;
+  final int nextSuggestedNumber;
+  final DatabaseHelper dbHelper;
+  final AttachmentService attachmentService;
+
+  const _QuoteFormDialog({
+    required this.initialFile,
+    required this.initialData,
+    required this.existingQuote,
+    required this.nextSuggestedNumber,
+    required this.dbHelper,
+    required this.attachmentService,
+  });
+
+  @override
+  State<_QuoteFormDialog> createState() => _QuoteFormDialogState();
+}
+
+class _QuoteFormDialogState extends State<_QuoteFormDialog> {
+  late final TextEditingController _codeCtrl;
+  late final TextEditingController _clientCtrl;
+  late final TextEditingController _dateCtrl;
+  late final TextEditingController _subjectCtrl;
+  late final TextEditingController _totalCtrl;
+  late final TextEditingController _subtotalCtrl;
+  late final TextEditingController _taxCtrl;
+  late String _status;
+  final List<_QuoteItemEntry> _items = [];
+  bool _isSaving = false;
+
+  bool get _isEditing => widget.existingQuote != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingQuote;
+    final init = widget.initialData;
+
+    _codeCtrl = TextEditingController(
+      text: existing?['code']?.toString() ??
+          init?['code']?.toString() ??
+          'N${widget.nextSuggestedNumber}-${DateFormat('yyyy').format(DateTime.now())}',
+    );
+    _clientCtrl = TextEditingController(
+      text: (existing?['client_name'] ??
+              existing?['client'] ??
+              init?['client_name'] ??
+              '')
+          .toString(),
+    );
+    _dateCtrl = TextEditingController(
+      text: (existing?['date'] ??
+              init?['date'] ??
+              DateFormat('dd/MM/yyyy').format(DateTime.now()))
+          .toString(),
+    );
+    _subjectCtrl = TextEditingController(
+      text: (existing?['subject'] ?? init?['subject'] ?? '').toString(),
+    );
+
+    final rawTotal =
+        existing?['total_amount'] ?? existing?['total'] ?? init?['total'] ?? 0;
+    final rawSub = existing?['subtotal'] ?? init?['subtotal'] ?? rawTotal;
+    final rawTax = existing?['tax_amount'] ?? init?['tax'] ?? 0;
+
+    _totalCtrl = TextEditingController(
+      text: CurrencyUtils.formatNumber(
+        CurrencyUtils.parseCurrency(rawTotal.toString()),
+      ),
+    );
+    _subtotalCtrl = TextEditingController(
+      text: CurrencyUtils.formatNumber(
+        CurrencyUtils.parseCurrency(rawSub.toString()),
+      ),
+    );
+    _taxCtrl = TextEditingController(
+      text: CurrencyUtils.formatNumber(
+        CurrencyUtils.parseCurrency(rawTax.toString()),
+      ),
+    );
+
+    _status = _QuotesScreenState._normalizeQuoteStatus(existing);
+
+    // Preserve checked state for BOTH existingQuote and initialData!
+    final dynamic rawItems = existing?['items'] ?? init?['items'];
+    if (rawItems is List && rawItems.isNotEmpty) {
+      for (final e in rawItems) {
+        if (e is Map) {
+          final extra = Map<String, dynamic>.from(e)
+            ..remove('name')
+            ..remove('qty')
+            ..remove('checked');
+          _items.add(
+            _QuoteItemEntry(
+              name: e['name']?.toString() ?? '',
+              qty: e['qty']?.toString() ?? '1',
+              checked: e['checked'] == true || e['checked'] == 'true',
+              extra: extra,
+            ),
+          );
+        } else if (e != null) {
+          _items.add(
+            _QuoteItemEntry(
+              name: e.toString(),
+              qty: '1',
+              checked: false,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    _clientCtrl.dispose();
+    _dateCtrl.dispose();
+    _subjectCtrl.dispose();
+    _totalCtrl.dispose();
+    _subtotalCtrl.dispose();
+    _taxCtrl.dispose();
+    for (final item in _items) {
+      item.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
+    try {
+      final existing = widget.existingQuote;
+      String? fileUrl = existing?['file_url']?.toString();
+      final String fileName = existing?['file_name']?.toString() ??
+          (widget.initialFile != null
+              ? p.basename(widget.initialFile!.path)
+              : 'preventivo.pdf');
+
+      if (widget.initialFile != null && !_isEditing) {
+        try {
+          fileUrl = await widget.attachmentService.uploadAttachment(
+            widget.initialFile!,
+            'quotes',
+          );
+        } catch (e) {
+          debugPrint('Upload allegato preventivo non riuscito (uso locale): $e');
+        }
+      }
+
+      final parsedSubtotal = CurrencyUtils.parseCurrency(_subtotalCtrl.text);
+      final parsedTax = CurrencyUtils.parseCurrency(_taxCtrl.text);
+      final parsedTotal = CurrencyUtils.parseCurrency(_totalCtrl.text);
+
+      final serializedItems = _items
+          .map((e) => e.toMap())
+          .where((m) => (m['name']?.toString().isNotEmpty == true))
+          .toList();
+
+      final quoteData = <String, dynamic>{
+        ...?existing,
+        'code': _codeCtrl.text.trim(),
+        'client_name': _clientCtrl.text.trim(),
+        'date': _dateCtrl.text.trim(),
+        'subject': _subjectCtrl.text.trim(),
+        'status': _status,
+        'accepted': _status == 'Accettato',
+        'rejected': _status == 'Rifiutato',
+        'items': serializedItems,
+        'subtotal': parsedSubtotal,
+        'tax_amount': parsedTax,
+        'total_amount': parsedTotal,
+        'total': parsedTotal,
+        'file_name': fileName,
+        'file_url': fileUrl ?? widget.initialFile?.path ?? '',
+        'local_path':
+            widget.initialFile?.path ?? existing?['local_path'] ?? '',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (_isEditing) {
+        quoteData['id'] = existing!['id'];
+        await widget.dbHelper.updateQuote(quoteData);
+      } else {
+        // Omit serial_number so DatabaseHelper.insertQuote assigns atomic sequential counter
+        quoteData.remove('serial_number');
+        quoteData['created_at'] = DateTime.now().toIso8601String();
+        await widget.dbHelper.insertQuote(quoteData);
+      }
+
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore salvataggio preventivo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Widget _buildTextField(
+    String label,
+    TextEditingController ctrl, {
+    bool isNumber = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: ctrl,
+          enabled: !_isSaving,
+          keyboardType: isNumber
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.06),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final statusDefinitions = const [
+      {'status': 'Inviato', 'color': Colors.blueAccent},
+      {'status': 'Accettato', 'color': Colors.greenAccent},
+      {'status': 'In Revisione', 'color': Colors.orangeAccent},
+      {'status': 'Bozza', 'color': Colors.purpleAccent},
+      {'status': 'Rifiutato', 'color': Colors.redAccent},
+    ];
+    final safeStatus = _QuotesScreenState._quoteStatuses.contains(_status)
+        ? _status
+        : 'Inviato';
+
+    return Dialog(
+      backgroundColor: const Color(0xFF131722),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 620,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _isEditing
+                            ? 'Modifica Preventivo'
+                            : 'Nuovo Preventivo',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white54),
+                      onPressed:
+                          _isSaving ? null : () => Navigator.pop(context, false),
+                    ),
+                  ],
+                ),
+                const Divider(color: Colors.white12, height: 24),
+
+                // Row 1: Code & Date
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        'Codice Preventivo (es. N1-2026)',
+                        _codeCtrl,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildTextField('Data (dd/MM/yyyy)', _dateCtrl),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Row 2: Client & Status
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: _buildTextField(
+                        'Nome Cliente / Azienda',
+                        _clientCtrl,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Stato',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white10,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: safeStatus,
+                                dropdownColor: const Color(0xFF1E2235),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                ),
+                                isExpanded: true,
+                                items: statusDefinitions.map((item) {
+                                  final s = item['status'] as String;
+                                  final c = item['color'] as Color;
+                                  return DropdownMenuItem<String>(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: c,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: _isSaving
+                                    ? null
+                                    : (val) {
+                                        if (val != null) {
+                                          setState(() => _status = val);
+                                        }
+                                      },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Subject
+                _buildTextField(
+                  'Oggetto / Descrizione sintetica',
+                  _subjectCtrl,
+                ),
+                const SizedBox(height: 16),
+
+                // Items Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Materiali / Voci (${_items.length})',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _isSaving
+                          ? null
+                          : () {
+                              setState(() {
+                                _items.add(
+                                  _QuoteItemEntry(
+                                    name: '',
+                                    qty: '1',
+                                    checked: false,
+                                  ),
+                                );
+                              });
+                            },
+                      icon: const Icon(
+                        Icons.add,
+                        size: 16,
+                        color: Color(0xFF38BDF8),
+                      ),
+                      label: const Text(
+                        'Aggiungi voce',
+                        style: TextStyle(
+                          color: Color(0xFF38BDF8),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+
+                // Items List
+                ..._items.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final item = entry.value;
+                  return Padding(
+                    key: ObjectKey(item),
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: item.checked,
+                          activeColor: Colors.tealAccent,
+                          onChanged: _isSaving
+                              ? null
+                              : (val) {
+                                  setState(() {
+                                    item.checked = val ?? false;
+                                  });
+                                },
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: item.nameCtrl,
+                            enabled: !_isSaving,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Materiale (Audio, Luci, Strutture...)',
+                              hintStyle: const TextStyle(
+                                color: Colors.white38,
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withValues(alpha: 0.05),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 1,
+                          child: TextField(
+                            controller: item.qtyCtrl,
+                            enabled: !_isSaving,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Q.tà',
+                              hintStyle: const TextStyle(
+                                color: Colors.white38,
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withValues(alpha: 0.05),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.remove_circle_outline,
+                            color: Colors.redAccent,
+                            size: 18,
+                          ),
+                          onPressed: _isSaving
+                              ? null
+                              : () {
+                                  setState(() {
+                                    final removed = _items.removeAt(idx);
+                                    removed.dispose();
+                                  });
+                                },
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 12),
+
+                // Totals Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        'Subtotale (€)',
+                        _subtotalCtrl,
+                        isNumber: true,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildTextField(
+                        'IVA (€)',
+                        _taxCtrl,
+                        isNumber: true,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildTextField(
+                        'Totale (€)',
+                        _totalCtrl,
+                        isNumber: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed:
+                          _isSaving ? null : () => Navigator.pop(context, false),
+                      child: const Text(
+                        'Annulla',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _isSaving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF38BDF8),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.black,
+                              ),
+                            )
+                          : const Icon(Icons.check, size: 18),
+                      label: Text(
+                        _isEditing ? 'Salva Modifiche' : 'Crea Preventivo',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

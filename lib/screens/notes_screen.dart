@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_theme_provider.dart';
 import '../database/database_helper.dart';
+import '../utils/security_utils.dart';
 import 'note_form_screen.dart';
 
 class NotesScreen extends StatefulWidget {
@@ -23,8 +24,19 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _loadNotes() async {
+    if (!mounted) {
+      return;
+    }
     setState(() => _isLoading = true);
-    List<Map<String,dynamic>> notes = []; try { notes = await _dbHelper.getNotes(); } catch (e) { print('EXCEPTION IN LOAD NOTES: $e'); }
+    List<Map<String, dynamic>> notes = [];
+    try {
+      notes = await _dbHelper.getNotes();
+    } catch (e) {
+      debugPrint('Errore caricamento note: $e');
+    }
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _notes = notes;
       _isLoading = false;
@@ -32,12 +44,19 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _deleteNote(String id) async {
-    final theme = context.read<AppThemeProvider>();
+    final authorized = await SecurityUtils.requireAdminAuth(context);
+    if (!authorized || !mounted) {
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E24),
-        title: Text('Elimina nota', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Elimina nota',
+          style: TextStyle(color: Colors.white),
+        ),
         content: Text(
           'Sei sicuro di voler eliminare questa nota?',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
@@ -53,15 +72,29 @@ class _NotesScreenState extends State<NotesScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Elimina'),
+            child: const Text('Elimina'),
           ),
         ],
       ),
     );
 
-    if (confirm == true) {
-      await _dbHelper.deleteNote(id);
-      _loadNotes();
+    if (confirm == true && mounted) {
+      try {
+        await _dbHelper.deleteNote(id);
+        if (!mounted) {
+          return;
+        }
+        await _loadNotes();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Errore eliminazione nota: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -72,17 +105,18 @@ class _NotesScreenState extends State<NotesScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F13),
       appBar: AppBar(
-        
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
+        title: const Text(
           'Note Generali',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        iconTheme: IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+          ? const Center(
+              child: CircularProgressIndicator(color: Colors.blueAccent),
+            )
           : _notes.isEmpty
           ? Center(
               child: Text(
@@ -95,8 +129,11 @@ class _NotesScreenState extends State<NotesScreen> {
               itemCount: _notes.length,
               itemBuilder: (context, index) {
                 final note = _notes[index];
+                final noteId = note['id']?.toString();
                 final title = note['title']?.toString() ?? 'Senza Titolo';
-                final date = note['update_date'] ?? note['creation_date'] ?? '';
+                final date =
+                    (note['update_date'] ?? note['creation_date'] ?? '')
+                        .toString();
                 final type = note['type']?.toString() ?? 'TEXT';
 
                 return Card(
@@ -116,7 +153,7 @@ class _NotesScreenState extends State<NotesScreen> {
                     ),
                     title: Text(
                       title,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
@@ -129,8 +166,10 @@ class _NotesScreenState extends State<NotesScreen> {
                       ),
                     ),
                     trailing: IconButton(
-                      icon: Icon(Icons.delete, color: Colors.redAccent),
-                      onPressed: () => _deleteNote(note['id']),
+                      icon: const Icon(Icons.delete, color: Colors.redAccent),
+                      onPressed: noteId == null
+                          ? null
+                          : () => _deleteNote(noteId),
                     ),
                     onTap: () async {
                       await Navigator.push(
@@ -139,7 +178,9 @@ class _NotesScreenState extends State<NotesScreen> {
                           builder: (context) => NoteFormScreen(note: note),
                         ),
                       );
-                      _loadNotes();
+                      if (mounted) {
+                        await _loadNotes();
+                      }
                     },
                   ),
                 );
@@ -152,9 +193,11 @@ class _NotesScreenState extends State<NotesScreen> {
             context,
             MaterialPageRoute(builder: (context) => const NoteFormScreen()),
           );
-          _loadNotes();
+          if (mounted) {
+            await _loadNotes();
+          }
         },
-        child: Icon(Icons.add, color: Colors.white),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

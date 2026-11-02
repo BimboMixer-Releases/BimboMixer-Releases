@@ -11,16 +11,35 @@ class DeadlinesSelectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.watch<AppThemeProvider>();
     final isDesktop = MediaQuery.of(context).size.width >= 800;
+    final parentScaffold = Scaffold.maybeOf(context);
+    final hasDrawer = parentScaffold?.hasDrawer == true;
+    final canPop = Navigator.canPop(context);
+
+    Widget? leadingWidget;
+    if (hasDrawer) {
+      leadingWidget = IconButton(
+        icon: const Icon(Icons.menu, color: Colors.white),
+        onPressed: () => parentScaffold?.openDrawer(),
+      );
+    } else if (canPop) {
+      leadingWidget = IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        
-        leading: Builder(builder: (context) => IconButton(icon: Icon(Icons.menu, color: Colors.white), onPressed: () { context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer(); })),
-        title: Text('Gestione Scadenze', style: TextStyle(color: Colors.white)),
+        automaticallyImplyLeading: false,
+        leading: leadingWidget,
+        title: const Text(
+          'Gestione Scadenze',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Center(
         child: SingleChildScrollView(

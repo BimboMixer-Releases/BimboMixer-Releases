@@ -1,23 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../utils/sort_utils.dart';
-import '../utils/password_hasher.dart';
+import 'package:flutter/foundation.dart';
+import '../utils/calculation_engine.dart';
 import '../utils/crypto_utils.dart';
+import '../utils/date_utils_app.dart';
+import '../utils/password_hasher.dart';
+import '../utils/sort_utils.dart';
 
 class DatabaseHelper {
   static DatabaseHelper _instance = DatabaseHelper._internal();
-  static void setMockInstance(DatabaseHelper mock) { _instance = mock; }
-  
+  static void setMockInstance(DatabaseHelper mock) {
+    _instance = mock;
+  }
+
   FirebaseFirestore? _mockDb;
   FirebaseFirestore get _db => _mockDb ?? FirebaseFirestore.instance;
   FirebaseFirestore get db => _db;
-  
-  static void setMockFirestore(FirebaseFirestore mock) { _instance._mockDb = mock; }
+
+  static void setMockFirestore(FirebaseFirestore mock) {
+    _instance._mockDb = mock;
+    _instance._paymentsMigrationDone = false;
+  }
 
   factory DatabaseHelper() => _instance;
 
   DatabaseHelper._internal();
 
-  /// Utente attualmente loggato, usato per l'Audit Log
+  /// Utente attualmente loggato, usato per l'Audit Log e controlli permessi
   String? currentUser;
 
   // --- CRUD USERS ---
@@ -32,13 +40,13 @@ class DatabaseHelper {
 
   Future<String> insertUser(Map<String, dynamic> user) async {
     final data = Map<String, dynamic>.from(user)..remove('id');
-    // Hash della password se non  gi hashata
-    if (data['password_hash'] != null && !PasswordHasher.isHashed(data['password_hash'])) {
-      data['password_hash'] = PasswordHasher.hashPassword(data['password_hash']);
+    if (data['password_hash'] != null &&
+        !PasswordHasher.isHashed(data['password_hash'].toString())) {
+      data['password_hash'] = PasswordHasher.hashPassword(data['password_hash'].toString());
     }
     final docRef = await _db.collection('users').add(data);
-    
-    if (currentUser != null) {
+
+    if (currentUser != null && currentUser!.isNotEmpty) {
       await logAuditEvent(
         username: currentUser!,
         eventType: 'CREATE',
@@ -52,15 +60,18 @@ class DatabaseHelper {
   }
 
   Future<void> updateUser(Map<String, dynamic> user) async {
-    final id = user['id'];
+    final id = user['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID utente mancante per updateUser');
+    }
     final data = Map<String, dynamic>.from(user)..remove('id');
-    // Hash della password se  stata cambiata e non  gi hashata
-    if (data['password_hash'] != null && !PasswordHasher.isHashed(data['password_hash'])) {
-      data['password_hash'] = PasswordHasher.hashPassword(data['password_hash']);
+    if (data['password_hash'] != null &&
+        !PasswordHasher.isHashed(data['password_hash'].toString())) {
+      data['password_hash'] = PasswordHasher.hashPassword(data['password_hash'].toString());
     }
     await _db.collection('users').doc(id).update(data);
 
-    if (currentUser != null) {
+    if (currentUser != null && currentUser!.isNotEmpty) {
       await logAuditEvent(
         username: currentUser!,
         eventType: 'UPDATE',
@@ -74,8 +85,8 @@ class DatabaseHelper {
 
   Future<void> deleteUser(String id) async {
     await _db.collection('users').doc(id).delete();
-    
-    if (currentUser != null) {
+
+    if (currentUser != null && currentUser!.isNotEmpty) {
       await logAuditEvent(
         username: currentUser!,
         eventType: 'DELETE',
@@ -88,36 +99,47 @@ class DatabaseHelper {
   }
 
   /// Verifica credenziali: cerca l'utente per username e verifica la password con hash.
-  /// Se la password  ancora in chiaro (legacy), la migra automaticamente ad hash.
-  /// Ritorna la mappa dell'utente se le credenziali sono valide, null altrimenti.
   Future<Map<String, dynamic>?> verifyCredentials(String username, String password) async {
     final users = await getUsers();
-    
-    for (var user in users) {
-      if (user['username'] == username) {
-        // Fallback al vecchio campo 'password' se 'password_hash' non esiste
-        final storedHash = user['password_hash']?.toString() ?? user['password']?.toString() ?? '';
-        
+
+    for (final user in users) {
+      if (user['username']?.toString().toLowerCase() == username.trim().toLowerCase()) {
+        final storedHash =
+            user['password_hash']?.toString() ?? user['password']?.toString() ?? '';
+
         if (PasswordHasher.verifyPassword(password, storedHash)) {
-          // Nessuna migrazione automatica delle credenziali (regola di protezione dati)
           return user;
         }
-        return null; // Username trovato ma password sbagliata
+        return null;
       }
     }
-    return null; // Username non trovato
+    return null;
+  }
+
+  /// Verifica se l'utente corrente in sessione è un amministratore.
+  Future<bool> isCurrentUserAdmin() async {
+    final activeUser = currentUser?.trim();
+    if (activeUser == null || activeUser.isEmpty) return false;
+    try {
+      final users = await getUsers();
+      for (final u in users) {
+        if (u['username']?.toString().toLowerCase() == activeUser.toLowerCase()) {
+          return u['role']?.toString().toLowerCase() == 'admin';
+        }
+      }
+    } catch (_) {}
+    return false;
   }
 
   /// Verifica se una password corrisponde a quella di un admin (per SecurityUtils).
   Future<bool> verifyAdminPassword(String password) async {
     final users = await getUsers();
-    for (var user in users) {
+    for (final user in users) {
       if (user['role']?.toString().toLowerCase() == 'admin') {
-        // Fallback al vecchio campo 'password' se 'password_hash' non esiste
-        final storedHash = user['password_hash']?.toString() ?? user['password']?.toString() ?? '';
-        
+        final storedHash =
+            user['password_hash']?.toString() ?? user['password']?.toString() ?? '';
+
         if (PasswordHasher.verifyPassword(password, storedHash)) {
-          // Nessuna migrazione automatica delle credenziali
           return true;
         }
       }
@@ -129,57 +151,138 @@ class DatabaseHelper {
   /// Registra un tentativo di login fallito. Ritorna il numero di tentativi recenti.
   Future<int> recordFailedLogin(String username) async {
     await _db.collection('login_attempts').add({
-      'username': username,
+      'username': username.trim(),
       'timestamp': DateTime.now().toIso8601String(),
       'type': 'failed',
     });
     return await getRecentFailedAttempts(username);
   }
 
-  /// Conta i tentativi falliti negli ultimi [minutes] minuti.
+  /// Conta i tentativi falliti negli ultimi [minutes] minuti senza richiedere indici compositi Firestore.
   Future<int> getRecentFailedAttempts(String username, {int minutes = 5}) async {
-    final cutoff = DateTime.now().subtract(Duration(minutes: minutes)).toIso8601String();
-    final snapshot = await _db.collection('login_attempts')
-        .where('username', isEqualTo: username)
-        .where('type', isEqualTo: 'failed')
-        .where('timestamp', isGreaterThan: cutoff)
+    final cutoff = DateTime.now().subtract(Duration(minutes: minutes));
+    final snapshot = await _db
+        .collection('login_attempts')
+        .where('username', isEqualTo: username.trim())
         .get();
-    return snapshot.docs.length;
+
+    int count = 0;
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['type'] != 'failed') continue;
+      final tsStr = data['timestamp']?.toString() ?? '';
+      final ts = DateTime.tryParse(tsStr);
+      if (ts != null && ts.isAfter(cutoff)) {
+        count++;
+      }
+    }
+    return count;
   }
 
-  /// Pulisce i vecchi tentativi (pi di 1 ora).
+  /// Pulisce i vecchi tentativi (più di 1 ora).
   Future<void> cleanOldLoginAttempts() async {
     try {
       final cutoff = DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();
-      final snapshot = await _db.collection('login_attempts')
+      final snapshot = await _db
+          .collection('login_attempts')
           .where('timestamp', isLessThan: cutoff)
           .get();
-      for (var doc in snapshot.docs) {
+      for (final doc in snapshot.docs) {
         await doc.reference.delete();
       }
     } catch (e) {
-      print('Errore pulizia tentativi login: $e');
+      debugPrint('Errore pulizia tentativi login: $e');
     }
   }
 
   // --- CRUD CUSTOMERS ---
-  Future<String> insertCustomer(Map<String, dynamic> customer) async {
+  Map<String, dynamic> _prepareCustomerForWrite(Map<String, dynamic> customer) {
     final data = Map<String, dynamic>.from(customer)..remove('id');
-    // Cifra dati sensibili
-    if (data['vat_number'] != null) data['vat_number'] = CryptoUtils.encryptData(data['vat_number']);
-    if (data['fiscal_code'] != null) data['fiscal_code'] = CryptoUtils.encryptData(data['fiscal_code']);
-    
+
+    // Sincronizza chiavi canoniche e legacy prima della cifratura
+    final taxCode = (data['tax_code'] ?? data['fiscal_code'])?.toString();
+    if (taxCode != null) {
+      data['tax_code'] = taxCode;
+      data['fiscal_code'] = taxCode;
+    }
+    final sdiCode = (data['sdi_code'] ?? data['unique_code'])?.toString();
+    if (sdiCode != null) {
+      data['sdi_code'] = sdiCode;
+      data['unique_code'] = sdiCode;
+    }
+    final addressStreet = (data['address_street'] ?? data['address'])?.toString();
+    if (addressStreet != null) {
+      data['address_street'] = addressStreet;
+      data['address'] = addressStreet;
+    }
+
+    // Cifra dati sensibili se non vuoti
+    if (data['vat_number'] != null && data['vat_number'].toString().isNotEmpty) {
+      data['vat_number'] = CryptoUtils.encryptData(data['vat_number'].toString());
+    }
+    if (data['fiscal_code'] != null && data['fiscal_code'].toString().isNotEmpty) {
+      data['fiscal_code'] = CryptoUtils.encryptData(data['fiscal_code'].toString());
+    }
+    if (data['tax_code'] != null && data['tax_code'].toString().isNotEmpty) {
+      data['tax_code'] = CryptoUtils.encryptData(data['tax_code'].toString());
+    }
+    return data;
+  }
+
+  Map<String, dynamic> _normalizeCustomerFromRead(Map<String, dynamic> raw, String id) {
+    final data = Map<String, dynamic>.from(raw);
+    data['id'] = id;
+
+    if (data['vat_number'] != null) {
+      data['vat_number'] = CryptoUtils.decryptData(data['vat_number'].toString());
+    }
+    if (data['fiscal_code'] != null) {
+      data['fiscal_code'] = CryptoUtils.decryptData(data['fiscal_code'].toString());
+    }
+    if (data['tax_code'] != null) {
+      data['tax_code'] = CryptoUtils.decryptData(data['tax_code'].toString());
+    }
+
+    // Allinea alias per compatibilità con tutte le schermate
+    final taxCode = (data['tax_code']?.toString().isNotEmpty == true)
+        ? data['tax_code']
+        : data['fiscal_code'];
+    if (taxCode != null) {
+      data['tax_code'] = taxCode;
+      data['fiscal_code'] = taxCode;
+    }
+
+    final sdiCode = (data['sdi_code']?.toString().isNotEmpty == true)
+        ? data['sdi_code']
+        : data['unique_code'];
+    if (sdiCode != null) {
+      data['sdi_code'] = sdiCode;
+      data['unique_code'] = sdiCode;
+    }
+
+    final addressStreet = (data['address_street']?.toString().isNotEmpty == true)
+        ? data['address_street']
+        : data['address'];
+    if (addressStreet != null) {
+      data['address_street'] = addressStreet;
+      data['address'] = addressStreet;
+    }
+
+    return data;
+  }
+
+  Future<String> insertCustomer(Map<String, dynamic> customer) async {
+    final data = _prepareCustomerForWrite(customer);
     final docRef = await _db.collection('customers').add(data);
     return docRef.id;
   }
 
   Future<void> updateCustomer(Map<String, dynamic> customer) async {
-    final id = customer['id'];
-    final data = Map<String, dynamic>.from(customer)..remove('id');
-    // Cifra dati sensibili prima di salvare
-    if (data['vat_number'] != null) data['vat_number'] = CryptoUtils.encryptData(data['vat_number']);
-    if (data['fiscal_code'] != null) data['fiscal_code'] = CryptoUtils.encryptData(data['fiscal_code']);
-    
+    final id = customer['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID cliente mancante per updateCustomer');
+    }
+    final data = _prepareCustomerForWrite(customer);
     await _db.collection('customers').doc(id).update(data);
   }
 
@@ -188,15 +291,15 @@ class DatabaseHelper {
   }
 
   Future<List<Map<String, dynamic>>> getCustomers() async {
-    final snapshot = await _db.collection('customers').orderBy('name').get();
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      data['id'] = doc.id;
-      // Decifra dati sensibili
-      if (data['vat_number'] != null) data['vat_number'] = CryptoUtils.decryptData(data['vat_number']);
-      if (data['fiscal_code'] != null) data['fiscal_code'] = CryptoUtils.decryptData(data['fiscal_code']);
-      return data;
-    }).toList();
+    final snapshot = await _db.collection('customers').get();
+    final list = snapshot.docs
+        .map((doc) => _normalizeCustomerFromRead(doc.data(), doc.id))
+        .toList();
+    list.sort((a, b) => (a['name'] ?? '')
+        .toString()
+        .toLowerCase()
+        .compareTo((b['name'] ?? '').toString().toLowerCase()));
+    return list;
   }
 
   // --- CRUD CATEGORIES ---
@@ -207,7 +310,10 @@ class DatabaseHelper {
   }
 
   Future<void> updateCategory(Map<String, dynamic> category) async {
-    final id = category['id'];
+    final id = category['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID categoria mancante per updateCategory');
+    }
     final data = Map<String, dynamic>.from(category)..remove('id');
     await _db.collection('categories').doc(id).update(data);
   }
@@ -233,7 +339,10 @@ class DatabaseHelper {
   }
 
   Future<void> updateServiceType(Map<String, dynamic> service) async {
-    final id = service['id'];
+    final id = service['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID servizio mancante per updateServiceType');
+    }
     final data = Map<String, dynamic>.from(service)..remove('id');
     await _db.collection('service_types').doc(id).update(data);
   }
@@ -254,17 +363,17 @@ class DatabaseHelper {
   // --- CRUD PAYMENTS ---
   Future<void> _initializeCounterIfNeeded() async {
     final counterRef = _db.collection('metadata').doc('payment_counter');
-    
-    // Check locally first outside transaction
+
     final counterSnap = await counterRef.get();
-    if (counterSnap.exists && counterSnap.data() != null && counterSnap.data()!.containsKey('last_id')) {
+    if (counterSnap.exists &&
+        counterSnap.data() != null &&
+        counterSnap.data()!.containsKey('last_id')) {
       return;
     }
-    
-    // Inizializza leggendo i documenti esistenti (solo al primo avvio della nuova logica)
+
     final snapshot = await _db.collection('payments').get();
     String maxId = 'A000';
-    for (var doc in snapshot.docs) {
+    for (final doc in snapshot.docs) {
       final id = doc.id;
       if (RegExp(r'^[A-Z]\d{3}$').hasMatch(id)) {
         if (id.compareTo(maxId) > 0) {
@@ -272,8 +381,7 @@ class DatabaseHelper {
         }
       }
     }
-    
-    // Usa transazione per impostare solo se non esiste ancora, prevenendo race conditions
+
     await _db.runTransaction((transaction) async {
       final snap = await transaction.get(counterRef);
       if (!snap.exists || snap.data() == null || !snap.data()!.containsKey('last_id')) {
@@ -282,67 +390,78 @@ class DatabaseHelper {
     });
   }
 
+  Map<String, dynamic> _sanitizePaymentForWrite(Map<String, dynamic> payment) {
+    return Map<String, dynamic>.from(payment)
+      ..remove('id')
+      ..remove('_generated_seq')
+      ..remove('customer_name')
+      ..remove('service_name')
+      ..remove('category_name');
+  }
+
   Future<String> insertPayment(Map<String, dynamic> payment) async {
-    final data = Map<String, dynamic>.from(payment)..remove('id');
-    
-    // 1. Assicura che il contatore esista, altrimenti lo inizializza (fuori dalla transazione)
+    final data = _sanitizePaymentForWrite(payment);
+
     await _initializeCounterIfNeeded();
 
-    // 2. Transazione atomica per allocare il nuovo ID senza concorrenza
     return await _db.runTransaction((transaction) async {
       final counterRef = _db.collection('metadata').doc('payment_counter');
       final counterSnap = await transaction.get(counterRef);
-      
+
       String currentId = 'A000';
-      if (counterSnap.exists && counterSnap.data() != null && counterSnap.data()!.containsKey('last_id')) {
+      if (counterSnap.exists &&
+          counterSnap.data() != null &&
+          counterSnap.data()!.containsKey('last_id')) {
         currentId = counterSnap.data()!['last_id'] as String;
       }
-      
+
       if (!RegExp(r'^[A-Z]\d{3}$').hasMatch(currentId)) {
         throw Exception('INVALID_COUNTER_STATE: $currentId');
       }
-      
+
       String letter = currentId.substring(0, 1);
       int number = int.parse(currentId.substring(1));
-      
+
       number++;
       if (number > 999) {
         number = 1;
         int charCode = letter.codeUnitAt(0);
         charCode++;
-        if (charCode > 90) { // Limite Z999
+        if (charCode > 90) {
           throw Exception('LIMIT_Z999_REACHED');
         }
         letter = String.fromCharCode(charCode);
       }
-      
+
       final newId = '$letter${number.toString().padLeft(3, '0')}';
-      
+
       final docRef = _db.collection('payments').doc(newId);
       final docSnap = await transaction.get(docRef);
-      
+
       if (docSnap.exists) {
-        // Nessuna sovrascrittura! Se il record esiste, fallisce (il chiamante/UI potrà riprovare)
         throw Exception('DOCUMENT_ALREADY_EXISTS');
       }
-      
+
       transaction.set(counterRef, {'last_id': newId}, SetOptions(merge: true));
       transaction.set(docRef, data);
-      
+
       return newId;
     });
   }
 
   Future<void> updatePayment(Map<String, dynamic> payment) async {
-    final id = payment['id'];
-    final data = Map<String, dynamic>.from(payment)..remove('id');
+    final id = payment['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID pagamento mancante per updatePayment');
+    }
+    final data = _sanitizePaymentForWrite(payment);
     await _db.collection('payments').doc(id).update(data);
   }
 
   Future<void> deletePayment(String id) async {
     await _db.collection('payments').doc(id).delete();
-    
-    if (currentUser != null) {
+
+    if (currentUser != null && currentUser!.isNotEmpty) {
       await logAuditEvent(
         username: currentUser!,
         eventType: 'DELETE',
@@ -355,145 +474,179 @@ class DatabaseHelper {
   }
 
   bool _paymentsMigrationDone = false;
-  
+
   Future<void> _runPaymentsRenumberingMigration() async {
     try {
       final configSnap = await _db.collection('metadata').doc('app_config').get();
       if (configSnap.exists && configSnap.data()?['migration_a001_done'] == true) {
         return;
       }
-      
+
       final snapshot = await _db.collection('payments').get();
       if (snapshot.docs.isEmpty) {
-        await _db.collection('metadata').doc('app_config').set({'migration_a001_done': true}, SetOptions(merge: true));
+        await _db
+            .collection('metadata')
+            .doc('app_config')
+            .set({'migration_a001_done': true}, SetOptions(merge: true));
         return;
       }
-      
-      var docs = snapshot.docs.map((d) {
+
+      final docs = snapshot.docs.map((d) {
         final data = d.data();
         data['original_id'] = d.id;
         return data;
       }).toList();
-      
-      docs.sort((a, b) => compareDates(a['date']?.toString(), b['date']?.toString(), descending: false));
-      
+
+      docs.sort((a, b) =>
+          compareDates(a['date']?.toString(), b['date']?.toString(), descending: false));
+
       var batch = _db.batch();
       int count = 0;
-      
+
       int number = 1;
       String letter = 'A';
       String lastId = 'A000';
-      
-      for (var doc in docs) {
+
+      for (final doc in docs) {
         final originalId = doc['original_id'] as String;
-        
+
         if (number > 999) {
-           number = 1;
-           letter = String.fromCharCode(letter.codeUnitAt(0) + 1);
+          number = 1;
+          final nextCharCode = letter.codeUnitAt(0) + 1;
+          if (nextCharCode > 90) {
+            throw Exception('LIMIT_Z999_REACHED');
+          }
+          letter = String.fromCharCode(nextCharCode);
         }
-        final newId = '';
+        final newId = '$letter${number.toString().padLeft(3, '0')}';
         lastId = newId;
         number++;
-        
-        final data = Map<String, dynamic>.from(doc)..remove('original_id')..remove('id');
-        
+
+        final data = Map<String, dynamic>.from(doc)
+          ..remove('original_id')
+          ..remove('id');
+
         if (originalId != newId) {
           batch.delete(_db.collection('payments').doc(originalId));
         }
         batch.set(_db.collection('payments').doc(newId), data);
-        
+
         count++;
-        if (count >= 480) {
+        if (count >= 450) {
           await batch.commit();
           batch = _db.batch();
           count = 0;
         }
       }
-      
+
       final counterRef = _db.collection('metadata').doc('payment_counter');
       batch.set(counterRef, {'last_id': lastId});
-      batch.set(_db.collection('metadata').doc('app_config'), {'migration_a001_done': true}, SetOptions(merge: true));
-      
+      batch.set(
+        _db.collection('metadata').doc('app_config'),
+        {'migration_a001_done': true},
+        SetOptions(merge: true),
+      );
+
       await batch.commit();
-      print('Migration A001 completata con successo. Ultimo ID: $lastId');
+      debugPrint('Migration A001 completata con successo. Ultimo ID: $lastId');
     } catch (e) {
-      print('Errore migrazione A001: $e');
+      debugPrint('Errore migrazione A001: $e');
     }
   }
 
-  Future<List<Map<String, dynamic>>> getPayments({int? year, String? startDate, String? endDate}) async {
+  Future<void> _enrichPayments(List<Map<String, dynamic>> docs) async {
+    if (docs.isEmpty) return;
+    try {
+      final customersSnap = await _db.collection('customers').get();
+      final servicesSnap = await _db.collection('service_types').get();
+      final categoriesSnap = await _db.collection('categories').get();
+      final Map<String, String> customerNames = {
+        for (final d in customersSnap.docs) d.id: (d.data()['name'] ?? '').toString()
+      };
+      final Map<String, String> serviceNames = {
+        for (final d in servicesSnap.docs) d.id: (d.data()['name'] ?? '').toString()
+      };
+      final Map<String, String> categoryNames = {
+        for (final d in categoriesSnap.docs) d.id: (d.data()['name'] ?? '').toString()
+      };
+      for (final doc in docs) {
+        final cid = doc['customer_id']?.toString() ?? '';
+        final sid = doc['service_id']?.toString() ?? '';
+        final catId = doc['category_id']?.toString() ?? '';
+        doc['customer_name'] = cid.isNotEmpty ? (customerNames[cid] ?? '') : '';
+        doc['service_name'] = sid.isNotEmpty ? (serviceNames[sid] ?? '') : '';
+        doc['category_name'] = catId.isNotEmpty ? (categoryNames[catId] ?? '') : '';
+      }
+    } catch (_) {}
+  }
+
+  Future<List<Map<String, dynamic>>> getPayments({
+    int? year,
+    String? startDate,
+    String? endDate,
+  }) async {
     if (!_paymentsMigrationDone) {
       _paymentsMigrationDone = true;
       await _runPaymentsRenumberingMigration();
     }
-  
-    Query query = _db.collection('payments');
-    
-    if (startDate != null && endDate != null) {
-      query = query.where('date', isGreaterThanOrEqualTo: startDate).where('date', isLessThanOrEqualTo: endDate);
-    } else if (year != null) {
-      String start = "$year-01-01";
-      String end = "${year + 1}-01-01";
-      query = query.where('date', isGreaterThanOrEqualTo: start).where('date', isLessThan: end);
-    }
-    
-    final snapshot = await query.get();
+
+    final snapshot = await _db.collection('payments').get();
     var docs = snapshot.docs.map((doc) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = Map<String, dynamic>.from(doc.data());
       data['id'] = doc.id;
       return data;
     }).toList();
+
+    // Filtra in memoria per supportare sia formato italiano dd/MM/yyyy sia yyyy-MM-dd
+    if (startDate != null && endDate != null) {
+      final startDt = DateUtilsApp.tryParseDate(startDate);
+      final endDt = DateUtilsApp.tryParseDate(endDate);
+      if (startDt != null && endDt != null) {
+        final startBound = DateTime(startDt.year, startDt.month, startDt.day);
+        final endBound = DateTime(endDt.year, endDt.month, endDt.day, 23, 59, 59);
+        docs = docs.where((d) {
+          final dt = DateUtilsApp.tryParseDate(d['date']?.toString());
+          if (dt == null) return false;
+          return !dt.isBefore(startBound) && !dt.isAfter(endBound);
+        }).toList();
+      }
+    } else if (year != null) {
+      docs = docs.where((d) {
+        return CalculationEngine.extractYear(d['date']?.toString()) == year;
+      }).toList();
+    }
 
     // Ordina per data discendente (ultimi inseriti prima)
     docs.sort((a, b) {
       return compareDates(a['date']?.toString(), b['date']?.toString(), descending: true);
     });
 
-    // Arricchisce con nome cliente e servizio (join in memoria)
-    try {
-      final customersSnap = await _db.collection('customers').get();
-      final servicesSnap = await _db.collection('service_types').get();
-      final Map<String, String> customerNames = {
-        for (var d in customersSnap.docs) d.id: (d.data()['name'] ?? '').toString()
-      };
-      final Map<String, String> serviceNames = {
-        for (var d in servicesSnap.docs) d.id: (d.data()['name'] ?? '').toString()
-      };
-      for (var doc in docs) {
-        final cid = doc['customer_id']?.toString() ?? '';
-        final sid = doc['service_id']?.toString() ?? '';
-        doc['customer_name'] = cid.isNotEmpty ? (customerNames[cid] ?? '') : '';
-        doc['service_name'] = sid.isNotEmpty ? (serviceNames[sid] ?? '') : '';
-      }
-    } catch (_) {}
-
+    await _enrichPayments(docs);
     return docs;
   }
 
   Future<List<Map<String, dynamic>>> getPaymentsByCustomer(String customerId) async {
-    final snapshot = await _db.collection('payments')
+    final snapshot = await _db
+        .collection('payments')
         .where('customer_id', isEqualTo: customerId)
         .get();
-    var docs = snapshot.docs.map((doc) {
-      final data = doc.data();
+    final docs = snapshot.docs.map((doc) {
+      final data = Map<String, dynamic>.from(doc.data());
       data['id'] = doc.id;
       return data;
     }).toList();
-    
-    // Sort in memory to avoid requiring a composite index in Firestore
-    docs.sort((a, b) {
-      String dateA = a['date'] ?? '';
-      String dateB = b['date'] ?? '';
-      return dateB.compareTo(dateA); // descending
-    });
-    
+
+    docs.sort((a, b) =>
+        compareDates(a['date']?.toString(), b['date']?.toString(), descending: true));
+
+    await _enrichPayments(docs);
     return docs;
   }
 
   Future<Map<String, dynamic>?> getPaymentById(String id) async {
     final doc = await _db.collection('payments').doc(id).get();
-    if (doc.exists) {
-      final data = doc.data() as Map<String, dynamic>;
+    if (doc.exists && doc.data() != null) {
+      final data = Map<String, dynamic>.from(doc.data()!);
       data['id'] = doc.id;
       return data;
     }
@@ -508,15 +661,18 @@ class DatabaseHelper {
   }
 
   Future<void> updateInvoice(Map<String, dynamic> invoice) async {
-    final id = invoice['id'];
+    final id = invoice['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID fattura mancante per updateInvoice');
+    }
     final data = Map<String, dynamic>.from(invoice)..remove('id');
     await _db.collection('invoices').doc(id).update(data);
   }
 
   Future<void> deleteInvoice(String id) async {
     await _db.collection('invoices').doc(id).delete();
-    
-    if (currentUser != null) {
+
+    if (currentUser != null && currentUser!.isNotEmpty) {
       await logAuditEvent(
         username: currentUser!,
         eventType: 'DELETE',
@@ -535,13 +691,14 @@ class DatabaseHelper {
       data['id'] = doc.id;
       return data;
     }).toList();
-    docs.sort((a, b) => compareDates(a['date']?.toString(), b['date']?.toString(), descending: true));
+    docs.sort((a, b) =>
+        compareDates(a['date']?.toString(), b['date']?.toString(), descending: true));
     return docs;
   }
 
   Future<Map<String, dynamic>?> getInvoiceById(String id) async {
     final doc = await _db.collection('invoices').doc(id).get();
-    if (doc.exists) {
+    if (doc.exists && doc.data() != null) {
       final data = doc.data()!;
       data['id'] = doc.id;
       return data;
@@ -557,7 +714,10 @@ class DatabaseHelper {
   }
 
   Future<void> updateDeadline(Map<String, dynamic> deadline) async {
-    final id = deadline['id'];
+    final id = deadline['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID scadenza mancante per updateDeadline');
+    }
     final data = Map<String, dynamic>.from(deadline)..remove('id');
     await _db.collection('deadlines').doc(id).update(data);
   }
@@ -573,16 +733,27 @@ class DatabaseHelper {
       data['id'] = doc.id;
       return data;
     }).toList();
-    // Deadlines usually ascending (earliest first)
-    docs.sort((a, b) => compareDates(a['date']?.toString(), b['date']?.toString(), descending: false));
+    docs.sort((a, b) {
+      final dateA = (a['date_from']?.toString().isNotEmpty == true)
+          ? a['date_from']?.toString()
+          : a['date']?.toString();
+      final dateB = (b['date_from']?.toString().isNotEmpty == true)
+          ? b['date_from']?.toString()
+          : b['date']?.toString();
+      return compareDates(dateA, dateB, descending: false);
+    });
     return docs;
   }
 
   // --- ACCESS LOGS ---
-  Future<void> logAccess(String username, String role, String deviceType, {String eventType = 'login_success'}) async {
+  Future<void> logAccess(
+    String username,
+    String role,
+    String deviceType, {
+    String eventType = 'login_success',
+  }) async {
     final now = DateTime.now();
-    
-    // Inserisci il nuovo log (append-only: le Firestore rules impediscono modifica/cancellazione)
+
     await _db.collection('access_logs').add({
       'username': username,
       'role': role,
@@ -593,13 +764,13 @@ class DatabaseHelper {
   }
 
   Future<List<Map<String, dynamic>>> getAccessLogs() async {
-    // Filtra solo gli ultimi 7 giorni
     final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7)).toIso8601String();
-    final snapshot = await _db.collection('access_logs')
+    final snapshot = await _db
+        .collection('access_logs')
         .where('timestamp', isGreaterThan: sevenDaysAgo)
         .orderBy('timestamp', descending: true)
         .get();
-    
+
     return snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
@@ -608,8 +779,6 @@ class DatabaseHelper {
   }
 
   // --- AUDIT LOG ---
-  /// Registra un evento di sicurezza nell'audit log.
-  /// Severity: INFO, WARNING, HIGH, CRITICAL
   Future<void> logAuditEvent({
     required String username,
     required String eventType,
@@ -630,11 +799,12 @@ class DatabaseHelper {
   }
 
   Future<List<Map<String, dynamic>>> getAuditLogs({int limit = 100}) async {
-    final snapshot = await _db.collection('audit_log')
+    final snapshot = await _db
+        .collection('audit_log')
         .orderBy('timestamp', descending: true)
         .limit(limit)
         .get();
-    
+
     return snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
@@ -650,7 +820,10 @@ class DatabaseHelper {
   }
 
   Future<void> updateCalendarEvent(Map<String, dynamic> event) async {
-    final id = event['id'];
+    final id = event['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID evento calendario mancante');
+    }
     final data = Map<String, dynamic>.from(event)..remove('id');
     await _db.collection('calendar_events').doc(id).update(data);
   }
@@ -660,12 +833,15 @@ class DatabaseHelper {
   }
 
   Future<List<Map<String, dynamic>>> getCalendarEvents() async {
-    final snapshot = await _db.collection('calendar_events').orderBy('date').get();
-    return snapshot.docs.map((doc) {
+    final snapshot = await _db.collection('calendar_events').get();
+    final docs = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
+    docs.sort((a, b) =>
+        compareDates(a['date']?.toString(), b['date']?.toString(), descending: false));
+    return docs;
   }
 
   // --- CRUD MEMO EVENTS ---
@@ -676,7 +852,10 @@ class DatabaseHelper {
   }
 
   Future<void> updateMemoEvent(Map<String, dynamic> memo) async {
-    final id = memo['id'];
+    final id = memo['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID memo mancante');
+    }
     final data = Map<String, dynamic>.from(memo)..remove('id');
     await _db.collection('memo_events').doc(id).update(data);
   }
@@ -687,20 +866,82 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getMemoEvents() async {
     final snapshot = await _db.collection('memo_events').get();
-    var docs = snapshot.docs.map((doc) {
+    final docs = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
-    
-    // Ordinamento in memoria per data evento o data
+
     docs.sort((a, b) {
-      String dateA = a['event_date'] ?? a['date'] ?? '';
-      String dateB = b['event_date'] ?? b['date'] ?? '';
-      return dateB.compareTo(dateA);
+      final dateA = (a['event_date'] ?? a['date'])?.toString();
+      final dateB = (b['event_date'] ?? b['date'])?.toString();
+      return compareDates(dateA, dateB, descending: true);
     });
-    
+
     return docs;
+  }
+
+  /// Trasferisce un pagamento/fattura programmato in definitivo ed elimina il memo in modo atomico.
+  Future<String> settleMemoEventAtomically({
+    required String memoId,
+    required bool isInvoice,
+    required Map<String, dynamic> targetData,
+  }) async {
+    if (isInvoice) {
+      final invData = Map<String, dynamic>.from(targetData)..remove('id');
+      final invRef = _db.collection('invoices').doc();
+      final memoRef = _db.collection('memo_events').doc(memoId);
+      final batch = _db.batch();
+      batch.set(invRef, invData);
+      batch.delete(memoRef);
+      await batch.commit();
+      return invRef.id;
+    } else {
+      final payData = _sanitizePaymentForWrite(targetData);
+      await _initializeCounterIfNeeded();
+
+      return await _db.runTransaction((transaction) async {
+        final counterRef = _db.collection('metadata').doc('payment_counter');
+        final counterSnap = await transaction.get(counterRef);
+
+        String currentId = 'A000';
+        if (counterSnap.exists &&
+            counterSnap.data() != null &&
+            counterSnap.data()!.containsKey('last_id')) {
+          currentId = counterSnap.data()!['last_id'] as String;
+        }
+
+        if (!RegExp(r'^[A-Z]\d{3}$').hasMatch(currentId)) {
+          throw Exception('INVALID_COUNTER_STATE: $currentId');
+        }
+
+        String letter = currentId.substring(0, 1);
+        int number = int.parse(currentId.substring(1));
+
+        number++;
+        if (number > 999) {
+          number = 1;
+          int charCode = letter.codeUnitAt(0) + 1;
+          if (charCode > 90) {
+            throw Exception('LIMIT_Z999_REACHED');
+          }
+          letter = String.fromCharCode(charCode);
+        }
+
+        final newId = '$letter${number.toString().padLeft(3, '0')}';
+        final docRef = _db.collection('payments').doc(newId);
+        final docSnap = await transaction.get(docRef);
+        if (docSnap.exists) {
+          throw Exception('DOCUMENT_ALREADY_EXISTS');
+        }
+
+        final memoRef = _db.collection('memo_events').doc(memoId);
+        transaction.set(counterRef, {'last_id': newId}, SetOptions(merge: true));
+        transaction.set(docRef, payData);
+        transaction.delete(memoRef);
+        return newId;
+      });
+    }
   }
 
   // --- CRUD NOTE ---
@@ -711,7 +952,10 @@ class DatabaseHelper {
   }
 
   Future<void> updateNote(Map<String, dynamic> note) async {
-    final id = note['id'];
+    final id = note['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID nota mancante');
+    }
     final data = Map<String, dynamic>.from(note)..remove('id');
     await _db.collection('notes').doc(id).update(data);
   }
@@ -722,21 +966,21 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getNotes() async {
     final snapshot = await _db.collection('notes').get();
-    var docs = snapshot.docs.map((doc) {
+    final docs = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
-    
-    // Ordinamento in memoria per update_date
+
     docs.sort((a, b) {
-      String dateA = a['update_date'] ?? a['creation_date'] ?? '';
-      String dateB = b['update_date'] ?? b['creation_date'] ?? '';
-      return dateB.compareTo(dateA);
+      final dateA = (a['update_date'] ?? a['creation_date'])?.toString();
+      final dateB = (b['update_date'] ?? b['creation_date'])?.toString();
+      return compareDates(dateA, dateB, descending: true);
     });
-    
+
     return docs;
   }
+
   // --- CRUD SCHEDULED PAYMENTS ---
   Future<String> insertScheduledPayment(Map<String, dynamic> payment) async {
     final data = Map<String, dynamic>.from(payment)..remove('id');
@@ -745,7 +989,10 @@ class DatabaseHelper {
   }
 
   Future<void> updateScheduledPayment(Map<String, dynamic> payment) async {
-    final id = payment['id'];
+    final id = payment['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID pagamento programmato mancante');
+    }
     final data = Map<String, dynamic>.from(payment)..remove('id');
     await _db.collection('scheduled_payments').doc(id).update(data);
   }
@@ -756,48 +1003,88 @@ class DatabaseHelper {
 
   Future<Map<String, dynamic>?> getScheduledPaymentById(String id) async {
     final doc = await _db.collection('scheduled_payments').doc(id).get();
-    if (!doc.exists) return null;
-    final data = doc.data() as Map<String, dynamic>;
+    if (!doc.exists || doc.data() == null) return null;
+    final data = Map<String, dynamic>.from(doc.data()!);
     data['id'] = doc.id;
     return data;
   }
 
   Future<List<Map<String, dynamic>>> getScheduledPayments() async {
     final snapshot = await _db.collection('scheduled_payments').get();
-    var docs = snapshot.docs.map((doc) {
+    final docs = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
-    docs.sort((a, b) {
-      return compareDates(a['date']?.toString(), b['date']?.toString(), descending: true);
-    });
+    docs.sort((a, b) =>
+        compareDates(a['date']?.toString(), b['date']?.toString(), descending: true));
     return docs;
   }
 
   // --- CRUD QUOTES (Preventivi) ---
+  Future<void> _initializeQuoteCounterIfNeeded() async {
+    final counterRef = _db.collection('metadata').doc('quote_counter');
+    final counterSnap = await counterRef.get();
+    if (counterSnap.exists &&
+        counterSnap.data() != null &&
+        counterSnap.data()!.containsKey('last_serial')) {
+      return;
+    }
+
+    final snapshot = await _db.collection('quotes').get();
+    int maxSerial = 0;
+    for (final doc in snapshot.docs) {
+      final s = doc.data()['serial_number'];
+      if (s != null) {
+        final sInt = int.tryParse(s.toString());
+        if (sInt != null && sInt > maxSerial) {
+          maxSerial = sInt;
+        }
+      }
+    }
+
+    await _db.runTransaction((transaction) async {
+      final snap = await transaction.get(counterRef);
+      if (!snap.exists ||
+          snap.data() == null ||
+          !snap.data()!.containsKey('last_serial')) {
+        transaction.set(counterRef, {'last_serial': maxSerial});
+      }
+    });
+  }
+
   Future<String> insertQuote(Map<String, dynamic> quote) async {
     final data = Map<String, dynamic>.from(quote)..remove('id');
-    if (data['serial_number'] == null) {
-       final allQuotes = await getQuotes();
-       int maxSerial = 0;
-       for (var q in allQuotes) {
-         final s = q['serial_number'];
-         if (s != null) {
-           final sInt = int.tryParse(s.toString());
-           if (sInt != null && sInt > maxSerial) {
-             maxSerial = sInt;
-           }
-         }
-       }
-       data['serial_number'] = maxSerial + 1;
+    if (data['serial_number'] != null) {
+      final docRef = await _db.collection('quotes').add(data);
+      return docRef.id;
     }
-    final docRef = await _db.collection('quotes').add(data);
-    return docRef.id;
+
+    await _initializeQuoteCounterIfNeeded();
+
+    return await _db.runTransaction((transaction) async {
+      final counterRef = _db.collection('metadata').doc('quote_counter');
+      final counterSnap = await transaction.get(counterRef);
+      int currentSerial = 0;
+      if (counterSnap.exists && counterSnap.data() != null) {
+        currentSerial =
+            int.tryParse(counterSnap.data()!['last_serial']?.toString() ?? '0') ?? 0;
+      }
+      final nextSerial = currentSerial + 1;
+      data['serial_number'] = nextSerial;
+
+      final docRef = _db.collection('quotes').doc();
+      transaction.set(counterRef, {'last_serial': nextSerial}, SetOptions(merge: true));
+      transaction.set(docRef, data);
+      return docRef.id;
+    });
   }
 
   Future<void> updateQuote(Map<String, dynamic> quote) async {
-    final id = quote['id'];
+    final id = quote['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw ArgumentError('ID preventivo mancante');
+    }
     final data = Map<String, dynamic>.from(quote)..remove('id');
     await _db.collection('quotes').doc(id).update(data);
   }
@@ -808,7 +1095,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getQuotes() async {
     final snapshot = await _db.collection('quotes').get();
-    var docs = snapshot.docs.map((doc) {
+    final docs = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
@@ -821,5 +1108,3 @@ class DatabaseHelper {
     return docs;
   }
 }
-
-

@@ -150,13 +150,14 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                 context,
               );
               if (range == null) return;
+              if (!context.mounted) return;
               final filteredPayments = _payments.where((p) {
                 final date = p['date'] as String?;
                 if (date == null || date.isEmpty) return true;
                 return ReportUtils.isDateInRange(date, range);
               }).toList();
               if (filteredPayments.isEmpty) {
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
@@ -172,8 +173,12 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                 final serviceName = p['service_name']?.toString() ?? '';
                 final notes = p['notes']?.toString() ?? '';
                 final List<String> descParts = [];
-                if (serviceName.isNotEmpty) descParts.add(serviceName);
-                if (notes.isNotEmpty) descParts.add(notes);
+                if (serviceName.isNotEmpty) {
+                  descParts.add(serviceName);
+                }
+                if (notes.isNotEmpty) {
+                  descParts.add(notes);
+                }
                 final descrizione = descParts.isNotEmpty
                     ? descParts.join(' - ')
                     : 'N/D';
@@ -186,17 +191,20 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                 final tipo = p['type'] == 'IN' ? 'E' : 'U';
 
                 String metodo = p['payment_method']?.toString() ?? '';
-                if (metodo.toLowerCase() == 'bonifico') {
+                final m = metodo.toLowerCase();
+                if (m == 'bonifico') {
                   metodo = 'BON';
-                } else if (metodo.toLowerCase() == 'contanti')
-                  metodo = 'C/C';
-                else if (metodo.toLowerCase() == 'assegno')
+                } else if (m == 'contanti' || m == 'contante') {
+                  metodo = 'CON';
+                } else if (m == 'assegno') {
                   metodo = 'ASS';
-                else if (metodo.toLowerCase() == 'pos')
-                  metodo = 'POS';
+                } else if (m == 'pos' || m == 'carta' || m == 'bancomat') {
+                  metodo = 'CAR';
+                }
 
-                final importo =
-                    '${CurrencyUtils.formatEuro(double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0)}';
+                final importo = CurrencyUtils.formatEuro(
+                  CurrencyUtils.parseCurrency(p['amount']?.toString()),
+                );
 
                 final hasAtt =
                     p['attachments'] != null && p['attachments'] != '[]';
@@ -436,7 +444,11 @@ class _ScheduledPaymentsScreenState extends State<ScheduledPaymentsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  '${CurrencyUtils.formatEuro(double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0)}',
+                                  CurrencyUtils.formatEuro(
+                                    CurrencyUtils.parseCurrency(
+                                      p['amount']?.toString(),
+                                    ),
+                                  ),
                                   style: TextStyle(
                                     color:
                                         (p['status'] == 'Pagato' ||

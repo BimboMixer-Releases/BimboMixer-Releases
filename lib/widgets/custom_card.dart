@@ -20,8 +20,8 @@ class CustomCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardColor = color ?? const Color(0xFF2A2D34); // Default sleek dark color
-    
+    final cardColor = color ?? const Color(0xFF2A2D34);
+
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -42,7 +42,7 @@ class CustomCard extends StatelessWidget {
           onTap: onTap,
           onLongPress: onLongPress,
           child: Padding(
-            padding: padding!,
+            padding: padding ?? const EdgeInsets.all(16.0),
             child: child,
           ),
         ),

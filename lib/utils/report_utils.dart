@@ -1,7 +1,7 @@
-﻿import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:contabile_app/utils/date_utils_app.dart';
 import 'package:contabile_app/widgets/glass_date_range_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class ReportUtils {
   static Future<DateTimeRange?> showDateRangeFilterDialog(BuildContext context) async {
@@ -22,15 +22,10 @@ class ReportUtils {
   }
 
   static bool isDateInRange(String dateStr, DateTimeRange range) {
-    try {
-      final formatted = DateUtilsApp.formatDbDate(dateStr, 'yyyy-MM-dd');
-      final date = DateTime.parse(formatted);
-      final start = DateTime(range.start.year, range.start.month, range.start.day);
-      final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
-      return date.isAfter(start.subtract(const Duration(seconds: 1))) && 
-             date.isBefore(end.add(const Duration(seconds: 1)));
-    } catch (e) {
-      return false;
-    }
+    final date = DateUtilsApp.tryParseDate(dateStr);
+    if (date == null) return false;
+    final start = DateTime(range.start.year, range.start.month, range.start.day);
+    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
+    return !date.isBefore(start) && !date.isAfter(end);
   }
 }

@@ -1,39 +1,62 @@
-import 'package:flutter/material.dart';
+import 'package:contabile_app/database/database_helper.dart';
+import 'package:contabile_app/utils/password_hasher.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:contabile_app/screens/login_screen.dart';
-
-// NOTA: In assenza di firebase_auth_mocks o di un wrapper iniettabile per FirebaseAuth.instance,
-// questi test illustrano la logica di blocco del flusso appena implementata.
 
 void main() {
-  group('LoginScreen Error Handling Flow', () {
-    testWidgets('Flusso fallito: eccezione Firebase Auth blocca le query Firestore successive e non fa scritture', (WidgetTester tester) async {
-      // Obiettivo del test: 
-      // Verificare che se signInWithEmailAndPassword lancia FirebaseAuthException (es. invalid-credential),
-      // il try-catch intercetta l'errore, aggiorna _errorMessage in "Credenziali di autenticazione non valide o account inesistente.",
-      // e NON esegue le righe successive (dbHelper.getUsers() / verifyCredentials).
-      // Nessun dato viene scritto (no auto-recovery).
-      
-      // Essendo dipendente dal Singleton FirebaseAuth.instance, questo test 
-      // richiederebbe l'inizializzazione del mock del channel, ma la logica
-      // strutturale nel codice garantisce l'uscita anticipata nel blocco catch.
-      expect(true, isTrue); // Placeholder per test di integrazione
+  group('Login Security, Rate Limiting & PasswordHasher Tests', () {
+    late FakeFirebaseFirestore fakeFirestore;
+    late DatabaseHelper dbHelper;
+
+    setUp(() {
+      fakeFirestore = FakeFirebaseFirestore();
+      DatabaseHelper.setMockFirestore(fakeFirestore);
+      dbHelper = DatabaseHelper();
+      dbHelper.currentUser = null;
     });
 
-    testWidgets('Flusso fallito: eccezione Firestore Permission Denied produce messaggio differenziato', (WidgetTester tester) async {
-      // Obiettivo del test:
-      // Se l'autenticazione ha successo ma FirebaseException(permission-denied) viene lanciata 
-      // durante dbHelper.getUsers(), il catch di FirebaseException aggiorna
-      // il messaggio in "Permessi insufficienti per accedere al database."
-      expect(true, isTrue);
+    tearDown(() {
+      dbHelper.currentUser = null;
     });
 
-    testWidgets('Conservazione identità: nessun dato viene manipolato', (WidgetTester tester) async {
-      // Obiettivo del test:
-      // Assicurarsi che nel blocco catch non ci siano chiamate a dbHelper per
-      // forzare il login, aggiornare hash o manipolare dati (requisito soddisfatto
-      // dalla rimozione della logica di auto-recovery e migrazione).
-      expect(true, isTrue);
+    test('recordFailedLogin incrementa i tentativi recenti per username', () async {
+      expect(await dbHelper.getRecentFailedAttempts('mario'), 0);
+      final c1 = await dbHelper.recordFailedLogin('mario');
+      final c2 = await dbHelper.recordFailedLogin('mario');
+      final other = await dbHelper.getRecentFailedAttempts('luigi');
+
+      expect(c1, 1);
+      expect(c2, 2);
+      expect(other, 0);
+    });
+
+    test('isCurrentUserAdmin distingue correttamente Admin da User', () async {
+      await dbHelper.insertUser({
+        'username': 'admin_user',
+        'password_hash': 'Secret123!',
+        'role': 'Admin',
+      });
+      await dbHelper.insertUser({
+        'username': 'standard_user',
+        'password_hash': 'UserPass123!',
+        'role': 'User',
+      });
+
+      dbHelper.currentUser = 'standard_user';
+      expect(await dbHelper.isCurrentUserAdmin(), isFalse);
+
+      dbHelper.currentUser = 'admin_user';
+      expect(await dbHelper.isCurrentUserAdmin(), isTrue);
+    });
+
+    test('PasswordHasher supporta sia password legacy con \$ sia hash SHA-256', () {
+      expect(PasswordHasher.verifyPassword('P@ss\$word1', 'P@ss\$word1'), isTrue);
+      expect(PasswordHasher.isHashed('P@ss\$word1'), isFalse);
+
+      final hashed = PasswordHasher.hashPassword('P@ss\$word1');
+      expect(PasswordHasher.isHashed(hashed), isTrue);
+      expect(PasswordHasher.verifyPassword('P@ss\$word1', hashed), isTrue);
+      expect(PasswordHasher.verifyPassword('WrongPass', hashed), isFalse);
     });
   });
 }

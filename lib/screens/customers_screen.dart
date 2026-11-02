@@ -1,18 +1,20 @@
-import 'package:contabile_app/utils/currency_utils.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
-import '../database/database_helper.dart';
-import '../models/models.dart';
-import '../widgets/gradient_scaffold.dart';
-import '../widgets/glass_container.dart';
-import '../services/pdf_report_service.dart';
-import '../utils/report_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../database/database_helper.dart';
+import '../models/models.dart';
+import '../services/pdf_report_service.dart';
+import '../utils/calculation_engine.dart';
+import '../utils/currency_utils.dart';
+import '../utils/report_utils.dart';
+import '../utils/security_utils.dart';
+import '../widgets/gradient_scaffold.dart';
+import '../widgets/glass_container.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -24,10 +26,10 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Customer> _customers = [];
+  Map<String, double> _customerSettledVolume = {};
   bool _isLoading = true;
   bool _showArchive = false;
   bool _isCompactView = false;
-  final TextEditingController _mainSearchCtrl = TextEditingController();
   String _mainSearchQuery = '';
   String _statusFilter = 'Tutti';
 
@@ -38,6 +40,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
   // Ricerca operazioni
   final TextEditingController _opsSearchCtrl = TextEditingController();
   String _opsSearchQuery = '';
+
+  bool _matchesCustomerSearch(Customer c, String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) {
+      return true;
+    }
+    return c.name.toLowerCase().contains(q) ||
+        (c.email?.toLowerCase().contains(q) ?? false) ||
+        (c.vatNumber?.toLowerCase().contains(q) ?? false) ||
+        (c.taxCode?.toLowerCase().contains(q) ?? false);
+  }
 
   List<Customer> get _filteredCustomers {
     var list = _customers;
@@ -53,21 +66,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
       }
     }
 
-    if (_mainSearchQuery.isNotEmpty) {
-      final q = _mainSearchQuery.toLowerCase();
+    if (_mainSearchQuery.trim().isNotEmpty) {
       list = list
-          .where(
-            (c) =>
-                c.name.toLowerCase().contains(q) ||
-                (c.vatNumber?.toLowerCase().contains(q) ?? false),
-          )
+          .where((c) => _matchesCustomerSearch(c, _mainSearchQuery))
           .toList();
     }
     return list;
   }
 
   List<Map<String, dynamic>> get _filteredPayments {
-    if (_opsSearchQuery.isEmpty) return _customerPayments;
+    if (_opsSearchQuery.isEmpty) {
+      return _customerPayments;
+    }
     final q = _opsSearchQuery.toLowerCase();
     return _customerPayments.where((p) {
       final service = (p['service_name'] ?? p['category_name'] ?? '')
@@ -92,32 +102,89 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<void> _refreshCustomers() async {
+    if (!mounted) {
+      return;
+    }
     setState(() => _isLoading = true);
-    final data = await _dbHelper.getCustomers();
-    setState(() {
-      _customers = data.map((e) => Customer.fromMap(e)).toList();
-      _isLoading = false;
-    });
-
-    if (_selectedCustomer != null) {
-      // Aggiorna il cliente selezionato se modificato
-      final idx = _customers.indexWhere((c) => c.id == _selectedCustomer!.id);
-      if (idx != -1) {
-        _selectedCustomer = _customers[idx];
-      } else {
-        _selectedCustomer = null;
-        _customerPayments = [];
+    try {
+      final results = await Future.wait([
+        _dbHelper.getCustomers(),
+        _dbHelper.getPayments(),
+      ]);
+      if (!mounted) {
+        return;
       }
+      final data = results[0];
+      final allPayments = results[1];
+      final volumeMap = <String, double>{};
+      for (final p in allPayments) {
+        final cid = p['customer_id']?.toString();
+        if (cid == null || cid.isEmpty) {
+          continue;
+        }
+        if (!CalculationEngine.isPaymentSettled(p)) {
+          continue;
+        }
+        final type = (p['type'] ?? 'IN').toString().toUpperCase();
+        if (type == 'IN') {
+          final amt = CurrencyUtils.parseCurrency(p['amount']?.toString());
+          volumeMap[cid] = CurrencyUtils.roundMoney(
+            (volumeMap[cid] ?? 0.0) + amt,
+          );
+        }
+      }
+
+      setState(() {
+        _customers = data.map((e) => Customer.fromMap(e)).toList();
+        _customerSettledVolume = volumeMap;
+        _isLoading = false;
+
+        if (_selectedCustomer != null) {
+          final idx = _customers.indexWhere(
+            (c) => c.id == _selectedCustomer!.id,
+          );
+          if (idx != -1) {
+            _selectedCustomer = _customers[idx];
+          } else {
+            _selectedCustomer = null;
+            _customerPayments = [];
+          }
+        }
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Errore caricamento clienti: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   Future<void> _loadCustomerPayments(String customerId) async {
+    if (!mounted) {
+      return;
+    }
     setState(() => _isLoadingPayments = true);
-    final payments = await _dbHelper.getPaymentsByCustomer(customerId);
-    setState(() {
-      _customerPayments = payments;
-      _isLoadingPayments = false;
-    });
+    try {
+      final payments = await _dbHelper.getPaymentsByCustomer(customerId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _customerPayments = payments;
+        _isLoadingPayments = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isLoadingPayments = false);
+    }
   }
 
   void _onCustomerSelected(Customer? customer) {
@@ -125,560 +192,60 @@ class _CustomersScreenState extends State<CustomersScreen> {
       _selectedCustomer = customer;
       _opsSearchQuery = '';
       _opsSearchCtrl.clear();
+      if (customer == null) {
+        _customerPayments = [];
+      }
     });
-    if (customer != null) {
+    if (customer != null && customer.id != null) {
       _loadCustomerPayments(customer.id!);
-    } else {
-      _customerPayments = [];
     }
   }
 
   @override
   void dispose() {
     _opsSearchCtrl.dispose();
-    _mainSearchCtrl.dispose();
     super.dispose();
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 24, bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.blueAccent, size: 20),
-          SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.blueAccent,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDialogTextField(
-    TextEditingController controller,
-    String label, {
-    int flex = 1,
-  }) {
-    final field = TextField(
-      controller: controller,
-      style: TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(
-          color: Colors.white.withValues(alpha: 0.7),
-          fontSize: 13,
-        ),
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white38),
-        ),
-        focusedBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.blueAccent),
-        ),
-      ),
-    );
-    return flex > 0 ? Expanded(flex: flex, child: field) : field;
-  }
-
-  void _showCustomerDialog([Customer? customer]) {
-    final nameController = TextEditingController(text: customer?.name);
-    final vatController = TextEditingController(text: customer?.vatNumber);
-    final sdiController = TextEditingController(text: customer?.sdiCode);
-    final taxCodeController = TextEditingController(text: customer?.taxCode);
-
-    final streetController = TextEditingController(
-      text: customer?.addressStreet,
-    );
-    final zipController = TextEditingController(text: customer?.addressZip);
-    final cityController = TextEditingController(text: customer?.addressCity);
-    final provController = TextEditingController(
-      text: customer?.addressProvince,
-    );
-
-    final pecController = TextEditingController(text: customer?.pec);
-    final cigController = TextEditingController(text: customer?.cig);
-    final cupController = TextEditingController(text: customer?.cup);
-    final paRefController = TextEditingController(text: customer?.paReference);
-    final paContractController = TextEditingController(
-      text: customer?.paContract,
-    );
-
-    // Parsare email e cellulare dalla stringa contacts se combinati (retrocompatibilità)
-    String emailText = customer?.email ?? '';
-    String phoneText = customer?.phone ?? '';
-
-    if (emailText.isEmpty && phoneText.isEmpty && customer?.contacts != null) {
-      final contacts = customer!.contacts!;
-      if (contacts.contains('|')) {
-        final parts = contacts.split('|');
-        for (var part in parts) {
-          part = part.trim();
-          if (part.startsWith('Email:')) {
-            emailText = part.replaceFirst('Email:', '').trim();
-          } else if (part.startsWith('Tel:')) {
-            phoneText = part.replaceFirst('Tel:', '').trim();
-          }
-        }
-      } else {
-        emailText = contacts; // Fallback legacy
+  Future<void> _showCustomerDialog([Customer? customer]) async {
+    if (customer != null) {
+      final authorized = await SecurityUtils.requireAdminAuth(context);
+      if (!authorized || !mounted) {
+        return;
       }
     }
 
-    final emailController = TextEditingController(text: emailText);
-    final phoneController = TextEditingController(text: phoneText);
-
-    String? logoPath = customer?.logoPath;
-    String selectedStatus = customer?.status ?? 'Nuovo';
-    if (![
-      'Attivo',
-      'In Sospeso',
-      'Priorità Alta',
-      'In Revisione',
-      'Nuovo',
-      'Chiuso',
-      'Archiviato',
-    ].contains(selectedStatus)) {
-      selectedStatus = 'Nuovo';
-    }
-
-    showDialog(
+    final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setStateSB) {
-          Future<void> pickLogo() async {
-            try {
-              String? chosenPath;
-              final result = await FilePicker.platform.pickFiles(
-                type: FileType.image,
-              );
-              if (result != null &&
-                  result.files.isNotEmpty &&
-                  result.files.single.path != null) {
-                chosenPath = result.files.single.path!;
-              } else {
-                try {
-                  final ImagePicker picker = ImagePicker();
-                  final XFile? photo = await picker.pickImage(
-                    source: ImageSource.gallery,
-                  );
-                  if (photo != null) {
-                    chosenPath = photo.path;
-                  }
-                } catch (_) {}
-              }
-
-              if (chosenPath != null) {
-                String finalPath = chosenPath;
-                try {
-                  final directory = await getApplicationDocumentsDirectory();
-                  final ext = path.extension(chosenPath).toLowerCase().isEmpty
-                      ? '.png'
-                      : path.extension(chosenPath).toLowerCase();
-                  final String targetPath = path.join(
-                    directory.path,
-                    'contabile_logos',
-                    'logo_${DateTime.now().millisecondsSinceEpoch}$ext',
-                  );
-
-                  final targetDir = Directory(path.dirname(targetPath));
-                  if (!await targetDir.exists()) {
-                    await targetDir.create(recursive: true);
-                  }
-
-                  final File file = File(chosenPath);
-                  final File savedFile = await file.copy(targetPath);
-                  finalPath = savedFile.path;
-                } catch (copyErr) {
-                  debugPrint("Errore copia logo: $copyErr");
-                }
-
-                setStateSB(() {
-                  logoPath = finalPath;
-                });
-              }
-            } catch (e) {
-              debugPrint("Errore selezione logo: $e");
-              if (dialogContext.mounted) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(
-                    content: Text('Errore selezione logo: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            }
-          }
-
-          return AlertDialog(
-            backgroundColor: Colors.transparent,
-            contentPadding: EdgeInsets.zero,
-            content: Container(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: GlassContainer(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        customer == null ? 'Nuovo Cliente' : 'Modifica Cliente',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          GestureDetector(
-                            onTap: pickLogo,
-                            child: Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.white12,
-                                shape: BoxShape.circle,
-                                image:
-                                    logoPath != null &&
-                                        File(logoPath!).existsSync()
-                                    ? DecorationImage(
-                                        image: FileImage(File(logoPath!)),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                                border: Border.all(
-                                  color: const Color(0xFF38BDF8),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child:
-                                  logoPath == null ||
-                                      !File(logoPath!).existsSync()
-                                  ? const Icon(
-                                      Icons.add_a_photo,
-                                      color: Colors.white70,
-                                      size: 28,
-                                    )
-                                  : null,
-                            ),
-                          ),
-                          if (logoPath != null &&
-                              File(logoPath!).existsSync()) ...[
-                            const SizedBox(width: 12),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.redAccent,
-                                size: 22,
-                              ),
-                              tooltip: 'Rimuovi logo',
-                              onPressed: () {
-                                setStateSB(() {
-                                  logoPath = null;
-                                });
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        logoPath != null && File(logoPath!).existsSync()
-                            ? 'Clicca sul logo per cambiarlo'
-                            : 'Aggiungi Logo / Immagine',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 12,
-                        ),
-                      ),
-
-                      _buildSectionTitle('Dati Principali', Icons.business),
-                      Row(
-                        children: [
-                          _buildDialogTextField(
-                            nameController,
-                            'Ragione Sociale / Nome Azienda *',
-                            flex: 2,
-                          ),
-                          SizedBox(width: 16),
-                          _buildDialogTextField(
-                            vatController,
-                            'Partita IVA',
-                            flex: 1,
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: selectedStatus,
-                              dropdownColor: const Color(0xFF1E1E2C),
-                              style: const TextStyle(color: Colors.white),
-                              decoration: InputDecoration(
-                                labelText: 'Stato Cliente',
-                                labelStyle: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 13,
-                                ),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white38),
-                                ),
-                                focusedBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color: Colors.blueAccent,
-                                  ),
-                                ),
-                              ),
-                              items:
-                                  [
-                                        'Attivo',
-                                        'In Sospeso',
-                                        'Priorità Alta',
-                                        'In Revisione',
-                                        'Nuovo',
-                                        'Chiuso',
-                                        'Archiviato',
-                                      ]
-                                      .map(
-                                        (s) => DropdownMenuItem(
-                                          value: s,
-                                          child: Text(s),
-                                        ),
-                                      )
-                                      .toList(),
-                              onChanged: (val) {
-                                if (val != null)
-                                  setStateSB(() => selectedStatus = val);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          _buildDialogTextField(
-                            sdiController,
-                            'Codice Univoco (SDI)',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _buildDialogTextField(
-                            taxCodeController,
-                            'Codice Fiscale',
-                          ),
-                        ],
-                      ),
-
-                      _buildSectionTitle(
-                        'Sede Legale / Operativa',
-                        Icons.location_on,
-                      ),
-                      Row(
-                        children: [
-                          _buildDialogTextField(
-                            streetController,
-                            'Via/Piazza e N° Civico',
-                            flex: 3,
-                          ),
-                          SizedBox(width: 16),
-                          _buildDialogTextField(zipController, 'CAP', flex: 1),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _buildDialogTextField(
-                            cityController,
-                            'Città',
-                            flex: 2,
-                          ),
-                          SizedBox(width: 16),
-                          _buildDialogTextField(
-                            provController,
-                            'Provincia (Sigla)',
-                            flex: 1,
-                          ),
-                        ],
-                      ),
-
-                      _buildSectionTitle(
-                        'Recapiti e Contatti',
-                        Icons.contact_mail,
-                      ),
-                      Row(
-                        children: [
-                          _buildDialogTextField(
-                            emailController,
-                            'Email',
-                            flex: 1,
-                          ),
-                          SizedBox(width: 16),
-                          _buildDialogTextField(
-                            pecController,
-                            'Indirizzo PEC',
-                            flex: 1,
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _buildDialogTextField(
-                            phoneController,
-                            'Cellulare / Telefono',
-                            flex: 1,
-                          ),
-                          SizedBox(width: 16),
-                          Expanded(child: Container()), // Spazio vuoto
-                        ],
-                      ),
-
-                      _buildSectionTitle(
-                        'Codici Pubblica Amministrazione',
-                        Icons.account_balance,
-                      ),
-                      Row(
-                        children: [
-                          _buildDialogTextField(cigController, 'Codice CIG'),
-                          SizedBox(width: 16),
-                          _buildDialogTextField(cupController, 'Codice CUP'),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _buildDialogTextField(
-                            paRefController,
-                            'Riferimento Amministrazione (es. N° Ordine)',
-                          ),
-                          SizedBox(width: 16),
-                          _buildDialogTextField(
-                            paContractController,
-                            'Codice Commessa / Convenzione',
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: 32),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(dialogContext),
-                            child: Text(
-                              'ANNULLA',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () async {
-                              if (nameController.text.trim().isEmpty) return;
-
-                              final newCustomer = Customer(
-                                id: customer?.id,
-                                name: nameController.text.trim(),
-                                vatNumber: vatController.text.trim().isEmpty
-                                    ? null
-                                    : vatController.text.trim(),
-                                sdiCode: sdiController.text.trim().isEmpty
-                                    ? null
-                                    : sdiController.text.trim(),
-                                taxCode: taxCodeController.text.trim().isEmpty
-                                    ? null
-                                    : taxCodeController.text.trim(),
-                                addressStreet:
-                                    streetController.text.trim().isEmpty
-                                    ? null
-                                    : streetController.text.trim(),
-                                addressZip: zipController.text.trim().isEmpty
-                                    ? null
-                                    : zipController.text.trim(),
-                                addressCity: cityController.text.trim().isEmpty
-                                    ? null
-                                    : cityController.text.trim(),
-                                addressProvince:
-                                    provController.text.trim().isEmpty
-                                    ? null
-                                    : provController.text.trim(),
-                                email: emailController.text.trim().isEmpty
-                                    ? null
-                                    : emailController.text.trim(),
-                                pec: pecController.text.trim().isEmpty
-                                    ? null
-                                    : pecController.text.trim(),
-                                phone: phoneController.text.trim().isEmpty
-                                    ? null
-                                    : phoneController.text.trim(),
-                                // Il vecchio campo contacts lo lasciamo null per i nuovi o lo ereditiamo se era l'unico
-                                contacts: customer?.contacts,
-                                cig: cigController.text.trim().isEmpty
-                                    ? null
-                                    : cigController.text.trim(),
-                                cup: cupController.text.trim().isEmpty
-                                    ? null
-                                    : cupController.text.trim(),
-                                paReference: paRefController.text.trim().isEmpty
-                                    ? null
-                                    : paRefController.text.trim(),
-                                paContract:
-                                    paContractController.text.trim().isEmpty
-                                    ? null
-                                    : paContractController.text.trim(),
-                                logoPath: logoPath,
-                                status: selectedStatus,
-                              );
-
-                              if (customer == null) {
-                                await _dbHelper.insertCustomer(
-                                  newCustomer.toMap(),
-                                );
-                              } else {
-                                await _dbHelper.updateCustomer(
-                                  newCustomer.toMap(),
-                                );
-                              }
-
-                              if (dialogContext.mounted)
-                                Navigator.pop(dialogContext);
-                              _refreshCustomers();
-                            },
-                            child: Text('SALVA'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+      builder: (_) => _CustomerFormDialog(
+        dbHelper: _dbHelper,
+        customer: customer,
       ),
     );
+    if (saved == true && mounted) {
+      await _refreshCustomers();
+      if (_selectedCustomer?.id != null) {
+        await _loadCustomerPayments(_selectedCustomer!.id!);
+      }
+    }
   }
 
-  void _deleteCustomer(String id) async {
+  Future<void> _deleteCustomer(String id) async {
+    final authorized = await SecurityUtils.requireAdminAuth(context);
+    if (!authorized || !mounted) {
+      return;
+    }
+
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.transparent,
         contentPadding: EdgeInsets.zero,
         content: GlassContainer(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 'Conferma Eliminazione',
                 style: TextStyle(
                   fontSize: 18,
@@ -686,17 +253,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Text(
                 'Eliminando questo cliente, i pagamenti associati rimarranno senza cliente. Procedere?',
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
               ),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context, false),
+                    onPressed: () => Navigator.pop(dialogContext, false),
                     child: Text(
                       'ANNULLA',
                       style: TextStyle(
@@ -704,13 +271,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       ),
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                     ),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text('ELIMINA'),
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('ELIMINA'),
                   ),
                 ],
               ),
@@ -720,7 +287,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       ),
     );
 
-    if (confirm == true) {
+    if (confirm == true && mounted) {
       if (_selectedCustomer?.id == id) {
         setState(() {
           _selectedCustomer = null;
@@ -729,7 +296,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
       }
       try {
         await _dbHelper.deleteCustomer(id);
-        _refreshCustomers();
+        if (!mounted) {
+          return;
+        }
+        await _refreshCustomers();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -781,17 +351,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
               Expanded(
                 child: Autocomplete<Customer>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text.isEmpty) {
+                    if (textEditingValue.text.trim().isEmpty) {
                       return _customers;
                     }
                     return _customers.where((Customer customer) {
-                      return customer.name.toLowerCase().contains(
-                        textEditingValue.text.toLowerCase(),
+                      return _matchesCustomerSearch(
+                        customer,
+                        textEditingValue.text,
                       );
                     });
                   },
                   displayStringForOption: (Customer option) => option.name,
                   onSelected: (Customer selection) {
+                    _mainSearchQuery = selection.name;
                     _onCustomerSelected(selection);
                   },
                   fieldViewBuilder:
@@ -809,22 +381,43 @@ class _CustomersScreenState extends State<CustomersScreen> {
                           controller: textEditingController,
                           focusNode: focusNode,
                           style: const TextStyle(color: Colors.white),
+                          onChanged: (val) {
+                            setState(() {
+                              _mainSearchQuery = val;
+                              if (_selectedCustomer != null &&
+                                  val != _selectedCustomer!.name) {
+                                _selectedCustomer = null;
+                                _customerPayments = [];
+                              }
+                            });
+                          },
                           decoration: InputDecoration(
-                            hintText: 'Cerca Cliente (Tutti i Clienti)',
+                            hintText:
+                                'Cerca per nome, email, P.IVA o Codice Fiscale...',
                             hintStyle: TextStyle(
                               color: Colors.white.withValues(alpha: 0.54),
                             ),
                             border: InputBorder.none,
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                Icons.clear,
-                                color: Colors.white.withValues(alpha: 0.54),
-                              ),
-                              onPressed: () {
-                                textEditingController.clear();
-                                _onCustomerSelected(null);
-                              },
-                            ),
+                            suffixIcon:
+                                (textEditingController.text.isNotEmpty ||
+                                    _mainSearchQuery.isNotEmpty ||
+                                    _selectedCustomer != null)
+                                ? IconButton(
+                                    icon: Icon(
+                                      Icons.clear,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.54,
+                                      ),
+                                    ),
+                                    onPressed: () {
+                                      textEditingController.clear();
+                                      setState(() {
+                                        _mainSearchQuery = '';
+                                      });
+                                      _onCustomerSelected(null);
+                                    },
+                                  )
+                                : null,
                           ),
                           onSubmitted: (String value) {
                             onFieldSubmitted();
@@ -1797,8 +1390,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
             scheme: 'mailto',
             path: customer.email,
           );
-          if (await canLaunchUrl(emailLaunchUri))
+          if (await canLaunchUrl(emailLaunchUri)) {
             await launchUrl(emailLaunchUri);
+          }
         }
       } else {
         final Uri emailLaunchUri = Uri(scheme: 'mailto', path: customer.email);
@@ -1830,6 +1424,37 @@ class _CustomersScreenState extends State<CustomersScreen> {
         );
       }
     }
+  }
+
+  Widget _buildOperationsHeader() {
+    final cid = _selectedCustomer?.id;
+    final settled = cid == null ? 0.0 : (_customerSettledVolume[cid] ?? 0.0);
+    return Row(
+      children: [
+        const Expanded(
+          child: Text(
+            'Storico Operazioni',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Flexible(
+          child: Text(
+            'Incassato: ${CurrencyUtils.formatEuro(settled)}',
+            style: const TextStyle(
+              color: Colors.greenAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildOperationsSearchBar() {
@@ -1910,10 +1535,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     p['service_name'] ?? p['category_name'] ?? '';
                 final notes = p['description'] ?? p['notes'] ?? '';
                 final List<String> descParts = [];
-                if (serviceName.toString().isNotEmpty)
+                if (serviceName.toString().isNotEmpty) {
                   descParts.add(serviceName.toString());
-                if (notes.toString().isNotEmpty)
+                }
+                if (notes.toString().isNotEmpty) {
                   descParts.add(notes.toString());
+                }
                 final descrizione = descParts.isNotEmpty
                     ? descParts.join(' - ')
                     : 'N/D';
@@ -1923,17 +1550,24 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 final tipo = p['type'] == 'IN' ? 'E' : 'U';
 
                 String metodo = p['payment_method']?.toString() ?? '';
-                if (metodo.toLowerCase() == 'bonifico') {
+                final m = metodo.toLowerCase();
+                if (m == 'bonifico') {
                   metodo = 'BON';
-                } else if (metodo.toLowerCase() == 'contanti')
-                  metodo = 'C/C';
-                else if (metodo.toLowerCase() == 'assegno')
+                } else if (m == 'contanti' || m == 'contante') {
+                  metodo = 'CON';
+                } else if (m == 'assegno') {
                   metodo = 'ASS';
-                else if (metodo.toLowerCase() == 'pos')
-                  metodo = 'POS';
+                } else if (m == 'pos' || m == 'carta') {
+                  metodo = 'CAR';
+                } else if (m == 'bancomat') {
+                  metodo = 'BAN';
+                } else if (m == 'fattura') {
+                  metodo = 'FAT';
+                }
 
-                final importo =
-                    '${CurrencyUtils.formatEuro(double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0)}';
+                final importo = CurrencyUtils.formatEuro(
+                  CurrencyUtils.parseCurrency(p['amount']?.toString()),
+                );
 
                 final hasAtt =
                     p['attachments'] != null && p['attachments'] != '[]';
@@ -1976,7 +1610,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 legend: {
                   'Dt.': 'Data',
                   'Tp.': 'Tipo (E=Entrata, U=Uscita)',
-                  'Met.': 'Metodo (BON=Bonifico, C/C=Contanti, ASS=Assegno)',
+                  'Met.':
+                      'Metodo (BON=Bonifico, CON=Contante, ASS=Assegno, CAR=Carta, BAN=Bancomat, FAT=Fattura)',
                   'Imp.': 'Importo',
                   'All.': 'Allegati Presenti (S=Si, N=No)',
                 },
@@ -2030,7 +1665,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 title: Row(
                   children: [
                     Text(
-                      '${CurrencyUtils.formatEuro(payment['amount'])}',
+                      CurrencyUtils.formatEuro(
+                        CurrencyUtils.parseCurrency(
+                          payment['amount']?.toString(),
+                        ),
+                      ),
                       style: TextStyle(
                         color: isIncome ? Colors.greenAccent : Colors.redAccent,
                         fontWeight: FontWeight.bold,
@@ -2233,14 +1872,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          'Storico Operazioni',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
+                                        _buildOperationsHeader(),
                                         SizedBox(height: 8),
                                         _buildOperationsSearchBar(),
                                         Expanded(
@@ -2268,14 +1900,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                     color: Colors.white24,
                                     height: 24,
                                   ),
-                                  Text(
-                                    'Storico Operazioni',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  _buildOperationsHeader(),
                                   SizedBox(height: 8),
                                   _buildOperationsSearchBar(),
                                   Expanded(child: _buildCustomerPayments()),
@@ -2291,6 +1916,498 @@ class _CustomersScreenState extends State<CustomersScreen> {
         onPressed: () => _showCustomerDialog(),
         backgroundColor: Colors.blueAccent,
         child: Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+/// Dialog dedicato creazione/modifica cliente: tutti i controller vengono
+/// correttamente disposti e il salvataggio è protetto da doppio tap.
+class _CustomerFormDialog extends StatefulWidget {
+  final DatabaseHelper dbHelper;
+  final Customer? customer;
+
+  const _CustomerFormDialog({required this.dbHelper, this.customer});
+
+  @override
+  State<_CustomerFormDialog> createState() => _CustomerFormDialogState();
+}
+
+class _CustomerFormDialogState extends State<_CustomerFormDialog> {
+  static const List<String> _statuses = [
+    'Attivo',
+    'In Sospeso',
+    'Priorità Alta',
+    'In Revisione',
+    'Nuovo',
+    'Chiuso',
+    'Archiviato',
+  ];
+
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _vatCtrl;
+  late final TextEditingController _sdiCtrl;
+  late final TextEditingController _taxCodeCtrl;
+  late final TextEditingController _streetCtrl;
+  late final TextEditingController _zipCtrl;
+  late final TextEditingController _cityCtrl;
+  late final TextEditingController _provCtrl;
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _pecCtrl;
+  late final TextEditingController _cigCtrl;
+  late final TextEditingController _cupCtrl;
+  late final TextEditingController _paRefCtrl;
+  late final TextEditingController _paContractCtrl;
+
+  String? _logoPath;
+  late String _selectedStatus;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = widget.customer;
+    _nameCtrl = TextEditingController(text: c?.name);
+    _vatCtrl = TextEditingController(text: c?.vatNumber);
+    _sdiCtrl = TextEditingController(text: c?.sdiCode);
+    _taxCodeCtrl = TextEditingController(text: c?.taxCode);
+    _streetCtrl = TextEditingController(text: c?.addressStreet);
+    _zipCtrl = TextEditingController(text: c?.addressZip);
+    _cityCtrl = TextEditingController(text: c?.addressCity);
+    _provCtrl = TextEditingController(text: c?.addressProvince);
+    _pecCtrl = TextEditingController(text: c?.pec);
+    _cigCtrl = TextEditingController(text: c?.cig);
+    _cupCtrl = TextEditingController(text: c?.cup);
+    _paRefCtrl = TextEditingController(text: c?.paReference);
+    _paContractCtrl = TextEditingController(text: c?.paContract);
+
+    // Retrocompatibilità: email/telefono nel vecchio campo "contacts".
+    String emailText = c?.email ?? '';
+    String phoneText = c?.phone ?? '';
+    final contacts = c?.contacts;
+    if (emailText.isEmpty && phoneText.isEmpty && contacts != null) {
+      if (contacts.contains('|')) {
+        for (var part in contacts.split('|')) {
+          part = part.trim();
+          if (part.startsWith('Email:')) {
+            emailText = part.replaceFirst('Email:', '').trim();
+          } else if (part.startsWith('Tel:')) {
+            phoneText = part.replaceFirst('Tel:', '').trim();
+          }
+        }
+      } else {
+        emailText = contacts;
+      }
+    }
+    _emailCtrl = TextEditingController(text: emailText);
+    _phoneCtrl = TextEditingController(text: phoneText);
+
+    _logoPath = c?.logoPath;
+    final status = c?.status ?? 'Nuovo';
+    _selectedStatus = _statuses.contains(status) ? status : 'Nuovo';
+  }
+
+  @override
+  void dispose() {
+    for (final ctrl in [
+      _nameCtrl,
+      _vatCtrl,
+      _sdiCtrl,
+      _taxCodeCtrl,
+      _streetCtrl,
+      _zipCtrl,
+      _cityCtrl,
+      _provCtrl,
+      _emailCtrl,
+      _phoneCtrl,
+      _pecCtrl,
+      _cigCtrl,
+      _cupCtrl,
+      _paRefCtrl,
+      _paContractCtrl,
+    ]) {
+      ctrl.dispose();
+    }
+    super.dispose();
+  }
+
+  bool get _hasLogo => _logoPath != null && File(_logoPath!).existsSync();
+
+  Future<void> _pickLogo() async {
+    try {
+      String? chosenPath;
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      if (result != null &&
+          result.files.isNotEmpty &&
+          result.files.single.path != null) {
+        chosenPath = result.files.single.path!;
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        try {
+          final XFile? photo = await ImagePicker().pickImage(
+            source: ImageSource.gallery,
+          );
+          chosenPath = photo?.path;
+        } catch (_) {}
+      }
+      if (chosenPath == null) {
+        return;
+      }
+
+      String finalPath = chosenPath;
+      try {
+        final directory = await getApplicationDocumentsDirectory();
+        final rawExt = path.extension(chosenPath).toLowerCase();
+        final ext = rawExt.isEmpty ? '.png' : rawExt;
+        final targetPath = path.join(
+          directory.path,
+          'contabile_logos',
+          'logo_${DateTime.now().millisecondsSinceEpoch}$ext',
+        );
+        final targetDir = Directory(path.dirname(targetPath));
+        if (!await targetDir.exists()) {
+          await targetDir.create(recursive: true);
+        }
+        finalPath = (await File(chosenPath).copy(targetPath)).path;
+      } catch (copyErr) {
+        debugPrint('Errore copia logo: $copyErr');
+      }
+      if (mounted) {
+        setState(() => _logoPath = finalPath);
+      }
+    } catch (e) {
+      debugPrint('Errore selezione logo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore selezione logo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String? _val(TextEditingController c) {
+    final t = c.text.trim();
+    return t.isEmpty ? null : t;
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) {
+      return;
+    }
+    if (_nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Inserisci la Ragione Sociale / Nome del cliente.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    setState(() => _isSaving = true);
+    final c = widget.customer;
+    final newCustomer = Customer(
+      id: c?.id,
+      name: _nameCtrl.text.trim(),
+      vatNumber: _val(_vatCtrl),
+      sdiCode: _val(_sdiCtrl),
+      taxCode: _val(_taxCodeCtrl),
+      addressStreet: _val(_streetCtrl),
+      addressZip: _val(_zipCtrl),
+      addressCity: _val(_cityCtrl),
+      addressProvince: _val(_provCtrl),
+      email: _val(_emailCtrl),
+      pec: _val(_pecCtrl),
+      phone: _val(_phoneCtrl),
+      contacts: c?.contacts,
+      cig: _val(_cigCtrl),
+      cup: _val(_cupCtrl),
+      paReference: _val(_paRefCtrl),
+      paContract: _val(_paContractCtrl),
+      logoPath: _logoPath,
+      status: _selectedStatus,
+    );
+    try {
+      if (c == null) {
+        await widget.dbHelper.insertCustomer(newCustomer.toMap());
+      } else {
+        await widget.dbHelper.updateCustomer(newCustomer.toMap());
+      }
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore salvataggio cliente: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _sectionTitle(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.blueAccent, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController ctrl, String label) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          color: Colors.white.withValues(alpha: 0.7),
+          fontSize: 13,
+        ),
+        enabledBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Colors.white38),
+        ),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Colors.blueAccent),
+        ),
+      ),
+    );
+  }
+
+  /// Due campi affiancati su schermi larghi, impilati su mobile.
+  Widget _pair(bool narrow, Widget a, Widget b, {int flexA = 1, int flexB = 1}) {
+    if (narrow) {
+      return Column(children: [a, const SizedBox(height: 8), b]);
+    }
+    return Row(
+      children: [
+        Expanded(flex: flexA, child: a),
+        const SizedBox(width: 16),
+        Expanded(flex: flexB, child: b),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.customer != null;
+    return AlertDialog(
+      backgroundColor: Colors.transparent,
+      contentPadding: EdgeInsets.zero,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      content: Container(
+        constraints: const BoxConstraints(maxWidth: 800),
+        child: GlassContainer(
+          child: Builder(
+            builder: (context) {
+              final narrow = MediaQuery.sizeOf(context).width < 560;
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isEdit ? 'Modifica Cliente' : 'Nuovo Cliente',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: _pickLogo,
+                          child: Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.white12,
+                              shape: BoxShape.circle,
+                              image: _hasLogo
+                                  ? DecorationImage(
+                                      image: FileImage(File(_logoPath!)),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                              border: Border.all(
+                                color: const Color(0xFF38BDF8),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: _hasLogo
+                                ? null
+                                : const Icon(
+                                    Icons.add_a_photo,
+                                    color: Colors.white70,
+                                    size: 28,
+                                  ),
+                          ),
+                        ),
+                        if (_hasLogo) ...[
+                          const SizedBox(width: 12),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.redAccent,
+                              size: 22,
+                            ),
+                            tooltip: 'Rimuovi logo',
+                            onPressed: () => setState(() => _logoPath = null),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _hasLogo
+                          ? 'Clicca sul logo per cambiarlo'
+                          : 'Aggiungi Logo / Immagine',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 12,
+                      ),
+                    ),
+                    _sectionTitle('Dati Principali', Icons.business),
+                    _pair(
+                      narrow,
+                      _field(_nameCtrl, 'Ragione Sociale / Nome Azienda *'),
+                      _field(_vatCtrl, 'Partita IVA'),
+                      flexA: 2,
+                    ),
+                    const SizedBox(height: 8),
+                    _pair(
+                      narrow,
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedStatus,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF1E1E2C),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Stato Cliente',
+                          labelStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 13,
+                          ),
+                          enabledBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white38),
+                          ),
+                          focusedBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.blueAccent),
+                          ),
+                        ),
+                        items: _statuses
+                            .map(
+                              (s) => DropdownMenuItem(value: s, child: Text(s)),
+                            )
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedStatus = val);
+                          }
+                        },
+                      ),
+                      _field(_sdiCtrl, 'Codice Univoco (SDI)'),
+                    ),
+                    const SizedBox(height: 8),
+                    _field(_taxCodeCtrl, 'Codice Fiscale'),
+                    _sectionTitle('Sede Legale / Operativa', Icons.location_on),
+                    _pair(
+                      narrow,
+                      _field(_streetCtrl, 'Via/Piazza e N° Civico'),
+                      _field(_zipCtrl, 'CAP'),
+                      flexA: 3,
+                    ),
+                    const SizedBox(height: 8),
+                    _pair(
+                      narrow,
+                      _field(_cityCtrl, 'Città'),
+                      _field(_provCtrl, 'Provincia (Sigla)'),
+                      flexA: 2,
+                    ),
+                    _sectionTitle('Recapiti e Contatti', Icons.contact_mail),
+                    _pair(
+                      narrow,
+                      _field(_emailCtrl, 'Email'),
+                      _field(_pecCtrl, 'Indirizzo PEC'),
+                    ),
+                    const SizedBox(height: 8),
+                    _field(_phoneCtrl, 'Cellulare / Telefono'),
+                    _sectionTitle(
+                      'Codici Pubblica Amministrazione',
+                      Icons.account_balance,
+                    ),
+                    _pair(
+                      narrow,
+                      _field(_cigCtrl, 'Codice CIG'),
+                      _field(_cupCtrl, 'Codice CUP'),
+                    ),
+                    const SizedBox(height: 8),
+                    _pair(
+                      narrow,
+                      _field(
+                        _paRefCtrl,
+                        'Riferimento Amministrazione (es. N° Ordine)',
+                      ),
+                      _field(_paContractCtrl, 'Codice Commessa / Convenzione'),
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: _isSaving
+                              ? null
+                              : () => Navigator.pop(context, false),
+                          child: Text(
+                            'ANNULLA',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _isSaving ? null : _save,
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('SALVA'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

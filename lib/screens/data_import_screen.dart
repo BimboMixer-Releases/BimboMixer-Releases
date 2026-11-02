@@ -1,10 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:provider/provider.dart';
 import '../services/data_import_service.dart';
 import '../database/database_helper.dart';
-import '../providers/app_theme_provider.dart';
 import '../widgets/customer_dialog.dart';
 
 class DataImportScreen extends StatefulWidget {
@@ -64,13 +62,17 @@ class _DataImportScreenState extends State<DataImportScreen> {
         });
         _mapDataToExpenses();
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Errore durante l\'importazione: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Errore durante l\'importazione: $e')),
+          );
+        }
       } finally {
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -114,8 +116,10 @@ class _DataImportScreenState extends State<DataImportScreen> {
           ),
         );
 
+        if (!mounted) return;
         if (confirm == true) {
           // Apri il customer_dialog
+          if (!mounted) return;
           bool? created = await showDialog<bool>(
             context: context,
             builder: (ctx) => CustomerDialog(
@@ -123,15 +127,17 @@ class _DataImportScreenState extends State<DataImportScreen> {
               onSave: (newCustomer) async {
                 final id = await DatabaseHelper().insertCustomer(newCustomer);
                 newCustomer['id'] = id;
-                setState(() {
-                  _customers.add(newCustomer);
-                });
+                if (mounted) {
+                  setState(() {
+                    _customers.add(newCustomer);
+                  });
+                }
                 return id;
               },
             ),
           );
 
-          if (created == true) {
+          if (created == true && mounted) {
             // Find it in the updated list
             final match = _customers
                 .where((c) => c['name'] == exp.customerName)
@@ -210,10 +216,11 @@ class _DataImportScreenState extends State<DataImportScreen> {
         String m = row[methodKey].toString().toLowerCase();
         if (m.contains('fattur')) {
           method = 'Fattura';
-        } else if (m.contains('ritenuta'))
+        } else if (m.contains('ritenuta')) {
           method = "Ritenuta d'acconto";
-        else if (m.contains('contant'))
+        } else if (m.contains('contant')) {
           method = 'Contanti';
+        }
       }
 
       // Stato (Saldo - ATTESA)
@@ -266,18 +273,20 @@ class _DataImportScreenState extends State<DataImportScreen> {
   }
 
   Future<void> _createNewCustomer(ParsedExpense expense, int index) async {
-    bool? created = await showDialog<bool>(
+    await showDialog<bool>(
       context: context,
       builder: (ctx) => CustomerDialog(
         initialName: expense.customerName,
         onSave: (newCustomer) async {
           final id = await DatabaseHelper().insertCustomer(newCustomer);
           newCustomer['id'] = id;
-          setState(() {
-            _customers.add(newCustomer);
-            _mappedExpenses[index].customerId = id;
-            _mappedExpenses[index].customerName = newCustomer['name']!;
-          });
+          if (mounted) {
+            setState(() {
+              _customers.add(newCustomer);
+              _mappedExpenses[index].customerId = id;
+              _mappedExpenses[index].customerName = newCustomer['name']!;
+            });
+          }
           return id;
         },
       ),
@@ -322,22 +331,27 @@ class _DataImportScreenState extends State<DataImportScreen> {
         saved++;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Importati $saved movimenti con successo!')),
-      );
-      Navigator.pop(context, true); // Return to previous screen
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Importati $saved movimenti con successo!')),
+        );
+        Navigator.pop(context, true); // Return to previous screen
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Errore salvataggio: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Errore salvataggio: $e')));
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<AppThemeProvider>(context);
     final theme = Theme.of(context);
 
     return Scaffold(

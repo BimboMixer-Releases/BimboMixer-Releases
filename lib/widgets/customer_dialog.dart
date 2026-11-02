@@ -45,26 +45,33 @@ class _CustomerDialogState extends State<CustomerDialog> {
 
   Future<void> _save() async {
     if (_nameController.text.trim().isEmpty) return;
-    
+
     setState(() => _isSaving = true);
     try {
+      final cf = _cfController.text.trim();
+      final sdi = _univocoController.text.trim();
+      final addr = _addressController.text.trim();
       final newCustomer = {
         'name': _nameController.text.trim(),
         'vat_number': _vatController.text.trim(),
-        'fiscal_code': _cfController.text.trim(),
-        'unique_code': _univocoController.text.trim(),
-        'address': _addressController.text.trim(),
+        'tax_code': cf,
+        'fiscal_code': cf,
+        'sdi_code': sdi,
+        'unique_code': sdi,
+        'address_street': addr,
+        'address': addr,
         'email': _emailController.text.trim(),
         'pec': _pecController.text.trim(),
       };
-      
+
       await widget.onSave(newCustomer);
       if (mounted) {
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Errore: $e')));
       }
     } finally {
       if (mounted) {
@@ -85,37 +92,58 @@ class _CustomerDialogState extends State<CustomerDialog> {
             TextField(
               controller: _nameController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Nome Cliente', labelStyle: TextStyle(color: Colors.white70)),
+              decoration: const InputDecoration(
+                labelText: 'Nome Cliente',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
             ),
             TextField(
               controller: _vatController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Partita IVA', labelStyle: TextStyle(color: Colors.white70)),
+              decoration: const InputDecoration(
+                labelText: 'Partita IVA',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
             ),
             TextField(
               controller: _univocoController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Codice Univoco', labelStyle: TextStyle(color: Colors.white70)),
+              decoration: const InputDecoration(
+                labelText: 'Codice Univoco / SDI',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
             ),
             TextField(
               controller: _cfController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Codice Fiscale', labelStyle: TextStyle(color: Colors.white70)),
+              decoration: const InputDecoration(
+                labelText: 'Codice Fiscale',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
             ),
             TextField(
               controller: _addressController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Indirizzo (Via, civico, cap, città, prov)', labelStyle: TextStyle(color: Colors.white70)),
+              decoration: const InputDecoration(
+                labelText: 'Indirizzo (Via, civico, cap, città, prov)',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
             ),
             TextField(
               controller: _emailController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'Email', labelStyle: TextStyle(color: Colors.white70)),
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
             ),
             TextField(
               controller: _pecController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(labelText: 'PEC', labelStyle: TextStyle(color: Colors.white70)),
+              decoration: const InputDecoration(
+                labelText: 'PEC',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
             ),
           ],
         ),
@@ -129,7 +157,11 @@ class _CustomerDialogState extends State<CustomerDialog> {
           onPressed: _isSaving ? null : _save,
           style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
           child: _isSaving
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white))
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.white),
+                )
               : const Text('Salva', style: TextStyle(color: Colors.white)),
         ),
       ],

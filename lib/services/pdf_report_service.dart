@@ -1,14 +1,32 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:open_filex/open_filex.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
 
 class PDFReportService {
+  static Future<pw.ThemeData?> _loadPdfTheme() async {
+    try {
+      final font = await PdfGoogleFonts.robotoRegular();
+      final boldFont = await PdfGoogleFonts.robotoBold();
+      return pw.ThemeData.withFont(base: font, bold: boldFont);
+    } catch (_) {
+      try {
+        final fontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+        final fallbackFont = pw.Font.ttf(fontData);
+        return pw.ThemeData.withFont(base: fallbackFont, bold: fallbackFont);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
   static Future<void> generateAndDownloadReport({
     required String title,
     required List<String> headers,
@@ -19,32 +37,22 @@ class PDFReportService {
     Map<String, String>? legend,
     Map<int, pw.TableColumnWidth>? columnWidths,
   }) async {
-    pw.ThemeData? pdfTheme;
-    try {
-      final font = await PdfGoogleFonts.robotoRegular();
-      final boldFont = await PdfGoogleFonts.robotoBold();
-      pdfTheme = pw.ThemeData.withFont(base: font, bold: boldFont);
-    } catch (_) {
-      // Offline: usa i font PDF di default
-    }
-
+    final pw.ThemeData? pdfTheme = await _loadPdfTheme();
     final pdf = pw.Document(theme: pdfTheme);
-    
+
     final dateFormat = DateFormat('$dateFormatString HH:mm');
     final String currentDateTime = dateFormat.format(DateTime.now());
 
-    // Carica il logo
     pw.ImageProvider? logoImage;
     try {
       final ByteData imageData = await rootBundle.load('assets/logo.jpg');
       final Uint8List imageBytes = imageData.buffer.asUint8List();
       logoImage = pw.MemoryImage(imageBytes);
-    } catch (e) {
-      // Ignora se il logo non è disponibile
-    }
+    } catch (_) {}
 
     pdf.addPage(
       pw.MultiPage(
+        maxPages: 500,
         pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
@@ -59,14 +67,29 @@ class PDFReportService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('Report: $title', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'Report: $title',
+                          style: pw.TextStyle(
+                            fontSize: 24,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                         pw.SizedBox(height: 4),
                         if (dateRangeText != null && dateRangeText.isNotEmpty)
-                          pw.Text('Periodo: $dateRangeText', style: const pw.TextStyle(fontSize: 14)),
+                          pw.Text(
+                            'Periodo: $dateRangeText',
+                            style: const pw.TextStyle(fontSize: 14),
+                          ),
                         pw.SizedBox(height: 2),
-                        pw.Text('Generato il $currentDateTime', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
-                      ]
-                    )
+                        pw.Text(
+                          'Generato il $currentDateTime',
+                          style: const pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.grey700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   if (logoImage != null)
                     pw.Container(
@@ -75,8 +98,8 @@ class PDFReportService {
                       alignment: pw.Alignment.topRight,
                       child: pw.Image(logoImage, fit: pw.BoxFit.contain),
                     ),
-                ]
-              )
+                ],
+              ),
             ),
             pw.SizedBox(height: 20),
             pw.TableHelper.fromTextArray(
@@ -93,18 +116,32 @@ class PDFReportService {
               cellAlignment: pw.Alignment.centerLeft,
               cellPadding: const pw.EdgeInsets.all(6),
               cellStyle: const pw.TextStyle(fontSize: 10),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+                fontSize: 10,
+              ),
             ),
             if (legend != null && legend.isNotEmpty) ...[
               pw.SizedBox(height: 30),
-              pw.Text('Legenda Acronimi/Abbreviazioni:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+              pw.Text(
+                'Legenda Acronimi/Abbreviazioni:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+              ),
               pw.SizedBox(height: 8),
               pw.Wrap(
                 spacing: 16,
                 runSpacing: 8,
-                children: legend.entries.map((e) => pw.Text('${e.key} = ${e.value}', style: const pw.TextStyle(fontSize: 10))).toList(),
-              )
-            ]
+                children: legend.entries
+                    .map(
+                      (e) => pw.Text(
+                        '${e.key} = ${e.value}',
+                        style: const pw.TextStyle(fontSize: 10),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
           ];
         },
       ),
@@ -115,11 +152,28 @@ class PDFReportService {
 
     final bytes = await pdf.save();
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '.';
-      final dir = Directory('$home/Downloads');
-      if (!await dir.exists()) await dir.create(recursive: true);
-      final file = File('${dir.path}/$filename');
-      await file.writeAsBytes(bytes, flush: true);
+      Directory? dir = await getDownloadsDirectory();
+      if (dir == null) {
+        final home =
+            Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '.';
+        dir = Directory(p.join(home, 'Downloads'));
+      }
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+
+      File file = File(p.join(dir.path, filename));
+      try {
+        await file.writeAsBytes(bytes, flush: true);
+      } on FileSystemException {
+        file = File(
+          p.join(
+            dir.path,
+            'Report_${safeTitle}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+          ),
+        );
+        await file.writeAsBytes(bytes, flush: true);
+      }
       await OpenFilex.open(file.path);
     } else {
       await Printing.sharePdf(bytes: bytes, filename: filename);

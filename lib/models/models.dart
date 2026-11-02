@@ -1,3 +1,6 @@
+import 'dart:convert';
+import '../utils/currency_utils.dart';
+
 class Customer {
   final String? id;
   final String name;
@@ -70,9 +73,9 @@ class Customer {
       id: id ?? map['id']?.toString(),
       name: map['name']?.toString() ?? 'Sconosciuto',
       vatNumber: map['vat_number']?.toString(),
-      sdiCode: map['sdi_code']?.toString(),
-      taxCode: map['tax_code']?.toString(),
-      addressStreet: map['address_street']?.toString(),
+      sdiCode: (map['sdi_code'] ?? map['unique_code'])?.toString(),
+      taxCode: (map['tax_code'] ?? map['fiscal_code'])?.toString(),
+      addressStreet: (map['address_street'] ?? map['address'])?.toString(),
       addressZip: map['address_zip']?.toString(),
       addressCity: map['address_city']?.toString(),
       addressProvince: map['address_province']?.toString(),
@@ -149,12 +152,13 @@ class Payment {
   final String? customerId;
   final String? categoryId;
   final String? serviceId;
-  final String? paymentMethod; // 'Fattura' or 'Contante'
+  final String? invoiceId;
+  final String? paymentMethod;
   final String? attachments; // JSON string of file paths
   final String status; // 'PAID' or 'PENDING'
-  final String? notes; // Additional notes e.g. for split logic
-  final String? eventDates; // Storing intervals as text or JSON
-  final String? dateTo; // Optional end date for scheduled payments
+  final String? notes;
+  final String? eventDates;
+  final String? dateTo;
   final String? title;
   final String? clientPhone;
   final String? clientEmail;
@@ -167,6 +171,7 @@ class Payment {
     this.customerId,
     this.categoryId,
     this.serviceId,
+    this.invoiceId,
     this.paymentMethod,
     this.attachments,
     this.status = 'PAID',
@@ -187,6 +192,7 @@ class Payment {
       'customer_id': customerId,
       'category_id': categoryId,
       'service_id': serviceId,
+      if (invoiceId != null) 'invoice_id': invoiceId,
       'payment_method': paymentMethod,
       'attachments': attachments,
       'status': status,
@@ -199,17 +205,26 @@ class Payment {
     };
   }
 
+  static String? _serializeAttachments(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is List) {
+      return jsonEncode(raw.map((e) => e.toString()).toList());
+    }
+    return raw.toString();
+  }
+
   factory Payment.fromMap(Map<String, dynamic> map, [String? id]) {
     return Payment(
       id: id ?? map['id']?.toString(),
       type: map['type']?.toString() ?? 'OUT',
-      amount: double.tryParse(map['amount']?.toString() ?? '0') ?? 0.0,
+      amount: CurrencyUtils.parseCurrency(map['amount']?.toString()),
       date: map['date']?.toString() ?? DateTime.now().toIso8601String().split('T').first,
       customerId: map['customer_id']?.toString(),
       categoryId: map['category_id']?.toString(),
       serviceId: map['service_id']?.toString(),
+      invoiceId: map['invoice_id']?.toString(),
       paymentMethod: map['payment_method']?.toString(),
-      attachments: map['attachments']?.toString(),
+      attachments: _serializeAttachments(map['attachments']),
       status: map['status']?.toString() ?? 'PAID',
       notes: map['notes']?.toString(),
       eventDates: map['event_dates']?.toString(),
@@ -271,6 +286,7 @@ class Invoice {
   final String? notes;
   final String? eventDate;
   final String? vatCode;
+  final String type; // 'IN' or 'OUT'
 
   Invoice({
     this.id,
@@ -282,6 +298,7 @@ class Invoice {
     this.notes,
     this.eventDate,
     this.vatCode,
+    this.type = 'IN',
   });
 
   Map<String, dynamic> toMap() {
@@ -295,6 +312,7 @@ class Invoice {
       'notes': notes,
       'event_date': eventDate,
       'vat_code': vatCode,
+      'type': type,
     };
   }
 
@@ -302,13 +320,14 @@ class Invoice {
     return Invoice(
       id: id ?? map['id']?.toString(),
       date: map['date']?.toString() ?? DateTime.now().toIso8601String().split('T').first,
-      amount: double.tryParse(map['amount']?.toString() ?? '0') ?? 0.0,
+      amount: CurrencyUtils.parseCurrency(map['amount']?.toString()),
       customerId: map['customer_id']?.toString(),
       number: map['number']?.toString(),
       status: map['status']?.toString() ?? 'PENDING',
       notes: map['notes']?.toString(),
       eventDate: map['event_date']?.toString(),
       vatCode: map['vat_code']?.toString(),
+      type: map['type']?.toString() ?? 'IN',
     );
   }
 }
@@ -345,7 +364,7 @@ class Deadline {
     return Deadline(
       id: id ?? map['id']?.toString(),
       date: map['date']?.toString() ?? DateTime.now().toIso8601String().split('T').first,
-      amount: double.tryParse(map['amount']?.toString() ?? '0') ?? 0.0,
+      amount: CurrencyUtils.parseCurrency(map['amount']?.toString()),
       title: map['title']?.toString() ?? 'Scadenza',
       categoryId: map['category_id']?.toString(),
       status: map['status']?.toString() ?? 'PENDING',

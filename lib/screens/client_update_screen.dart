@@ -28,7 +28,7 @@ class _ClientUpdateScreenState extends State<ClientUpdateScreen> {
     try {
       await _audioPlayer.play(AssetSource('audio/blimp.wav'));
     } catch (e) {
-      print("Errore riproduzione suono: $e");
+      debugPrint("Errore riproduzione suono: $e");
     }
   }
 

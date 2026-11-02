@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 /// Usa SHA-256 con salt casuale per impedire attacchi rainbow table.
 class PasswordHasher {
   static const int _saltLength = 32;
+  static final RegExp _hashedPattern = RegExp(r'^[^$]+\$[a-fA-F0-9]{64}$');
 
   /// Genera un salt casuale di [_saltLength] byte, codificato in base64.
   static String _generateSalt() {
@@ -32,21 +33,18 @@ class PasswordHasher {
   /// Verifica se [password] corrisponde a [storedHash].
   /// Supporta sia il nuovo formato (salt$hash) che le password in chiaro legacy.
   static bool verifyPassword(String password, String storedHash) {
-    if (storedHash.contains('\$')) {
-      // Nuovo formato: salt$hash
-      final parts = storedHash.split('\$');
-      if (parts.length != 2) return false;
-      final salt = parts[0];
-      final hash = parts[1];
-      return _hash(password, salt) == hash;
+    if (isHashed(storedHash)) {
+      final sepIdx = storedHash.lastIndexOf('\$');
+      final salt = storedHash.substring(0, sepIdx);
+      final hash = storedHash.substring(sepIdx + 1);
+      return _hash(password, salt) == hash.toLowerCase();
     } else {
-      // Password legacy in chiaro — confronto diretto per migrazione
       return password == storedHash;
     }
   }
 
-  /// Controlla se una password è già nel formato hash (contiene il separatore $).
+  /// Controlla se una password è già nel formato hash (`salt$64hex`).
   static bool isHashed(String passwordHash) {
-    return passwordHash.contains('\$') && passwordHash.length > 70;
+    return _hashedPattern.hasMatch(passwordHash);
   }
 }

@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:intl/intl.dart';
+import 'dart:math' as math;
 import 'package:contabile_app/utils/currency_utils.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ModernPieChartPanel extends StatelessWidget {
   final List<MapEntry<String, double>> sortedCats;
@@ -24,10 +25,9 @@ class ModernPieChartPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Group categories into Top 3 + Others
-    List<MapEntry<String, double>> groupedCats = [];
+    final List<MapEntry<String, double>> groupedCats = [];
     double othersTotal = 0;
-    
+
     for (int i = 0; i < sortedCats.length; i++) {
       if (i < 3) {
         groupedCats.add(sortedCats[i]);
@@ -40,107 +40,163 @@ class ModernPieChartPanel extends StatelessWidget {
     }
 
     final total = groupedCats.fold<double>(0, (s, e) => s + e.value);
-
-    // Formatters
     final currencyFmt = NumberFormat.currency(locale: 'it_IT', symbol: '€');
 
-    Widget contentWidget = LayoutBuilder(
+    final Widget contentWidget = LayoutBuilder(
       builder: (context, constraints) {
-        bool isWide = constraints.maxWidth > 600;
-        
-        Widget header = Row(
+        final bool isWide = constraints.maxWidth > 600;
+
+        final Widget header = Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                    ),
+                    child: const Icon(
+                      LucideIcons.pieChart,
+                      color: Color(0xFF3B82F6),
+                    ),
                   ),
-                  child: Icon(LucideIcons.pieChart, color: Color(0xFF3B82F6)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DefaultTextStyle(
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
-                      child: titleDropdown ?? const Text(
-                        'RIPARTIZIONE',
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                      ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DefaultTextStyle(
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                          child: titleDropdown ??
+                              const Text(
+                                'RIPARTIZIONE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                        ),
+                        Text(
+                          'Tocca una sezione per i dettagli',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'Tocca una sezione per i dettagli',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                )),
-              ],
-            )),
+                  ),
+                ],
+              ),
+            ),
           ],
         );
 
         if (!isFullScreen) {
-            // DASHBOARD LAYOUT (Side by side to fit in constrained height)
-            return Column(
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              header,
+              const SizedBox(height: 16),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: _buildChart(
+                        groupedCats,
+                        total,
+                        currencyFmt,
+                        small: true,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 3,
+                      child: SingleChildScrollView(
+                        child: _buildListLegend(
+                          groupedCats,
+                          total,
+                          currencyFmt,
+                          small: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        } else {
+          return SingleChildScrollView(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
                 header,
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Row(
+                const SizedBox(height: 32),
+                if (isWide)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 2, child: _buildChart(groupedCats, total, currencyFmt, small: true)),
-                      const SizedBox(width: 8),
-                      Expanded(flex: 3, child: SingleChildScrollView(child: _buildListLegend(groupedCats, total, currencyFmt, small: true))),
+                      Expanded(
+                        flex: 1,
+                        child: _buildChart(
+                          groupedCats,
+                          total,
+                          currencyFmt,
+                          small: false,
+                        ),
+                      ),
+                      const SizedBox(width: 32),
+                      Expanded(
+                        flex: 1,
+                        child: _buildListLegend(
+                          groupedCats,
+                          total,
+                          currencyFmt,
+                          small: false,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Column(
+                    children: [
+                      SizedBox(
+                        height: 250,
+                        child: _buildChart(
+                          groupedCats,
+                          total,
+                          currencyFmt,
+                          small: false,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      _buildListLegend(
+                        groupedCats,
+                        total,
+                        currencyFmt,
+                        small: false,
+                      ),
                     ],
                   ),
-                ),
+                const SizedBox(height: 32),
+                if (groupedCats.isNotEmpty)
+                  _buildBottomSquares(groupedCats, total, currencyFmt),
               ],
-            );
-        } else {
-            // FULL SCREEN LAYOUT (Scrollable Column)
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  header,
-                  const SizedBox(height: 32),
-                  if (isWide)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 1, child: _buildChart(groupedCats, total, currencyFmt, small: false)),
-                        const SizedBox(width: 32),
-                        Expanded(flex: 1, child: _buildListLegend(groupedCats, total, currencyFmt, small: false)),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        SizedBox(height: 250, child: _buildChart(groupedCats, total, currencyFmt, small: false)),
-                        const SizedBox(height: 32),
-                        _buildListLegend(groupedCats, total, currencyFmt, small: false),
-                      ],
-                    ),
-                  const SizedBox(height: 32),
-                  if (groupedCats.isNotEmpty)
-                    _buildBottomSquares(groupedCats, total, currencyFmt),
-                ],
-              ),
-            );
+            ),
+          );
         }
       },
     );
@@ -155,23 +211,32 @@ class ModernPieChartPanel extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.4),
             blurRadius: 20,
             offset: const Offset(0, 10),
-          )
+          ),
         ],
       ),
-      padding: isFullScreen ? const EdgeInsets.all(24) : const EdgeInsets.all(12),
+      padding:
+          isFullScreen ? const EdgeInsets.all(24) : const EdgeInsets.all(12),
       child: contentWidget,
     );
   }
 
   Color _getColor(String key, int index) {
-    if (key == 'altre_categorie') return const Color(0xFF94A3B8); // Silver/Grey
-    return categoryColors[key] ?? palette[index % palette.length];
+    if (key == 'altre_categorie') return const Color(0xFF94A3B8);
+    if (categoryColors.containsKey(key)) return categoryColors[key]!;
+    if (palette.isEmpty) return const Color(0xFF3B82F6);
+    return palette[index % palette.length];
   }
 
   IconData _getIcon(String key) {
     if (key == 'altre_categorie') return LucideIcons.layoutGrid;
-    if (key.toLowerCase().contains('materiale') || key.toLowerCase().contains('acquist')) return LucideIcons.shoppingCart;
-    if (key.toLowerCase().contains('manodopera') || key.toLowerCase().contains('servizi')) return LucideIcons.hardHat;
+    if (key.toLowerCase().contains('materiale') ||
+        key.toLowerCase().contains('acquist')) {
+      return LucideIcons.shoppingCart;
+    }
+    if (key.toLowerCase().contains('manodopera') ||
+        key.toLowerCase().contains('servizi')) {
+      return LucideIcons.hardHat;
+    }
     return LucideIcons.moreHorizontal;
   }
 
@@ -180,15 +245,21 @@ class ModernPieChartPanel extends StatelessWidget {
     return categoryNames[key] ?? key;
   }
 
-  Widget _buildChart(List<MapEntry<String, double>> cats, double total, NumberFormat fmt, {bool small = false}) {
+  Widget _buildChart(
+    List<MapEntry<String, double>> cats,
+    double total,
+    NumberFormat fmt, {
+    bool small = false,
+  }) {
     if (cats.isEmpty) {
-      return const Center(child: Text('Nessun dato', style: TextStyle(color: Colors.white54)));
+      return const Center(
+        child: Text('Nessun dato', style: TextStyle(color: Colors.white54)),
+      );
     }
 
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Drop shadow behind pie chart
         Container(
           width: small ? 110 : 200,
           height: small ? 110 : 200,
@@ -203,7 +274,6 @@ class ModernPieChartPanel extends StatelessWidget {
             ],
           ),
         ),
-        
         PieChart(
           PieChartData(
             sectionsSpace: 4,
@@ -217,13 +287,10 @@ class ModernPieChartPanel extends StatelessWidget {
                 value: entry.value,
                 showTitle: false,
                 radius: small ? 25 : 40,
-                // Add a glowing badge to each slice? Maybe overkill.
               );
             }).toList(),
           ),
         ),
-
-        // 3D Glass / Emboss Overlay
         IgnorePointer(
           child: Container(
             width: small ? 130 : 220,
@@ -243,26 +310,51 @@ class ModernPieChartPanel extends StatelessWidget {
             ),
           ),
         ),
-
-        // Center Text
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Totale', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: small ? 10 : 14)),
-            const SizedBox(height: 4),
-            Text(
-              CurrencyUtils.formatNumber(total) + ' €',
-              style: TextStyle(color: Colors.white, fontSize: small ? 14 : 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text('100%', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: small ? 9 : 12)),
-          ],
+        SizedBox(
+          width: small ? 68 : 112,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Totale',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: small ? 10 : 14,
+                ),
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '${CurrencyUtils.formatNumber(total)} €',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: small ? 14 : 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '100%',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: small ? 9 : 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildListLegend(List<MapEntry<String, double>> cats, double total, NumberFormat fmt, {bool small = false}) {
+  Widget _buildListLegend(
+    List<MapEntry<String, double>> cats,
+    double total,
+    NumberFormat fmt, {
+    bool small = false,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: cats.asMap().entries.map((e) {
@@ -270,10 +362,12 @@ class ModernPieChartPanel extends StatelessWidget {
         final entry = e.value;
         final color = _getColor(entry.key, i);
         final pct = total > 0 ? (entry.value / total * 100) : 0.0;
-        
+
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: small ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: small
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.03),
             borderRadius: BorderRadius.circular(16),
@@ -284,7 +378,6 @@ class ModernPieChartPanel extends StatelessWidget {
                 blurRadius: 10,
                 spreadRadius: 2,
               ),
-              // Inner glowing effect via linear gradient
             ],
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -298,34 +391,55 @@ class ModernPieChartPanel extends StatelessWidget {
           child: Row(
             children: [
               Icon(_getIcon(entry.key), color: color, size: small ? 16 : 24),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       _getName(entry.key),
-                      style: TextStyle(color: Colors.white, fontSize: small ? 10 : 13, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: small ? 10 : 13,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          CurrencyUtils.formatNumber(entry.value) + ' €',
-                          style: TextStyle(color: Colors.white70, fontSize: small ? 10 : 14),
+                        Flexible(
+                          child: Text(
+                            '${CurrencyUtils.formatNumber(entry.value)} €',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: small ? 10 : 14,
+                            ),
+                          ),
                         ),
+                        const SizedBox(width: 6),
                         Text(
                           '${pct.toStringAsFixed(1)}%',
-                          style: TextStyle(color: color, fontSize: small ? 10 : 14, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: color,
+                            fontSize: small ? 10 : 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
             ],
           ),
         );
@@ -333,7 +447,11 @@ class ModernPieChartPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomSquares(List<MapEntry<String, double>> cats, double total, NumberFormat fmt) {
+  Widget _buildBottomSquares(
+    List<MapEntry<String, double>> cats,
+    double total,
+    NumberFormat fmt,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         return Row(
@@ -343,15 +461,18 @@ class ModernPieChartPanel extends StatelessWidget {
             final entry = e.value;
             final color = _getColor(entry.key, i);
             final pct = total > 0 ? (entry.value / total * 100) : 0.0;
-            
-            final width = (constraints.maxWidth - (cats.length - 1) * 12) / cats.length;
+
+            final rawWidth =
+                (constraints.maxWidth - (cats.length - 1) * 12) / cats.length;
+            final width = math.max(0.0, rawWidth);
 
             return Container(
               width: width,
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+                border:
+                    Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
                 boxShadow: [
                   BoxShadow(
                     color: color.withValues(alpha: 0.2),
@@ -361,7 +482,7 @@ class ModernPieChartPanel extends StatelessWidget {
                   BoxShadow(
                     color: color.withValues(alpha: 0.4),
                     blurRadius: 30,
-                    offset: const Offset(0, 10), // Bottom glow reflection
+                    offset: const Offset(0, 10),
                   ),
                 ],
                 gradient: LinearGradient(
@@ -378,14 +499,25 @@ class ModernPieChartPanel extends StatelessWidget {
                 children: [
                   Icon(_getIcon(entry.key), color: color, size: 28),
                   const SizedBox(height: 12),
-                  Text(
-                    CurrencyUtils.formatNumber(entry.value) + ' €',
-                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${CurrencyUtils.formatNumber(entry.value)} €',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${pct.toStringAsFixed(1)}%',
-                    style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -396,8 +528,3 @@ class ModernPieChartPanel extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
