@@ -56,3 +56,5 @@ test_*.dart
 test_upload.txt
 empty_dir/
 
+
+scratch/
