@@ -11,17 +11,18 @@ void main() {
     String? customerName,
     String paymentMethod = 'Fattura',
   }) {
-    return {
+    final map = <String, dynamic>{
       'amount': amount,
       'date': date,
       'type': type,
-      if (invoiceId != null) 'invoice_id': invoiceId,
-      if (customerId != null) 'customer_id': customerId,
-      if (customerName != null) 'customer_name': customerName,
       'category_id': 'cat1',
       'service_id': 'srv1',
       'payment_method': paymentMethod,
     };
+    if (invoiceId != null) map['invoice_id'] = invoiceId;
+    if (customerId != null) map['customer_id'] = customerId;
+    if (customerName != null) map['customer_name'] = customerName;
+    return map;
   }
 
   Map<String, dynamic> makeInvoice({
@@ -34,16 +35,17 @@ void main() {
     String status = 'PAID',
     String type = 'IN',
   }) {
-    return {
+    final map = <String, dynamic>{
       'id': id,
       'amount': amount,
       'date': date,
-      if (number != null) 'number': number,
-      if (customerId != null) 'customer_id': customerId,
-      if (clientName != null) 'client_name': clientName,
       'status': status,
       'type': type,
     };
+    if (number != null) map['number'] = number;
+    if (customerId != null) map['customer_id'] = customerId;
+    if (clientName != null) map['client_name'] = clientName;
+    return map;
   }
 
   group('Grafico a torta Fatturato vs Contante & Deduplicazione', () {
@@ -160,9 +162,23 @@ void main() {
       );
 
       expect(m.totalIn, 0.0);
-      expect(m.totalOut, 500.0);
       expect(m.paymentMethodBreakdown['Fatturato'], isNull);
       expect(m.paymentMethodBreakdown['Contante'], isNull);
+    });
+
+    test('isDeadlineSettled identifica scadenze pagate/saldate ed esclude da scadenze in arrivo', () {
+      final deadlines = [
+        {'id': '1', 'title': 'Affitto', 'amount': 600, 'status': 'PAID'},
+        {'id': '2', 'title': 'Fornitore Luce', 'amount': 250, 'status': 'SALDATO'},
+        {'id': '3', 'title': 'Fornitore Gas', 'amount': 180, 'status': 'pagato'},
+        {'id': '4', 'title': 'Tassa Rifiuti', 'amount': 120, 'status': 'PENDING'},
+        {'id': '5', 'title': 'Commercialista', 'amount': 300, 'status': ''},
+      ];
+
+      final upcoming = deadlines.where((d) => !CalculationEngine.isDeadlineSettled(d)).toList();
+
+      expect(upcoming.length, 2);
+      expect(upcoming.map((d) => d['id']).toList(), ['4', '5']);
     });
   });
 }

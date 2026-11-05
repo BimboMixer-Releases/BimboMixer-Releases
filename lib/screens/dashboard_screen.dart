@@ -1547,7 +1547,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildUpcomingDeadlines(AppThemeProvider theme) {
-    final sortedDeadlines = List<Map<String, dynamic>>.from(_deadlines)
+    final upcomingDeadlines = _deadlines
+        .where((d) => !CalculationEngine.isDeadlineSettled(d))
+        .toList();
+    final sortedDeadlines = List<Map<String, dynamic>>.from(upcomingDeadlines)
       ..sort((a, b) {
         final dA = (a['date']?.toString().trim().isNotEmpty == true)
             ? a['date']?.toString()

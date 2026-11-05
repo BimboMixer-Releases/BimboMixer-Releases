@@ -379,7 +379,8 @@ class _SubmitReportSheetState extends State<_SubmitReportSheet> {
             ? 'Utente Anonimo'
             : _emailCtrl.text.trim(),
         'timestamp': FieldValue.serverTimestamp(),
-        'status': 'Nuovo',
+        'status': 'Unfixed',
+        'fixed': false,
       });
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -722,7 +723,12 @@ class _ReportsList extends StatelessWidget {
             final email = (data['user_email'] ?? 'Utente Anonimo').toString();
             final text = (data['text'] ?? '').toString();
             final category = (data['category'] ?? 'Generale').toString();
-            final status = (data['status'] ?? 'Nuovo').toString();
+            final status = (data['status'] ?? 'Unfixed').toString();
+            final bool isFixed = data['fixed'] is bool
+                ? (data['fixed'] as bool)
+                : (status.toLowerCase() == 'fixed' ||
+                    status.toLowerCase() == 'risolto' ||
+                    status.toLowerCase() == 'implementato');
 
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
@@ -781,27 +787,69 @@ class _ReportsList extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: status == 'Risolto' ||
-                                        status == 'Implementato'
-                                    ? Colors.green.withValues(alpha: 0.15)
-                                    : Colors.white.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                status.toUpperCase(),
-                                style: TextStyle(
-                                  color: status == 'Risolto' ||
-                                          status == 'Implementato'
-                                      ? Colors.greenAccent
-                                      : Colors.white60,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
+                            InkWell(
+                              onTap: () async {
+                                final nextFixed = !isFixed;
+                                try {
+                                  await docs[index].reference.update({
+                                    'fixed': nextFixed,
+                                    'status': nextFixed ? 'Fixed' : 'Unfixed',
+                                  });
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Errore: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isFixed
+                                      ? Colors.green.withValues(alpha: 0.18)
+                                      : Colors.red.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isFixed
+                                        ? Colors.greenAccent.withValues(alpha: 0.7)
+                                        : Colors.redAccent.withValues(alpha: 0.7),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isFixed
+                                          ? Icons.check_box_rounded
+                                          : Icons.check_box_outline_blank_rounded,
+                                      size: 15,
+                                      color: isFixed
+                                          ? Colors.greenAccent
+                                          : Colors.redAccent,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      isFixed ? 'FIXED' : 'UNFIXED',
+                                      style: TextStyle(
+                                        color: isFixed
+                                            ? Colors.greenAccent
+                                            : Colors.redAccent,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
