@@ -2304,18 +2304,10 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
     final effectiveAllPayments =
         widget.allPayments.isNotEmpty ? widget.allPayments : widget.payments;
 
-    final Set<String> paidInvoiceIds = {};
-    for (final p in effectiveAllPayments) {
-      if (!CalculationEngine.isPaymentSettled(p)) continue;
-      final amt = CurrencyUtils.parseCurrency(p['amount']?.toString());
-      if (amt == 0) continue;
-      final dateStr = (p['date'] ?? '').toString().trim();
-      if (dateStr.isEmpty) continue;
-      final invId = p['invoice_id']?.toString() ?? '';
-      if (invId.isNotEmpty) {
-        paidInvoiceIds.add(invId);
-      }
-    }
+    final Set<String> paidInvoiceIds = CalculationEngine.findPaidInvoiceIds(
+      effectiveAllPayments,
+      widget.invoices,
+    );
 
     bool isValidSettledYearPayment(Map<String, dynamic> p) {
       if (!CalculationEngine.isPaymentSettled(p)) return false;
@@ -2344,6 +2336,8 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
       if (CalculationEngine.isCashMethod(sliceKey)) {
         return widget.payments.where((p) {
           if (!isValidSettledYearPayment(p)) return false;
+          final isIN = (p['type'] ?? 'IN').toString().trim().toUpperCase() == 'IN';
+          if (!isIN) return false;
           return CalculationEngine.isCashMethod(
             p['payment_method']?.toString(),
           );
@@ -2352,6 +2346,8 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
         final List<Map<String, dynamic>> result = [];
         for (final p in widget.payments) {
           if (!isValidSettledYearPayment(p)) continue;
+          final isIN = (p['type'] ?? 'IN').toString().trim().toUpperCase() == 'IN';
+          if (!isIN) continue;
           if (!CalculationEngine.isCashMethod(
             p['payment_method']?.toString(),
           )) {
@@ -2360,6 +2356,8 @@ class _PieChartFullScreenDialogState extends State<_PieChartFullScreenDialog>
         }
         for (final inv in widget.invoices) {
           if (!CalculationEngine.isInvoiceSettled(inv)) continue;
+          final isOut = (inv['type'] ?? 'IN').toString().trim().toUpperCase() == 'OUT';
+          if (isOut) continue;
           final invId = inv['id']?.toString() ?? '';
           if (invId.isNotEmpty && paidInvoiceIds.contains(invId)) continue;
           final dateStr = (inv['date'] ?? '').toString().trim();

@@ -121,6 +121,114 @@ class CalculationEngine {
         m.contains('elettronic');
   }
 
+  /// Trova tutti gli ID delle fatture che hanno già un movimento (pagamento) associato
+  /// per evitare qualsiasi doppio conteggio tra Fatture e Movimenti (tracking incrociato).
+  static Set<String> findPaidInvoiceIds(
+    List<Map<String, dynamic>> payments,
+    List<Map<String, dynamic>> invoices,
+  ) {
+    final Set<String> matchedInvoiceIds = {};
+    final Set<String> matchedPaymentIds = {};
+
+    String norm(dynamic s) => (s ?? '').toString().trim().toLowerCase();
+
+    // 1. Match diretto su invoice_id memorizzato nel pagamento
+    for (final p in payments) {
+      if (!isPaymentSettled(p)) continue;
+      final pInvId = (p['invoice_id'] ?? '').toString().trim();
+      if (pInvId.isNotEmpty) {
+        matchedInvoiceIds.add(pInvId);
+        final pId = p['id']?.toString() ?? '';
+        if (pId.isNotEmpty) matchedPaymentIds.add(pId);
+
+        // Se pInvId corrisponde a un 'number' di fattura anziché all'ID documento
+        for (final inv in invoices) {
+          final invId = inv['id']?.toString() ?? '';
+          final invNum = (inv['number'] ?? '').toString().trim();
+          if (invId.isNotEmpty &&
+              (pInvId == invId || (invNum.isNotEmpty && pInvId == invNum))) {
+            matchedInvoiceIds.add(invId);
+          }
+        }
+      }
+    }
+
+    // 2. Tracking incrociato euristico tra fatture saldate e pagamenti saldati
+    for (final inv in invoices) {
+      if (!isInvoiceSettled(inv)) continue;
+      final invId = inv['id']?.toString() ?? '';
+      if (invId.isEmpty || matchedInvoiceIds.contains(invId)) continue;
+
+      final invAmt = CurrencyUtils.parseCurrency(inv['amount']?.toString());
+      if (invAmt <= 0) continue;
+
+      final invDateStr = (inv['date'] ?? '').toString().trim();
+      final invYear = extractYear(invDateStr);
+      final invMonth = extractMonth(invDateStr);
+      final invCustId = norm(inv['customer_id'] ?? inv['client_id']);
+      final invCustName = norm(inv['client_name'] ?? inv['customer_name']);
+      final invNumber = norm(inv['number']);
+      final invType = (inv['type'] ?? 'IN').toString().trim().toUpperCase();
+
+      for (final p in payments) {
+        if (!isPaymentSettled(p)) continue;
+        final pId = p['id']?.toString() ?? '';
+        if (pId.isNotEmpty && matchedPaymentIds.contains(pId)) continue;
+
+        final pType = (p['type'] ?? 'IN').toString().trim().toUpperCase();
+        if (pType != invType) continue;
+
+        final pAmt = CurrencyUtils.parseCurrency(p['amount']?.toString());
+        if ((pAmt - invAmt).abs() > 0.01) continue;
+
+        final pDateStr = (p['date'] ?? '').toString().trim();
+        final pYear = extractYear(pDateStr);
+        if (pYear != invYear && invYear != 0 && pYear != 0) continue;
+
+        final pCustId = norm(p['customer_id'] ?? p['client_id']);
+        final pCustName = norm(p['customer_name'] ?? p['client_name']);
+        final pMethod = norm(p['payment_method']);
+        final pTitle = norm(p['title']);
+        final pNotes = norm(p['notes']);
+
+        bool isMatch = false;
+
+        // A) Riferimento al numero fattura o id nel titolo o note
+        if (invNumber.isNotEmpty &&
+            (pTitle.contains(invNumber) || pNotes.contains(invNumber))) {
+          isMatch = true;
+        } else if (pTitle.contains(invId.toLowerCase()) ||
+            pNotes.contains(invId.toLowerCase())) {
+          isMatch = true;
+        }
+        // B) Stesso cliente (ID o Nome) e stesso importo
+        else if ((invCustId.isNotEmpty && invCustId == pCustId) ||
+            (invCustName.isNotEmpty && invCustName == pCustName)) {
+          final pMonth = extractMonth(pDateStr);
+          if (pDateStr == invDateStr ||
+              pMethod.contains('fattur') ||
+              pMonth == invMonth) {
+            isMatch = true;
+          }
+        }
+        // C) Metodo esplicitamente 'Fattura' con stessa data o stesso cliente
+        else if (pMethod.contains('fattur') &&
+            (pDateStr == invDateStr ||
+                (invCustId.isNotEmpty && invCustId == pCustId))) {
+          isMatch = true;
+        }
+
+        if (isMatch) {
+          matchedInvoiceIds.add(invId);
+          if (pId.isNotEmpty) matchedPaymentIds.add(pId);
+          break;
+        }
+      }
+    }
+
+    return matchedInvoiceIds;
+  }
+
   /// Computes fiscal metrics for Bilancio Fisco using the exact same rules and deduplication as Dashboard.
   static FiscalMetrics computeFiscalMetrics({
     required List<Map<String, dynamic>> payments,
@@ -129,7 +237,7 @@ class CalculationEngine {
   }) {
     double entrateF = 0.0;
     double usciteF = 0.0;
-    final Set<String> allCountedFiscalInvoiceIds = {};
+    final Set<String> allCountedFiscalInvoiceIds = findPaidInvoiceIds(payments, invoices);
     final List<Map<String, dynamic>> fiscalRecords = [];
 
     // 1. Raccogli tutti gli invoice_id già coperti da movimenti fiscali saldati (anche su altri anni)
@@ -236,8 +344,11 @@ class CalculationEngine {
     final effectiveAllPayments = allPayments ?? payments;
     final effectiveAllInvoices = allInvoices ?? invoices;
 
-    // Compute Global Net Worth using allPayments and allInvoices
-    final Set<String> allPaidInvoiceIds = {};
+    // Compute Global Net Worth using allPayments and allInvoices (deduplicating linked invoices)
+    final Set<String> allPaidInvoiceIds = findPaidInvoiceIds(
+      effectiveAllPayments,
+      effectiveAllInvoices,
+    );
     for (final p in effectiveAllPayments) {
       if (!isPaymentSettled(p)) continue;
       final double amt = CurrencyUtils.parseCurrency(p['amount']?.toString());
@@ -250,10 +361,6 @@ class CalculationEngine {
         globalPatrimonio += amt;
       } else {
         globalPatrimonio -= amt;
-      }
-      final String? invId = p['invoice_id']?.toString();
-      if (invId != null && invId.isNotEmpty) {
-        allPaidInvoiceIds.add(invId);
       }
     }
 
@@ -291,7 +398,10 @@ class CalculationEngine {
     final Map<String, double> tempFatCon = {};
 
     // Estrai i pagamenti associati ad una fattura per evitare doppi conteggi (anche cross-anno)
-    final Set<String> paidInvoiceIds = {...allPaidInvoiceIds};
+    final Set<String> paidInvoiceIds = findPaidInvoiceIds(
+      payments,
+      invoices,
+    )..addAll(allPaidInvoiceIds);
 
     for (final p in payments) {
       if (!isPaymentSettled(p)) continue;
@@ -305,11 +415,6 @@ class CalculationEngine {
       final int year = extractYear(dateStr);
       if (year != selectedYear) continue;
 
-      final String? invId = p['invoice_id']?.toString();
-      if (invId != null && invId.isNotEmpty) {
-        paidInvoiceIds.add(invId);
-      }
-
       final int month = extractMonth(dateStr);
       final String catName = categoryNames[p['category_id']] ?? 'Altro';
       final String srvName = serviceNames[p['service_id']] ?? 'Altro';
@@ -320,6 +425,10 @@ class CalculationEngine {
         totalIn += amount;
         monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) + amount);
         monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) + amount);
+
+        // Fatturato vs Contante mostra esclusivamente quanto guadagnato/incassato (ENTRATE)
+        final String fatConKey = isCashMethod(paymentMethod) ? 'Contante' : 'Fatturato';
+        tempFatCon[fatConKey] = CurrencyUtils.roundMoney((tempFatCon[fatConKey] ?? 0.0) + amount);
       } else {
         totalOut += amount;
         monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) - amount);
@@ -328,9 +437,6 @@ class CalculationEngine {
 
       tempCat[catName] = CurrencyUtils.roundMoney((tempCat[catName] ?? 0.0) + amount);
       tempSrv[srvName] = CurrencyUtils.roundMoney((tempSrv[srvName] ?? 0.0) + amount);
-
-      final String fatConKey = isCashMethod(paymentMethod) ? 'Contante' : 'Fatturato';
-      tempFatCon[fatConKey] = CurrencyUtils.roundMoney((tempFatCon[fatConKey] ?? 0.0) + amount);
     }
 
     // Processa Invoices: aggiungi le fatture saldate che non hanno già un pagamento associato
@@ -358,8 +464,8 @@ class CalculationEngine {
         totalIn += amount;
         monthlyNet[month] = CurrencyUtils.roundMoney((monthlyNet[month] ?? 0.0) + amount);
         monthlyIn[month] = CurrencyUtils.roundMoney((monthlyIn[month] ?? 0.0) + amount);
+        tempFatCon['Fatturato'] = CurrencyUtils.roundMoney((tempFatCon['Fatturato'] ?? 0.0) + amount);
       }
-      tempFatCon['Fatturato'] = CurrencyUtils.roundMoney((tempFatCon['Fatturato'] ?? 0.0) + amount);
     }
 
     // Deadlines processing (filtered by selected year)
